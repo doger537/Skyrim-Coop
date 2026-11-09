@@ -1,3 +1,17 @@
+# Skyrim True Coop — ветка разработки
+
+Цель: единый кооперативный мир и сюжет поверх Skyrim Together Reborn.
+Сейчас выполнено первоначальное исследование и добавлен сценарий проверки/сборки;
+новые игровые функции ещё не реализованы. Установка собственной версии мода пока не готова.
+
+- [Фактические результаты и блокеры](BASELINE.md)
+- [Сборка Windows](BUILD.md) · [Архитектура](ARCHITECTURE.md) · [Этапы](ROADMAP.md)
+- [Статусы функций](FEATURES.md) · [Проверки](TEST_PLAN.md) · [Ограничения](KNOWN_ISSUES.md)
+- [Протокол](NETWORK_PROTOCOL.md) · [Общий сюжет](QUEST_SYSTEM.md) · [Контент и Alternate Start](CONTENT_COMPATIBILITY.md)
+- [Исходное ТЗ пользователя](docs/truecoop/PROJECT_SPEC.md)
+
+Исходные сведения и авторство upstream сохранены ниже.
+
 # Skyrim Together
 #### codename "TiltedEvolution"
 [![GitHub release](https://img.shields.io/github/v/release/tiltedphoques/TiltedEvolution?color=23314E)](https://github.com/tiltedphoques/TiltedEvolution/releases)
