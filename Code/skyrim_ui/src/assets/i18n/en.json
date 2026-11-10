@@ -167,6 +167,7 @@
     "ERROR": {
       "ERRORS": {
         "WRONG_VERSION": "This server expects version {{expectedVersion}} but you are on version {{version}}.",
+        "CONTENT_MISMATCH": "Active content is incompatible with this session. {{reason}}. Compare plugin contents and load order in a separate co-op profile.",
         "MODS_MISMATCH": "This server has ModPolicy enabled.{{mods}}",
         "MODS_MISMATCH_REMOVE": "Please remove the following mods to join:\n{{mods}}",
         "MODS_MISMATCH_INSTALL": "Please install the following mods to join:\n{{mods}}",

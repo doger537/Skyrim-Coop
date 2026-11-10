@@ -15,7 +15,8 @@ struct AuthenticationResponse final : ServerMessage
         kModsMismatch,
         kClientModsDisallowed,
         kWrongPassword,
-        kServerFull
+        kServerFull,
+        kContentMismatch
     };
 
     AuthenticationResponse()
@@ -26,12 +27,17 @@ struct AuthenticationResponse final : ServerMessage
     void SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept override;
     void DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept override;
 
-    bool operator==(const AuthenticationResponse& achRhs) const noexcept { return GetOpcode() == achRhs.GetOpcode() && Type == achRhs.Type && UserMods == achRhs.UserMods && Settings == achRhs.Settings && PlayerId == achRhs.PlayerId; }
+    bool operator==(const AuthenticationResponse& achRhs) const noexcept
+    {
+        return GetOpcode() == achRhs.GetOpcode() && Type == achRhs.Type && UserMods == achRhs.UserMods && Settings == achRhs.Settings && PlayerId == achRhs.PlayerId &&
+               ContentError == achRhs.ContentError;
+    }
 
     ResponseType Type;
     bool SKSEActive{false};
     bool MO2Active{false};
     String Version;
+    String ContentError;
     Mods UserMods{};
     ServerSettings Settings{};
     uint32_t PlayerId{};

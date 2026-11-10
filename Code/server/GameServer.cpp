@@ -12,6 +12,7 @@
 #include <steam/isteamnetworkingutils.h>
 
 #include <Messages/AuthenticationResponse.h>
+#include <Structs/ContentCompatibility.h>
 #include <Messages/ClientMessageFactory.h>
 #include <Messages/NotifyPlayerJoined.h>
 #include <Messages/NotifyPlayerLeft.h>
@@ -39,11 +40,19 @@ Console::Setting bEnablePvp{"Gameplay:bEnablePvp", "Enables pvp", false};
 Console::Setting bSyncPlayerHomes{"Gameplay:bSyncPlayerHomes", "Sync chests and displays in player homes and other NoResetZones", false};
 Console::Setting bEnableDeathSystem{"Gameplay:bEnableDeathSystem", "Enables the custom multiplayer death system. Only disable it if you use another mod that replaces death", true};
 Console::Setting uTimeScale{"Gameplay:uTimeScale", "How many seconds pass ingame for every real second (0 to 1000). Changing this can make the game unstable", 20u};
-Console::Setting bSyncPlayerCalendar{"Gameplay:bSyncPlayerCalendar", "Syncs up all player calendars to be the same day, month, and year. This uses the date of the player with the furthest ahead date at connection.", false};
+Console::Setting bSyncPlayerCalendar{
+    "Gameplay:bSyncPlayerCalendar",
+    "Syncs up all player calendars to be the same day, month, and year. This uses the date of the player with the furthest ahead date at connection.", false};
 Console::Setting bAutoPartyJoin{"Gameplay:bAutoPartyJoin", "Join parties automatically, as long as there is only one party in the server", true};
-Console::Setting bAllowConsoleCommands{"Gameplay:bAllowConsoleCommands", "Lets players run console commands they type while connected. Turn it off to stop console trolling such as spawning enemies or killing NPCs. The console still opens for reading ids, and mods can still run commands", true};
+Console::Setting bAllowConsoleCommands{
+    "Gameplay:bAllowConsoleCommands",
+    "Lets players run console commands they type while connected. Turn it off to stop console trolling such as spawning enemies or killing NPCs. The console still opens for "
+    "reading ids, and mods can still run commands",
+    true};
 // ModPolicy Stuff
 Console::Setting bEnableModCheck{"ModPolicy:bEnableModCheck", "Refuse clients whose mods do not match Data/loadorder.txt", false, Console::SettingsFlags::kLocked};
+Console::Setting bEnableContentCheck{
+    "ModPolicy:bEnableContentCheck", "Require matching active plugin fingerprints and order for the lifetime of this server session", true, Console::SettingsFlags::kLocked};
 Console::Setting bAllowSKSE{"ModPolicy:bAllowSKSE", "Allow players using SKSE to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 Console::Setting bAllowMO2{"ModPolicy:bAllowMO2", "Allow players using Mod Organizer 2 to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 
@@ -779,6 +788,11 @@ bool GameServer::ValidateAuthParams(ConnectionId_t aConnectionId, const UniquePt
 
 void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId, const UniquePtr<AuthenticationRequest>& acRequest)
 {
+    if (m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId))
+    {
+        spdlog::warn("Ignored repeated authentication on an already authenticated connection");
+        return;
+    }
     const auto info = GetConnectionInfo(aConnectionId);
 
     char remoteAddress[48]{};
@@ -822,7 +836,8 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         if (mo2Problem)
             response += "MO2 ";
 
-        spdlog::info("New player {:x} '{}' tried to connect, but {}{} disallowed - Kicked.", aConnectionId, remoteAddress, response.c_str(), skseProblem && mo2Problem ? "are" : "is");
+        spdlog::info(
+            "New player {:x} '{}' tried to connect, but {}{} disallowed - Kicked.", aConnectionId, remoteAddress, response.c_str(), skseProblem && mo2Problem ? "are" : "is");
 
         serverResponse.SKSEActive = acRequest->SKSEActive;
         serverResponse.MO2Active = acRequest->MO2Active;
@@ -835,6 +850,24 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
     // check if the proper server password was supplied.
     if (acRequest->Token == sPassword.value() || adminPasswordUsed)
     {
+        String contentError;
+        if (acRequest->RuntimeVersion.empty() || acRequest->RuntimeVersion.size() > 32)
+            contentError = "Cannot determine the Skyrim runtime version";
+        else if (!m_sessionRuntime.empty() && m_sessionRuntime != acRequest->RuntimeVersion)
+            contentError = "Skyrim runtime differs from this session: expected " + m_sessionRuntime;
+        else if (bEnableContentCheck)
+        {
+            const auto result = m_contentContract ? ContentCompatibility::Compare(*m_contentContract, acRequest->UserMods) : ContentCompatibility::Validate(acRequest->UserMods);
+            if (!result)
+                contentError = ContentCompatibility::Describe(result);
+        }
+        if (!contentError.empty())
+        {
+            serverResponse.ContentError = contentError;
+            spdlog::warn("Refused incompatible content: {}", contentError);
+            sendKick(RT::kContentMismatch);
+            return;
+        }
         if (adminPasswordUsed)
         {
             m_adminSessions.insert(aConnectionId);
@@ -912,6 +945,16 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
             responseList.ModList.push_back(entry);
         }
 
+        GameId initialWorldSpace;
+        GameId initialCell;
+        if (!ContentCompatibility::ResolveInitialForm(acRequest->WorldSpaceId, acRequest->UserMods, responseList, initialWorldSpace) ||
+            !ContentCompatibility::ResolveInitialForm(acRequest->CellId, acRequest->UserMods, responseList, initialCell))
+        {
+            serverResponse.ContentError = "Cannot resolve the initial location against the active plugin manifest";
+            sendKick(RT::kContentMismatch);
+            return;
+        }
+
         Player* pPlayer = m_pWorld->GetPlayerManager().Create(aConnectionId);
         pPlayer->SetEndpoint(remoteAddress);
         pPlayer->SetDiscordId(acRequest->DiscordId);
@@ -931,6 +974,11 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         }
 
         serverResponse.PlayerId = pPlayer->GetId();
+        if (!m_contentContract)
+        {
+            m_contentContract = acRequest->UserMods;
+            m_sessionRuntime = acRequest->RuntimeVersion;
+        }
 
         auto modList = PrettyPrintModList(acRequest->UserMods.ModList);
         spdlog::info("New player '{}' [{:x}] connected with {} mods\n\t: {}", pPlayer->GetUsername().c_str(), aConnectionId, acRequest->UserMods.ModList.size(), modList.c_str());
@@ -967,7 +1015,7 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
             Send(pPlayer->GetConnectionId(), notify);
         }
 
-        m_pWorld->GetDispatcher().trigger(PlayerJoinEvent(pPlayer, acRequest->WorldSpaceId, acRequest->CellId, acRequest->PlayerTime));
+        m_pWorld->GetDispatcher().trigger(PlayerJoinEvent(pPlayer, initialWorldSpace, initialCell, acRequest->PlayerTime));
     }
     else
     {

@@ -24,6 +24,9 @@
 #include <steam/isteamnetworkingutils.h>
 
 #include <ScriptExtender.h>
+#include <Structs/ContentCompatibility.h>
+#include <Systems/ContentFingerprint.h>
+#include "../../../immersive_launcher/utils/FileVersion.inl"
 #include <Services/DiscordService.h>
 
 // #include <imgui_internal.h>
@@ -75,7 +78,7 @@ bool TransportService::Send(const ClientMessage& acMessage, const TiltedPhoques:
         ~ScopedReset() { s_allocator.Reset(); }
     } allocatorGuard;
 
-    if (IsConnected())
+    if (Client::IsConnected() && (m_connected || acMessage.GetOpcode() == AuthenticationRequest::Opcode))
     {
         ScopedAllocator _{s_allocator};
 
@@ -112,8 +115,11 @@ void TransportService::OnConsume(const void* apData, uint32_t aSize)
 
 void TransportService::OnConnected()
 {
+    m_connected = false;
+    ++m_connectionGeneration;
     AuthenticationRequest request{};
     request.Version = BUILD_COMMIT;
+    request.RuntimeVersion = QueryFileVersion((std::filesystem::current_path() / L"SkyrimSE.exe").c_str()).c_str();
     request.SKSEActive = IsScriptExtenderLoaded();
     request.MO2Active = GetModuleHandleW(kMO2DllName);
 
@@ -148,11 +154,10 @@ void TransportService::OnConnected()
         entry.Filename = pMod->filename;
     }
 
-    auto& modSystem = m_world.GetModSystem();
     if (pPlayer->GetWorldSpace())
-        modSystem.GetServerModId(pPlayer->GetWorldSpace()->formID, request.WorldSpaceId);
+        ContentCompatibility::EncodeInitialForm(pPlayer->GetWorldSpace()->formID, request.UserMods, request.WorldSpaceId);
 
-    modSystem.GetServerModId(pPlayer->parentCell->formID, request.CellId);
+    ContentCompatibility::EncodeInitialForm(pPlayer->parentCell->formID, request.UserMods, request.CellId);
 
     request.Level = pPlayer->GetLevel();
 
@@ -163,12 +168,14 @@ void TransportService::OnConnected()
     request.PlayerTime.Month = pGameTime->GameMonth->f;
     request.PlayerTime.Day = pGameTime->GameDay->f;
 
-    Send(request);
+    m_queuedAuthentication = std::move(request);
 }
 
 void TransportService::OnDisconnected(EDisconnectReason aReason)
 {
     m_connected = false;
+    ++m_connectionGeneration;
+    m_queuedAuthentication.reset();
 
     spdlog::warn("Disconnected from server {}", aReason);
 
@@ -177,6 +184,43 @@ void TransportService::OnDisconnected(EDisconnectReason aReason)
 
 void TransportService::OnUpdate()
 {
+    if (m_manifestTask.valid() && m_manifestTask.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+    {
+        auto request = m_manifestTask.get();
+        if (m_manifestGeneration == m_connectionGeneration && Client::IsConnected())
+        {
+            const auto result = ContentCompatibility::Validate(request.UserMods);
+            if (result)
+                Send(request);
+            else
+            {
+                ConnectionErrorEvent event;
+                event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(ContentCompatibility::Describe(result)) + "\"}}";
+                m_dispatcher.trigger(event);
+                Close();
+            }
+        }
+    }
+    if (m_queuedAuthentication && !m_manifestTask.valid())
+    {
+        auto request = std::move(*m_queuedAuthentication);
+        m_queuedAuthentication.reset();
+        m_manifestGeneration = m_connectionGeneration;
+        const auto dataPath = std::filesystem::current_path() / L"Data";
+        // Only file IO and copies of the manifest cross threads; no engine objects do.
+        m_manifestTask = std::async(
+            std::launch::async,
+            [request = std::move(request), dataPath]() mutable
+            {
+                for (auto& entry : request.UserMods.ModList)
+                {
+                    const std::u8string filename(reinterpret_cast<const char8_t*>(entry.Filename.data()), entry.Filename.size());
+                    const auto path = dataPath / filename;
+                    FingerprintPluginFile(path, entry.Digest);
+                }
+                return request;
+            });
+    }
 }
 
 double TransportService::GetMessageReceiveTime() const noexcept
@@ -225,6 +269,7 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
 
     switch (acMessage.Type)
     {
+    case AR::kContentMismatch: ErrorInfo += "\"error\":\"content_mismatch\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acMessage.ContentError) + "\"}"; break;
     case AR::kWrongVersion:
         ErrorInfo += "\"error\": \"wrong_version\", \"data\": {";
         ErrorInfo += fmt::format("\"expectedVersion\": \"{}\", \"version\": \"{}\"", acMessage.Version, BUILD_COMMIT);

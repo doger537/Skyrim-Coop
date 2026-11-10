@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <array>
 
 using TiltedPhoques::String;
 using TiltedPhoques::Vector;
@@ -11,9 +12,10 @@ struct Mods
     {
         String Filename;
         uint16_t Id;
-        bool IsLite;
+        bool IsLite{};
+        std::array<uint8_t, 32> Digest{};
 
-        bool operator==(const Entry& acRhs) const noexcept { return Filename == acRhs.Filename && Id == acRhs.Id && IsLite == acRhs.IsLite; }
+        bool operator==(const Entry& acRhs) const noexcept { return Filename == acRhs.Filename && Id == acRhs.Id && IsLite == acRhs.IsLite && Digest == acRhs.Digest; }
 
         bool operator!=(const Entry& acRhs) const noexcept { return !this->operator==(acRhs); }
     };

@@ -27,6 +27,7 @@ Player::Player(Player&& aRhs) noexcept
     , m_party{std::exchange(aRhs.m_party, {})}
     , m_questLog{std::exchange(aRhs.m_questLog, {})}
     , m_cell{std::exchange(aRhs.m_cell, {})}
+    , m_inventoryOperations{std::exchange(aRhs.m_inventoryOperations, {})}
 {
 }
 

@@ -7,6 +7,7 @@ export interface ErrorEvent {
   error:
     | 'wrong_version'
     | 'mods_mismatch'
+    | 'content_mismatch'
     | 'client_mods_disallowed'
     | 'wrong_password'
     | 'server_full'
@@ -62,6 +63,16 @@ export class ErrorService {
     } else {
       let data: Record<string, any> = error.data;
       switch (error.error) {
+        case 'content_mismatch':
+          data = {
+            reason: String(error.data?.reason ?? '')
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;'),
+          };
+          break;
         case 'mods_mismatch':
           let mods = '';
           const install = error.data.mods

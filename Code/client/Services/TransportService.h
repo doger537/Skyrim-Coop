@@ -4,6 +4,8 @@
 #include "Events/DisconnectedEvent.h"
 
 #include <atomic>
+#include <future>
+#include <Messages/AuthenticationRequest.h>
 #include <Client.hpp>
 
 struct ImguiService;
@@ -34,6 +36,8 @@ struct TransportService : Client
     void OnUpdate() override;
 
     [[nodiscard]] bool IsOnline() const noexcept { return m_connected; }
+    // A connected socket is not a playable session until content negotiation succeeds.
+    [[nodiscard]] bool IsConnected() const noexcept { return m_connected && Client::IsConnected(); }
     void SetServerPassword(const std::string& acPassword) noexcept { m_serverPassword = acPassword; }
     const uint32_t& GetLocalPlayerId() const noexcept { return m_localPlayerId; }
 
@@ -62,6 +66,10 @@ private:
     String m_serverPassword{};
     uint32_t m_localPlayerId;
     double m_lastPollTime{};
+    std::optional<AuthenticationRequest> m_queuedAuthentication;
+    std::future<AuthenticationRequest> m_manifestTask;
+    uint64_t m_connectionGeneration{};
+    uint64_t m_manifestGeneration{};
 
     entt::scoped_connection m_updateConnection;
     entt::scoped_connection m_sendServerMessageConnection;

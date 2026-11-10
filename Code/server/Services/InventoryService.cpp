@@ -49,8 +49,8 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
         {
             const uint32_t ownerId = pOwner ? pOwner->GetId() : 0;
             spdlog::debug(
-                "Rejected inventory change from player {:X} for actor {:X} at stale epoch {}; current owner is {:X} at epoch {}",
-                acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch, ownerId, pOwnerComponent->OwnershipEpoch);
+                "Rejected inventory change from player {:X} for actor {:X} at stale epoch {}; current owner is {:X} at epoch {}", acMessage.pPlayer->GetId(), message.ServerId,
+                message.OwnershipEpoch, ownerId, pOwnerComponent->OwnershipEpoch);
             return;
         }
 
@@ -61,8 +61,8 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
             // A non-owner may still change an NPC's inventory through normal gameplay interactions
             // such as pickpocketing or looting. The epoch and range checks keep the interaction tied
             // to the currently visible incarnation of that NPC.
-            isRemoteNpcInteraction = pOwner && pCharacterComponent && pCellComponent && !pCharacterComponent->IsPlayer()
-                && acMessage.pPlayer->GetCellComponent().IsInRange(*pCellComponent, pCharacterComponent->IsDragon());
+            isRemoteNpcInteraction = pOwner && pCharacterComponent && pCellComponent && !pCharacterComponent->IsPlayer() &&
+                                     acMessage.pPlayer->GetCellComponent().IsInRange(*pCellComponent, pCharacterComponent->IsDragon());
 
             if (!isRemoteNpcInteraction)
             {
@@ -76,8 +76,14 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
     else if (message.OwnershipEpoch != 0)
     {
         spdlog::warn(
-            "Rejected inventory change from player {:X} because object {:X} unexpectedly carried ownership epoch {}",
-            acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+            "Rejected inventory change from player {:X} because object {:X} unexpectedly carried ownership epoch {}", acMessage.pPlayer->GetId(), message.ServerId,
+            message.OwnershipEpoch);
+        return;
+    }
+
+    if (!acMessage.pPlayer->AcceptInventoryOperation(message.OperationId))
+    {
+        spdlog::debug("Discarded duplicate or expired inventory operation {} from player {:X}", message.OperationId, acMessage.pPlayer->GetId());
         return;
     }
 
@@ -115,8 +121,8 @@ void InventoryService::OnInventorySnapshot(const PacketEvent<RequestInventorySna
     {
         const uint32_t ownerId = ownerComponent.GetOwner() ? ownerComponent.GetOwner()->GetId() : 0;
         spdlog::debug(
-            "Rejected inventory snapshot from player {:X} for actor {:X}; current owner is {:X} and requested epoch {} does not match {}",
-            acMessage.pPlayer->GetId(), message.ServerId, ownerId, message.OwnershipEpoch, ownerComponent.OwnershipEpoch);
+            "Rejected inventory snapshot from player {:X} for actor {:X}; current owner is {:X} and requested epoch {} does not match {}", acMessage.pPlayer->GetId(),
+            message.ServerId, ownerId, message.OwnershipEpoch, ownerComponent.OwnershipEpoch);
         return;
     }
 
@@ -149,16 +155,16 @@ void InventoryService::OnEquipmentChanges(const PacketEvent<RequestEquipmentChan
         {
             const uint32_t ownerId = pOwnerComponent->GetOwner() ? pOwnerComponent->GetOwner()->GetId() : 0;
             spdlog::debug(
-                "Rejected equipment change from player {:X} for actor {:X}; current owner is {:X} and requested epoch {} does not match {}",
-                acMessage.pPlayer->GetId(), message.ServerId, ownerId, message.OwnershipEpoch, pOwnerComponent->OwnershipEpoch);
+                "Rejected equipment change from player {:X} for actor {:X}; current owner is {:X} and requested epoch {} does not match {}", acMessage.pPlayer->GetId(),
+                message.ServerId, ownerId, message.OwnershipEpoch, pOwnerComponent->OwnershipEpoch);
             return;
         }
     }
     else if (message.OwnershipEpoch != 0)
     {
         spdlog::warn(
-            "Rejected equipment change from player {:X} because object {:X} unexpectedly carried ownership epoch {}",
-            acMessage.pPlayer->GetId(), message.ServerId, message.OwnershipEpoch);
+            "Rejected equipment change from player {:X} because object {:X} unexpectedly carried ownership epoch {}", acMessage.pPlayer->GetId(), message.ServerId,
+            message.OwnershipEpoch);
         return;
     }
 

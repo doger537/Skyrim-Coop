@@ -58,7 +58,8 @@ struct GameServer final : Server
     void SendToPlayers(const ServerMessage& acServerMessage, const Player* apExcludeSender = nullptr) const;
     bool SendToPlayersInRange(const ServerMessage& acServerMessage, const entt::entity acOrigin, const Player* apExcludeSender = nullptr) const;
     void SendToParty(const ServerMessage& acServerMessage, const PartyComponent& acPartyComponent, const Player* apExcludeSender = nullptr) const;
-    void SendToPartyInRange(const ServerMessage& acServerMessage, const PartyComponent& acPartyComponent, const entt::entity acOrigin, const Player* apExcludeSender = nullptr) const;
+    void
+    SendToPartyInRange(const ServerMessage& acServerMessage, const PartyComponent& acPartyComponent, const entt::entity acOrigin, const Player* apExcludeSender = nullptr) const;
 
     const Info& GetInfo() const noexcept { return m_info; }
 
@@ -118,6 +119,8 @@ private:
     UniquePtr<World> m_pWorld;
 
     bool m_requestStop;
+    std::optional<Mods> m_contentContract;
+    String m_sessionRuntime;
 
     static inline GameServer* s_pInstance = nullptr;
 };

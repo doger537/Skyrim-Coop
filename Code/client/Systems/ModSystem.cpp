@@ -9,10 +9,6 @@
 
 ModSystem::ModSystem(entt::dispatcher& aDispatcher) noexcept
 {
-    std::memset(m_standardToServer, 0, sizeof(m_standardToServer));
-    // Deal with temporary ids
-    m_standardToServer[0xFF] = std::numeric_limits<uint32_t>::max();
-
     m_modsConnection = aDispatcher.sink<Mods>().connect<&ModSystem::HandleMods>(this);
 }
 
@@ -37,7 +33,8 @@ bool ModSystem::GetServerModId(const uint32_t aGameId, uint32_t& aModId, uint32_
     }
 
     // Here we have a standard mod
-    aModId = m_standardToServer[hiByte & 0xFF];
+    if (!m_standardToServer.Resolve(hiByte, aModId))
+        return false;
     aBaseId = aGameId & 0x00FFFFFFu;
 
     return true;
@@ -80,8 +77,7 @@ void ModSystem::HandleMods(const Mods& acMods) noexcept
 {
     m_serverToGame.clear();
     m_liteToServer.clear();
-    std::memset(m_standardToServer, 0, sizeof(m_standardToServer));
-    m_standardToServer[0xFF] = std::numeric_limits<uint32_t>::max();
+    m_standardToServer.Reset();
 
     const auto pModManager = ModManager::Get();
 
@@ -97,7 +93,7 @@ void ModSystem::HandleMods(const Mods& acMods) noexcept
             else
             {
                 m_serverToGame.emplace(mod.Id, GameMod{static_cast<uint16_t>(pMod->GetId() & 0xFFu), false});
-                m_standardToServer[pMod->GetId() & 0xFF] = mod.Id;
+                m_standardToServer.Add(pMod->GetId() & 0xFF, mod.Id);
             }
         }
         else

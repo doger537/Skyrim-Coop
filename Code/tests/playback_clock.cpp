@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <limits>
 #include <vector>
 
 namespace
@@ -273,5 +274,28 @@ TEST_CASE("Playback clock", "[client.playback_clock]")
 
         REQUIRE(clock.GetSnapshotInterval() == Approx(33.0));
         REQUIRE(clock.GetJitter() == Approx(0.0));
+    }
+
+    SECTION("Invalid timestamps cannot poison estimates")
+    {
+        PlaybackClock clock;
+        REQUIRE_FALSE(clock.AddSample(std::numeric_limits<double>::quiet_NaN(), 1));
+        REQUIRE_FALSE(clock.AddSample(std::numeric_limits<double>::infinity(), 1));
+        REQUIRE_FALSE(clock.AddSample(-1.0, 1));
+        REQUIRE_FALSE(clock.IsRunning());
+        REQUIRE(clock.AddSample(100.0, 1000));
+        const double tick = clock.GetRenderTick();
+        REQUIRE(clock.Advance(std::numeric_limits<double>::infinity()) == 0.0);
+        REQUIRE(clock.GetRenderTick() == tick);
+    }
+    SECTION("A backward local clock step does not double-count elapsed time")
+    {
+        PlaybackClock clock;
+        clock.AddSample(100.0, 1000);
+        REQUIRE(clock.Advance(120.0) == 20.0);
+        const double tick = clock.GetRenderTick();
+        REQUIRE(clock.Advance(110.0) == 0.0);
+        REQUIRE(clock.GetRenderTick() == tick);
+        REQUIRE(clock.Advance(130.0) == 10.0);
     }
 }

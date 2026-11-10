@@ -1,4 +1,5 @@
 #pragma once
+#include <Structs/OperationWindow.h>
 
 struct ServerMessage;
 struct Player
@@ -41,6 +42,7 @@ struct Player
     void SetCellComponent(const CellIdComponent& aCellComponent) noexcept;
 
     void Send(const ServerMessage& acServerMessage, TiltedPhoques::EPacketFlags aPacketFlags = TiltedPhoques::kReliable) const;
+    bool AcceptInventoryOperation(uint64_t aId) noexcept { return m_inventoryOperations.Accept(aId); }
 
 private:
     uint32_t m_id{0};
@@ -56,4 +58,5 @@ private:
     CellIdComponent m_cell;
     uint32_t m_stringCacheId{0};
     uint16_t m_level{0};
+    OperationWindow m_inventoryOperations;
 };

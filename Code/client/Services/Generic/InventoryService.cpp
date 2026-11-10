@@ -67,7 +67,8 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
         const auto ownership = OwnershipSystem::GetOutgoingOwnership(m_world, *iter, acEvent.IsPlayerTransfer);
         if (!ownership)
         {
-            spdlog::debug("Discarded an inventory change for actor {:X} that isn't owned locally (item {:X}, count {})", acEvent.FormId, acEvent.Item.BaseId.BaseId, acEvent.Item.Count);
+            spdlog::debug(
+                "Discarded an inventory change for actor {:X} that isn't owned locally (item {:X}, count {})", acEvent.FormId, acEvent.Item.BaseId.BaseId, acEvent.Item.Count);
             return;
         }
 
@@ -87,6 +88,9 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
     }
 
     RequestInventoryChanges request;
+    if (m_nextOperationId == std::numeric_limits<uint64_t>::max())
+        return;
+    request.OperationId = ++m_nextOperationId;
     request.ServerId = serverId;
     request.OwnershipEpoch = ownershipEpoch;
     request.Item = acEvent.Item;

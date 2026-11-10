@@ -1,0 +1,8 @@
+target("TrueCoopProtocolProbe")
+    set_kind("binary")
+    set_group("Tests")
+    set_default(false)
+    add_files("main.cpp")
+    add_deps("SkyrimEncoding", "TiltedConnect")
+    add_packages("tiltedcore", "hopscotch-map", "glm", "gamenetworkingsockets")
+    add_includedirs("../encoding", "../../build")

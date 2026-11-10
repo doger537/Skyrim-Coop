@@ -7,6 +7,8 @@
 
 bool PlaybackClock::AddSample(const double aArrivalTime, const uint64_t aCaptureTick) noexcept
 {
+    if (!std::isfinite(aArrivalTime) || aArrivalTime < 0.0)
+        return false;
     // A duplicate carries no new timing information and would skew the interval estimate
     for (size_t i = 0; i < m_sampleCount; ++i)
     {
@@ -33,7 +35,7 @@ bool PlaybackClock::AddSample(const double aArrivalTime, const uint64_t aCapture
 
 double PlaybackClock::Advance(const double aNow) noexcept
 {
-    if (!IsRunning())
+    if (!IsRunning() || !std::isfinite(aNow) || aNow < m_lastAdvanceTime)
         return 0.0;
 
     const double delta = std::max(aNow - m_lastAdvanceTime, 0.0);

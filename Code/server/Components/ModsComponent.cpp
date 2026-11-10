@@ -1,10 +1,12 @@
 
 #include <Components.h>
 #include <es_loader/ESLoader.h>
+#include <Structs/ContentCompatibility.h>
 
 uint32_t ModsComponent::AddStandard(const String& acpFilename) noexcept
 {
-    const auto itor = m_standardMods.find(acpFilename);
+    const auto name = ContentCompatibility::NormalizeName(acpFilename);
+    const auto itor = m_standardMods.find(name);
     if (itor != std::end(m_standardMods))
     {
         itor.value().refCount++;
@@ -12,14 +14,15 @@ uint32_t ModsComponent::AddStandard(const String& acpFilename) noexcept
     }
 
     const auto id = m_seed++;
-    m_standardMods.emplace(acpFilename, Entry{id, 1});
+    m_standardMods.emplace(name, Entry{id, 1});
 
     return id;
 }
 
 uint32_t ModsComponent::AddLite(const String& acpFilename) noexcept
 {
-    const auto itor = m_liteMods.find(acpFilename);
+    const auto name = ContentCompatibility::NormalizeName(acpFilename);
+    const auto itor = m_liteMods.find(name);
     if (itor != std::end(m_liteMods))
     {
         itor.value().refCount++;
@@ -27,7 +30,7 @@ uint32_t ModsComponent::AddLite(const String& acpFilename) noexcept
     }
 
     const auto id = m_seed++;
-    m_liteMods.emplace(acpFilename, Entry{id, 1});
+    m_liteMods.emplace(name, Entry{id, 1});
 
     return id;
 }

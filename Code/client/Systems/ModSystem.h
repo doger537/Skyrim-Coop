@@ -1,4 +1,5 @@
 #pragma once
+#include <Structs/FormIdMapping.h>
 
 struct Mods;
 struct GameId;
@@ -31,5 +32,5 @@ private:
     entt::scoped_connection m_modsConnection;
     Map<uint16_t, uint32_t> m_liteToServer;
     Map<uint32_t, GameMod> m_serverToGame;
-    uint32_t m_standardToServer[0x100];
+    StandardModMapping m_standardToServer;
 };

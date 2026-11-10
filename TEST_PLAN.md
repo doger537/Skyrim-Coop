@@ -36,3 +36,9 @@ ID / commit клиента и сервера / дата / контент / сц�
 
 Автоматические проверки: Tools/TrueCoop/Build.ps1 -CheckOnly; конфигурация xmake;
 сборка TPTests и запуск Catch2; Angular production build. Отдельный отчёт текущего запуска: BASELINE.md.
+
+Итерация 2: pure-data проверки content_compatibility.cpp и два регрессионных сценария PlaybackClock.
+Headless-сеть: собрать TrueCoopProtocolProbe, запустить НОВЫЙ частный сервер с портом 10582 и
+bEnableContentCheck=true, выполнить TrueCoopProtocolProbe.exe 127.0.0.1:10582, остановить сервер /quit.
+Этот тест создаёт синтетических игроков/NPC, поэтому его нельзя запускать на игровом сервере прохождения.
+Пройденные headless-сценарии не заменяют игровые A–J. См. ITERATION_2.md.

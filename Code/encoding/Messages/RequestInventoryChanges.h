@@ -19,10 +19,12 @@ struct RequestInventoryChanges final : ClientMessage
 
     bool operator==(const RequestInventoryChanges& acRhs) const noexcept
     {
-        return GetOpcode() == acRhs.GetOpcode() && ServerId == acRhs.ServerId && OwnershipEpoch == acRhs.OwnershipEpoch && Item == acRhs.Item && Drop == acRhs.Drop && UpdateClients == acRhs.UpdateClients;
+        return GetOpcode() == acRhs.GetOpcode() && ServerId == acRhs.ServerId && OperationId == acRhs.OperationId && OwnershipEpoch == acRhs.OwnershipEpoch && Item == acRhs.Item &&
+               Drop == acRhs.Drop && UpdateClients == acRhs.UpdateClients;
     }
 
     uint32_t ServerId{};
+    uint64_t OperationId{};
     uint32_t OwnershipEpoch{};
     Inventory::Entry Item{};
     bool Drop = false;

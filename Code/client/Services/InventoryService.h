@@ -76,6 +76,7 @@ private:
     World& m_world;
     entt::dispatcher& m_dispatcher;
     TransportService& m_transport;
+    uint64_t m_nextOperationId{};
 
     entt::scoped_connection m_updateConnection;
     entt::scoped_connection m_inventoryConnection;

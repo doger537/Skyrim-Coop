@@ -1,6 +1,20 @@
 # Сетевой протокол
 
-В этой итерации сообщения и бинарные форматы НЕ изменены.
+В первой итерации сообщения не менялись. В итерации 2 протокол изменён и требует обновления
+всех клиентов и сервера вместе. BUILD_COMMIT новой сборки отделяет её от предыдущего ZIP.
+
+Изменения итерации 2:
+
+- Mods::Entry: после имени плагина идут 32 байта SHA-256. Serialize пишет ровно объявленное число
+  записей (не более 4096). Активный манифест ограничен расчётным бюджетом 48 KiB из пакета 64 KiB.
+- AuthenticationRequest: после Version идёт RuntimeVersion. WorldSpaceId/CellId в ЭТОМ запросе
+  используют ModId=index+1 в UserMods, ноль — отсутствие объекта. Сервер преобразует их до PlayerJoinEvent.
+  Во всех игровых сообщениях остаются обычные серверные ModId/BaseId.
+- AuthenticationResponse: после Version идёт ContentError; добавлен kContentMismatch.
+- RequestInventoryChanges: после ServerId идёт uint64 OperationId (varint), уникальный в соединении.
+  Сервер проверяет владение до replay-фильтра; устаревший запрос не расходует номер операции.
+- До успешного AuthenticationResponse игровые сервисы клиента не публикуют состояние.
+
 Определения и сериализаторы: Code/encoding/Messages; структуры: Code/encoding/Structs.
 Транспорт: Libraries/TiltedConnect (GameNetworkingSockets).
 
