@@ -10,6 +10,14 @@ $match = [regex]::Match($buildInfo, '#define BUILD_COMMIT "([^"]+)"')
 if (!$match.Success) { throw 'Missing build identity' }
 $version = $match.Groups[1].Value
 if ($version -notmatch '^[a-zA-Z0-9.-]+$') { throw 'Unsafe build identity' }
+$sourceVersion = git -C $repo describe --tags --always
+if ($LASTEXITCODE -ne 0 -or $version -ne $sourceVersion.Trim()) { throw 'Build identity does not match source revision' }
+foreach ($name in @('SkyrimTogether.exe','SkyrimTogetherServer.exe','STServer.dll','EarlyLoad.dll','TPProcess.exe')) {
+    $built = Join-Path $repo "build/windows/x64/releasedbg/$name"
+    $staged = Join-Path $repo "distrib/bin/$name"
+    if (!(Test-Path $built) -or !(Test-Path $staged) -or
+        (Get-FileHash $built).Hash -ne (Get-FileHash $staged).Hash) { throw "Stale distribution file: $name" }
+}
 $archive = Join-Path $outputs "SkyrimTrueCoop-$Label-SSE-1.7.104-$version.zip"
 if (Test-Path -LiteralPath $archive) { throw 'Output already exists; use another label' }
 $stage = Join-Path $workspace ('work/package-' + [Guid]::NewGuid().ToString('N'))

@@ -66,7 +66,14 @@ try {
         $env:VSInstallDir = $vsPath.TrimEnd('\') + '\'
         $env:VCInstallDir = (Join-Path $vsPath 'VC').TrimEnd('\') + '\'
         $env:VisualStudioVersion = '17.0'
-        Invoke-Checked $xmake.Source @('config', '--plat=windows', '--arch=x64', "--mode=$Mode", "--skyrim_version=$SkyrimVersion", '--yes') 'configure.log'
+        # xmake caches config-file substitutions, including GIT_TAG, until configuration is cleaned.
+        Invoke-Checked $xmake.Source @('config', '--clean', '--plat=windows', '--arch=x64', "--mode=$Mode", "--skyrim_version=$SkyrimVersion", '--yes') 'configure.log'
+        $expectedVersion = & $git.Source describe --tags --always
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot determine build version' }
+        $buildInfo = Get-Content -LiteralPath (Join-Path $repo 'build/BuildInfo.h') -Raw
+        if (!$buildInfo.Contains('#define BUILD_COMMIT "' + $expectedVersion.Trim() + '"')) {
+            throw 'Stale BUILD_COMMIT: refusing to build incompatible protocol under an old version'
+        }
         Invoke-Checked $xmake.Source @('build', '--yes') 'native-build.log'
         Invoke-Checked $xmake.Source @('build', '--yes', 'TPTests') 'tests-build.log'
         Invoke-Checked $xmake.Source @('run', 'TPTests') 'tests.log'

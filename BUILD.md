@@ -23,6 +23,8 @@ git submodule update --init --recursive
 ```
 
 Сценарий останавливается при первой ошибке, пишет preflight.json и логи в build/truecoop.
+Перед конфигурацией он сбрасывает кеш подстановок xmake и проверяет соответствие BUILD_COMMIT
+текущему git describe: иначе новый протокол мог бы случайно получить старое имя версии.
 Он не устанавливает инструменты и не копирует файлы в Skyrim.
 Установка VS 2022 определяется через vswhere с UTF-8. Для пути с кириллицей сценарий
 передаёт xmake VSInstallDir/VCInstallDir с завершающим разделителем и VisualStudioVersion;
