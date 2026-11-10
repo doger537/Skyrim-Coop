@@ -1,0 +1,46 @@
+[2026-11-10 12:12:34.166] [info] [tid 2724]  Server v1.8.4-24-g971d55c7 started on port 10582
+[2026-11-10 12:12:34.167] [warning] [tid 2724]  bAnnounceServer is set to false. The server will not show up as a public server. If you are just playing with friends, this is probably what you want.
+[2026-11-10 12:12:34.168] [info] [tid 2724]  Loaded 0 resources
+[2026-11-10 12:12:44.347] [info] [tid 2724]  Connection received f6455174
+[2026-11-10 12:12:44.354] [info] [tid 2724]  New player 'Protocol probe' [f6455174] connected with 2 mods
+	: Skyrim.esm, Update.esm
+[2026-11-10 12:12:44.375] [info] [tid 2724]  Connection received fd60600e
+[2026-11-10 12:12:44.386] [info] [tid 2724]  New player 'Protocol probe' [fd60600e] connected with 2 mods
+	: Skyrim.esm, Update.esm
+[2026-11-10 12:12:44.468] [info] [tid 2724]  Connection ended fd60600e - 'Protocol probe' disconnected
+[2026-11-10 12:12:44.473] [info] [tid 2724]  Connection received 93b3a90f
+[2026-11-10 12:12:44.484] [info] [tid 2724]  New player 'Protocol probe' [93b3a90f] connected with 2 mods
+	: Skyrim.esm, Update.esm
+[2026-11-10 12:12:44.499] [info] [tid 2724]  Connection ended 93b3a90f - 'Protocol probe' disconnected
+[2026-11-10 12:12:44.504] [info] [tid 2724]  Connection received ce9d90e6
+[2026-11-10 12:12:44.516] [warning] [tid 2724]  Refused incompatible content: Skyrim runtime differs from this session: expected 1.7.104.0
+[2026-11-10 12:12:44.516] [info] [tid 2724]  Connection ended ce9d90e6 - 'NULL' disconnected
+[2026-11-10 12:12:44.537] [info] [tid 2724]  Connection received 2339532c
+[2026-11-10 12:12:44.547] [warning] [tid 2724]  Refused incompatible content: Active plugin has different contents or ESL flag: Update.esm
+[2026-11-10 12:12:44.547] [info] [tid 2724]  Connection ended 2339532c - 'NULL' disconnected
+[2026-11-10 12:12:44.571] [info] [tid 2724]  Connection received 1340c8ff
+[2026-11-10 12:12:44.581] [warning] [tid 2724]  Refused incompatible content: Missing active plugin required by this session: Update.esm
+[2026-11-10 12:12:44.581] [info] [tid 2724]  Connection ended 1340c8ff - 'NULL' disconnected
+[2026-11-10 12:12:44.605] [info] [tid 2724]  Connection received 17137527
+[2026-11-10 12:12:44.614] [warning] [tid 2724]  Refused incompatible content: Extra active plugin is not supported by this session: ccExtra.esl
+[2026-11-10 12:12:44.614] [info] [tid 2724]  Connection ended 17137527 - 'NULL' disconnected
+[2026-11-10 12:12:44.637] [info] [tid 2724]  Connection received d4a4afff
+[2026-11-10 12:12:44.648] [warning] [tid 2724]  Refused incompatible content: Invalid or oversized active plugin manifest
+[2026-11-10 12:12:44.648] [info] [tid 2724]  Connection ended d4a4afff - 'NULL' disconnected
+[2026-11-10 12:12:44.668] [info] [tid 2724]  Connection received 606802e8
+[2026-11-10 12:12:44.678] [warning] [tid 2724]  Refused incompatible content: Cannot fingerprint active plugin: Skyrim.esm
+[2026-11-10 12:12:44.678] [info] [tid 2724]  Connection ended 606802e8 - 'NULL' disconnected
+[2026-11-10 12:12:44.699] [info] [tid 2724]  Connection received 20671179
+[2026-11-10 12:12:44.710] [info] [tid 2724]  Connection ended 20671179 - 'NULL' disconnected
+[2026-11-10 12:12:44.732] [info] [tid 2724]  Connection received 4608001c
+[2026-11-10 12:12:44.742] [info] [tid 2724]  New player 4608001c '127.0.0.1' tried to connect with client old-client - Version mismatch
+[2026-11-10 12:12:44.742] [info] [tid 2724]  Connection ended 4608001c - 'NULL' disconnected
+[2026-11-10 12:12:44.759] [info] [tid 2724]  Connection ended f6455174 - 'Protocol probe' disconnected
+[2026-11-10 12:12:44.865] [info] [tid 2724]  Connection received 60a962cb
+[2026-11-10 12:12:44.877] [warning] [tid 2724]  Refused incompatible content: Active plugin has different contents or ESL flag: Skyrim.esm
+[2026-11-10 12:12:44.877] [info] [tid 2724]  Connection ended 60a962cb - 'NULL' disconnected
+[2026-11-10 12:12:44.900] [info] [tid 2724]  Connection received aa895471
+[2026-11-10 12:12:44.911] [info] [tid 2724]  New player 'Protocol probe' [aa895471] connected with 2 mods
+	: Skyrim.esm, Update.esm
+[2026-11-10 12:12:44.927] [info] [tid 2724]  Connection ended aa895471 - 'Protocol probe' disconnected
+[2026-11-10 12:12:53.353] [info] [tid 2724]  Server shutdown requested

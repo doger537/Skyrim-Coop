@@ -1,0 +1,281 @@
+checking for Microsoft C/C++ Compiler (x64) ... ok
+checking for Microsoft Visual Studio (x64) version ... 2022
+generating Code\common\BuildInfo.h.in ... ok
+warning: please use add_configs("runtimes") instead of add_configs("vs_runtime").
+[  7%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\launcher.rc
+[  7%]: <SkyrimTogetherServer> compiling.releasedbg build\.gens\SkyrimTogetherServer\windows\x64\releasedbg\Code\server\Pch.h
+[  7%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\Launcher.cpp
+[  8%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\loader\MemoryLayout.cpp
+[  9%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\oobe\PathArgument.cpp
+[  9%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\oobe\PathSelection.cpp
+[  9%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\steam\SteamLoader.cpp
+[  9%]: <SkyrimTogetherClient> compiling.releasedbg build\.gens\SkyrimTogetherClient\windows\x64\releasedbg\Code\client\TiltedOnlinePCH.h
+[ 10%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\stubs\DllBlocklist.cpp
+[ 10%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\stubs\FileMapping.cpp
+[ 10%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\utils\Error.cpp
+[ 17%]: <SkyrimServerRunner> compiling.releasedbg Code\server_runner\server_runner.rc
+[ 18%]: <SkyrimServerRunner> compiling.releasedbg Code\server_runner\DediRunner.cpp
+[ 18%]: <SkyrimServerRunner> compiling.releasedbg Code\server_runner\main.cpp
+Code\server_runner\main.cpp(147): warning C4996: 'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Components\ModsComponent.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Animation\ActionReplayCache.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Animation\AnimationEventLists.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Cell.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Map.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Player.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\PlayerManager.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Region.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\GameServer.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\main.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Pch.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Component_Bindings.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\server.rc
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\ESLoader_Bindings.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\GameServer_Bindings.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\GLM_Bindings.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Player_Bindings.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\ScriptBindings.cpp
+[ 64%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\CalendarService_Bindings.cpp
+Code\server\Game\Animation\ActionReplayCache.cpp(35): warning C4244: инициализация: преобразование "unsigned __int64" в "int32_t", возможна потеря данных
+[ 64%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\CharacterService_Bindings.cpp
+[ 64%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\PartyService_Bindings.cpp
+[ 64%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\PlayerService_Bindings.cpp
+[ 64%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\QuestService_Bindings.cpp
+[ 64%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\ScriptService_Bindings.cpp
+[ 65%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\World_Bindings.cpp
+[ 65%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\ActorValueService.cpp
+[ 65%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\CalendarService.cpp
+[ 65%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\CharacterService.cpp
+[ 65%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\CombatService.cpp
+[ 65%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\CommandService.cpp
+[ 66%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\InventoryService.cpp
+[ 66%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\MagicService.cpp
+[ 66%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\MapService.cpp
+[ 66%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\ObjectService.cpp
+[ 66%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\OverlayService.cpp
+[ 66%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\PartyService.cpp
+[ 67%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\PlayerService.cpp
+Code\server\Services\CalendarService.cpp(90): warning C4018: <: несоответствие типов со знаком и без знака
+Code\server\Services\CalendarService.cpp(94): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+[ 67%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\QuestService.cpp
+[ 67%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\ScriptService.cpp
+[ 67%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\ServerListService.cpp
+[ 67%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\StringCacheService.cpp
+[ 67%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\WeatherService.cpp
+[ 67%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\World.cpp
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\CrashHandler.cpp
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\ActorExtension.cpp
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Animation.cpp
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\BGSCreatedObjectManager.cpp
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\BSAnimationGraphManager.cpp
+Code\server\GameServer.cpp(381): warning C4244: аргумент: преобразование "T" в "int", возможна потеря данных
+        with
+        [
+            T=int64_t
+        ]
+Code\server\GameServer.cpp(381): warning C4244: аргумент: преобразование "T" в "int", возможна потеря данных
+        with
+        [
+            T=int64_t
+        ]
+Code\server\GameServer.cpp(403): warning C4244: аргумент: преобразование "T" в "float", возможна потеря данных
+        with
+        [
+            T=int64_t
+        ]
+Code\server\GameServer.cpp(403): warning C4244: аргумент: преобразование "T" в "int", возможна потеря данных
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\FormFactory.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Forms.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\IAnimationGraphManagerHolder.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\INISettingCollection.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Memory.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Misc\BSScript.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Misc\Lock.cpp
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Misc\MenuTopicManager.cpp
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Misc\SubtitleManager.cpp
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\ModManager.cpp
+Code\client\CrashHandler.cpp(17): warning C4996: 'gmtime': This function or variable may be unsafe. Consider using gmtime_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Overrides.cpp
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\PapyrusFunctions.cpp
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Primitives.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\References.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Renderer.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\SaveLoad.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\TES.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\TimeManager.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\main.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\ModCompat\BehaviorOrig.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\ModCompat\BehaviorVar.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\ModCompat\BehaviorVarsMap.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\NvidiaUtil.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\ScriptExtender.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\DebugService.cpp
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\ActorValuesView.cpp
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\AnimDebugView.cpp
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\CalendarDebugView.cpp
+Code\server\Services\ServerListService.cpp(10): warning C4005: CPPHTTPLIB_OPENSSL_SUPPORT: изменение макроопределения
+Code\server\Services\ServerListService.cpp(10): note: "CPPHTTPLIB_OPENSSL_SUPPORT" ранее объявлен в командной строке
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\CellView.cpp
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\CombatView.cpp
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\ComponentView.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\ContainerDebugView.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\DragonSpawnerView.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\EntitiesView.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\FormDebugView.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\NetworkView.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\PartyView.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\PlayerDebugView.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\ProcessView.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\QuestDebugView.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\SkillView.cpp
+Code\client\Services\Debug\Views\CombatView.cpp(157): warning C4804: >: небезопасное использование типа "bool" в операции
+Code\client\Services\Debug\Views\CombatView.cpp(203): warning C4018: <: несоответствие типов со знаком и без знака
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\WeatherView.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\ActorValueService.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\CalendarService.cpp
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\CharacterService.cpp
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\CombatService.cpp
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\CommandService.cpp
+Code\client\Services\Debug\Views\ContainerDebugView.cpp(37): warning C4244: инициализация: преобразование "unsigned __int64" в "int", возможна потеря данных
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\DiscordService.cpp
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\DiscoveryService.cpp
+Code\client\Services\Generic\CalendarService.cpp(75): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+Code\client\Services\Generic\CalendarService.cpp(76): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+Code\client\Services\Generic\CalendarService.cpp(77): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+Code\client\Services\Generic\CalendarService.cpp(105): warning C4244: =: преобразование "uint32_t" в "float", возможна потеря данных
+Code\client\Services\Generic\CalendarService.cpp(106): warning C4244: =: преобразование "uint32_t" в "float", возможна потеря данных
+Code\client\Services\Generic\CalendarService.cpp(107): warning C4244: =: преобразование "uint32_t" в "float", возможна потеря данных
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\ImguiService.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\InputService.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\InventoryService.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\MagicService.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\MapService.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\ObjectService.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\OverlayClient.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\OverlayService.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\PapyrusService.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\PartyService.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\PlayerService.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\QuestService.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\RunnerService.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\StringCacheService.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\TransportService.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\WeatherService.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\SkyrimVM64.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\AnimationSystem.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\CacheSystem.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\ContentFingerprint.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\FaceGenSystem.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\InterpolationSystem.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\LeveledNpcSystem.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\ModSystem.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\OwnershipSystem.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\PlaybackClock.cpp
+Code\client\Systems\AnimationSystem.cpp(94): warning C4244: =: преобразование "unsigned __int64" в "uint32_t", возможна потеря данных
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\RenderSystemD3D11.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\TiltedOnlineApp.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\TiltedOnlinePCH.cpp
+Code\client\Systems\InterpolationSystem.cpp(116): warning C4305: -=: усечение из "double" в "float"
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Utils.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\VersionDb.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\World.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Actor.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\AI\AIProcess.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\AI\Movement\PlayerControls.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSCore\BSAtomic.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSCore\BSCRC32.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSGraphics\BSGraphicsRenderer.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSInput\BSInputDeviceManager.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSRandom\BSRandom.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSSystem\BSTaskletManager.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSSystem\BSThread.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Camera\PlayerCamera.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Camera\TESCamera.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\CellRespawnOverrides.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Combat\CombatController.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Components\TESActorBaseData.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Components\TESContainer.cpp
+Code\client\Services\Generic\OverlayService.cpp(487): warning C4244: аргумент: преобразование "float" в "int", возможна потеря данных
+Code\client\Services\Generic\OverlayService.cpp(488): warning C4244: аргумент: преобразование "float" в "int", возможна потеря данных
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Components\TESSpellList.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Components\TESTexture.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\DefaultObjectManager.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\DefaultStringManager.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Effects\InvisibilityEffect.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\EquipManager.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Events\EventDispacther.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\ExtraData\ExtraContainerChanges.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\ExtraData\ExtraDataList.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\ActorValueInfo.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\EnchantmentItem.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\MagicItem.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\TESObjectCELL.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\TESQuest.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\TESWorldSpace.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Havok\bhkCharacterController.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Havok\hkbBehaviorGraph.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\ConsoleCommandGuard.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\IMenu.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\MenuControls.cpp
+[ 88%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\Menus\HUDMenuUtils.cpp
+[ 88%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\Menus\MapMenu.cpp
+[ 88%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\Menus\SkillsMenu.cpp
+[ 88%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\UI.cpp
+[ 88%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\LoadingScreen.cpp
+[ 88%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Magic\ActorMagicCaster.cpp
+[ 88%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Magic\EffectItem.cpp
+[ 89%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Magic\MagicCaster.cpp
+[ 89%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Magic\MagicTarget.cpp
+[ 89%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\ActorState.cpp
+[ 89%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\BSFixedString.cpp
+[ 89%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\BSScript.cpp
+[ 89%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\GameVM.cpp
+[ 90%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\GarbageCollector.cpp
+[ 90%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\WeatherManager.cpp
+[ 90%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\NetImmerse\NiCamera.cpp
+[ 90%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\PlayerCharacter.cpp
+[ 90%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Projectiles\Projectile.cpp
+[ 90%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\RTTI.cpp
+[ 91%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\SaveLoad.cpp
+[ 91%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Sky\Sky.cpp
+[ 91%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\TESObjectREFR.cpp
+[ 91%]: <SkyrimTogetherServer> linking.releasedbg STServer.dll
+Code\client\Services\Generic\TransportService.cpp(90): warning C4267: аргумент: преобразование из "size_t" в "uint32_t"; возможна потеря данных
+Code\client\Services\Generic\TransportService.cpp(167): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+Code\client\Services\Generic\TransportService.cpp(168): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+Code\client\Services\Generic\TransportService.cpp(169): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+[ 93%]: <SkyrimServerRunner> linking.releasedbg SkyrimTogetherServer.exe
+Code\client\Games\Skyrim\TESObjectREFR.cpp(689): warning C4018: <: несоответствие типов со знаком и без знака
+[ 94%]: <SkyrimTogetherClient> archiving.releasedbg SkyrimTogetherClient.lib
+[ 94%]: <SkyrimImmersiveLauncher> linking.releasedbg SkyrimTogether.exe
+[100%]: build ok, spent 136.922s
+warning: add_cxflags("-fPIC") is ignored, please pass `{force = true}` or call `set_policy("check.auto_ignore_flags", false)` if you want to set it.
+[100%]: build ok, spent 0.297s
+===============================================================================
+All tests passed (153 assertions in 12 test cases)
+
+Lockfile is up to date, resolution step is skipped
+Already up to date
+
+Done in 1.1s using pnpm v9.15.9
+
+> skyrim-together-ui@0.0.0 deploy:production C:\Users\panzz\Documents\Codex\2026-11-08\new-chat\outputs\SkyrimTrueCoop\Code\skyrim_ui
+> ng build --output-hashing none --configuration=production --base-href ./ --resources-output-path ./assets/
+
+- Generating browser application bundles (phase: setup)...
+√ Browser application bundle generation complete.
+√ Browser application bundle generation complete.
+- Copying assets...
+√ Copying assets complete.
+- Generating index html...
+√ Index html generation complete.
+
+Initial Chunk Files | Names         |  Raw Size | Estimated Transfer Size
+main.js             | main          | 565.09 kB |               135.06 kB
+polyfills.js        | polyfills     |  33.06 kB |                10.65 kB
+styles.css          | styles        |   4.91 kB |                 1.07 kB
+runtime.js          | runtime       |   1.06 kB |               601 bytes
+
+| Initial Total | 604.12 kB |               147.37 kB
+
+Build at: 2026-11-10T09:10:50.993Z - Hash: 306805297cfc0ad8 - Time: 5281ms
