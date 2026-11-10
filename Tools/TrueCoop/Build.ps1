@@ -9,6 +9,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $logDir = Join-Path $repo 'build/truecoop'
+$vsEnvironment = @{}
+foreach ($name in @('VSInstallDir', 'VCInstallDir', 'VisualStudioVersion')) {
+    $vsEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+}
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 function Invoke-Checked {
@@ -27,7 +31,7 @@ try {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
     $vsPath = $null
     if (Test-Path -LiteralPath $vswhere) {
-        $vsPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        $vsPath = & $vswhere -utf8 -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     }
     if (!$vsPath) { $missing.Add('Visual Studio 2022 C++ Build Tools (MSVC x64/x86)') }
     $sdk = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/Include'
@@ -57,6 +61,11 @@ try {
     } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $logDir 'preflight.json') -Encoding UTF8
     if ($missing.Count) { throw ('Missing prerequisites: ' + ($missing -join '; ')) }
     if (!$CheckOnly) {
+        # Bypass xmake's non-UTF-8 vswhere discovery for installation paths with Cyrillic.
+        # VS batch scripts require the trailing separator on these variables.
+        $env:VSInstallDir = $vsPath.TrimEnd('\') + '\'
+        $env:VCInstallDir = (Join-Path $vsPath 'VC').TrimEnd('\') + '\'
+        $env:VisualStudioVersion = '17.0'
         Invoke-Checked $xmake.Source @('config', '--plat=windows', '--arch=x64', "--mode=$Mode", "--skyrim_version=$SkyrimVersion", '--yes') 'configure.log'
         Invoke-Checked $xmake.Source @('build', '--yes') 'native-build.log'
         Invoke-Checked $xmake.Source @('build', '--yes', 'TPTests') 'tests-build.log'
@@ -66,4 +75,9 @@ try {
             Invoke-Checked 'npm.cmd' @('exec', '--yes', '--package=pnpm@9.15.9', '--', 'pnpm', '--prefix', 'Code/skyrim_ui', 'deploy:production') 'ui-build.log'
         }
     }
-} finally { Pop-Location }
+} finally {
+    foreach ($name in $vsEnvironment.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $vsEnvironment[$name], 'Process')
+    }
+    Pop-Location
+}

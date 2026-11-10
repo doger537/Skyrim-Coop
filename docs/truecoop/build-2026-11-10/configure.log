@@ -1,0 +1,54 @@
+checking for Microsoft C/C++ Compiler (x64) ... ok
+checking for Microsoft Visual Studio (x64) version ... 2022
+  => install hopscotch-map v2.3.1 .. ok
+  => download https://github.com/xmake-mirror/build-artifacts/releases/download/snappy-1.1.10/windows-x64-vc14.39.33519-2a26ce639e064564bda0dcfab93e7110.7z .. ok
+  => install snappy 1.1.10 (precompiled) .. ok
+  => download https://github.com/microsoft/mimalloc/archive/refs/tags/v2.2.4.zip .. ok
+  => download https://github.com/catchorg/Catch2/archive/refs/tags/v2.13.9.zip .. ok
+  => download https://github.com/abseil/abseil-cpp/archive/refs/tags/20250127.1.tar.gz .. ok
+  => install catch2 v2.13.9 .. ok
+  => download https://github.com/xmake-mirror/build-artifacts/releases/download/libuv-v1.48.0/windows-x64-vc14.40.33807-83f3f0de210f4e5d8f46bd668e3ee167.7z .. ok
+  => install lua v5.4.8 .. ok
+  => install libuv v1.48.0 (precompiled) .. ok
+  => download https://github.com/0x1F9F1/mem/archive/refs/tags/1.0.0.tar.gz .. ok
+  => install mem 1.0.0 .. ok
+  => download https://github.com/TsudaKageyu/minhook/archive/v1.3.3.tar.gz .. ok
+  => download https://github.com/ThePhD/sol2/archive/refs/tags/v3.3.0.tar.gz .. ok
+  => install mimalloc v2.2.4 .. ok
+  => download https://github.com/xmake-mirror/build-artifacts/releases/download/tiltedcore-v0.2.9/windows-x64-vc14.44.35207-a984d563f9e448bfa7c6d9b92f93e32d.7z .. ok
+  => install tiltedcore v0.2.9 (precompiled) .. ok
+  => download https://github.com/herumi/xbyak/archive/v7.06.zip .. ok
+  => install xbyak v7.06 .. ok
+  => install minhook v1.3.3 .. ok
+  => download https://github.com/microsoft/DirectXTK/archive/nov2021.zip .. ok
+  => install abseil 20250127.1 .. ok
+  => download https://github.com/protocolbuffers/protobuf/releases/download/v26.1/protobuf-26.1.zip .. ok
+  => install directxtk 21.11.0 .. ok
+  => download https://github.com/skypjack/entt/archive/refs/tags/v3.10.0.tar.gz .. ok
+  => install sol2 v3.3.0 .. ok
+  => download https://github.com/xmake-mirror/build-artifacts/releases/download/cryptopp-8.9.0/windows-x64-vc14.44.35207-bbcea340cdea492c90b1699a210e1ff3.7z .. ok
+  => install cryptopp 8.9.0 (precompiled) .. ok
+  => download https://github.com/gabime/spdlog/archive/refs/tags/v1.13.0.zip .. ok
+  => install spdlog v1.13.0 .. ok
+  => install entt v3.10.0 .. ok
+  => download https://github.com/xmake-mirror/build-artifacts/releases/download/openssl-1.1.1-w/windows-x64-vc14.44.35207-61d86fc2f8cc4e60a5bef5bc478c3a92.7z .. ok
+  => download https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip .. ok
+  => install openssl 1.1.1-w (precompiled) .. ok
+  => download https://github.com/yhirose/cpp-httplib/archive/refs/tags/v0.14.0.tar.gz .. ok
+  => download https://cef-builds.spotifycdn.com/cef_binary_141.0.11+g7e73ac4+chromium-141.0.7390.123_windows64.tar.bz2 .. ok
+  => install cpp-httplib v0.14.0 .. ok
+  => download https://github.com/g-truc/glm/archive/refs/tags/0.9.9.8.tar.gz .. ok
+  => install glm 0.9.9+8 .. ok
+  => download https://github.com/xmake-mirror/build-artifacts/releases/download/zlib-v1.3.1/windows-x64-vc14.44.35207-d676b73b676c41cdae37b37fbf6c9cbd.7z .. ok
+  => install zlib v1.3.1 (precompiled) .. ok
+  => install protobuf-cpp 26.1 .. ok
+  => download https://dl-game-sdk.discordapp.net/3.2.1/discord_game_sdk.zip .. ok
+  => install cef 141.0.11 .. ok
+  => download https://github.com/ValveSoftware/GameNetworkingSockets/archive/v1.4.1.tar.gz .. ok
+  => download https://github.com/ocornut/imgui/archive/refs/tags/v1.89.7.tar.gz .. ok
+  => install discord 3.2.1 .. ok
+  => install gtest v1.14.0 .. ok
+  => install imgui v1.89.7 .. ok
+  => install gamenetworkingsockets v1.4.1 .. ok
+generating Code\common\BuildInfo.h.in ... ok
+warning: please use add_configs("runtimes") instead of add_configs("vs_runtime").

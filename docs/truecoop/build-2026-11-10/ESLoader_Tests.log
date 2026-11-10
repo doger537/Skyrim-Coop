@@ -1,0 +1,68 @@
+[==========] Running 8 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 8 tests from ESLoaderTest
+[ RUN      ] ESLoaderTest.BuildRecordCollection
+Code\components\es_loader\ESLoaderTest.cpp(30): error: Value of: pCollection
+  Actual: false
+Expected: true
+
+[  FAILED  ] ESLoaderTest.BuildRecordCollection (0 ms)
+[ RUN      ] ESLoaderTest.GetMapMarkerLandmark
+unknown file: error: SEH exception with code 0xc0000005 thrown in the test body.
+Stack trace:
+
+
+[  FAILED  ] ESLoaderTest.GetMapMarkerLandmark (0 ms)
+[ RUN      ] ESLoaderTest.GetNpcFaendal
+unknown file: error: SEH exception with code 0xc0000005 thrown in the test body.
+Stack trace:
+
+
+[  FAILED  ] ESLoaderTest.GetNpcFaendal (0 ms)
+[ RUN      ] ESLoaderTest.GetNpcDlcSerana
+unknown file: error: SEH exception with code 0xc0000005 thrown in the test body.
+Stack trace:
+
+
+[  FAILED  ] ESLoaderTest.GetNpcDlcSerana (0 ms)
+[ RUN      ] ESLoaderTest.GetContainerPersonalChest
+unknown file: error: SEH exception with code 0xc0000005 thrown in the test body.
+Stack trace:
+
+
+[  FAILED  ] ESLoaderTest.GetContainerPersonalChest (0 ms)
+[ RUN      ] ESLoaderTest.GetClimateDlcApocrypha
+unknown file: error: SEH exception with code 0xc0000005 thrown in the test body.
+Stack trace:
+
+
+[  FAILED  ] ESLoaderTest.GetClimateDlcApocrypha (0 ms)
+[ RUN      ] ESLoaderTest.GetGameSettingFloatBribeScale
+unknown file: error: SEH exception with code 0xc0000005 thrown in the test body.
+Stack trace:
+
+
+[  FAILED  ] ESLoaderTest.GetGameSettingFloatBribeScale (0 ms)
+[ RUN      ] ESLoaderTest.GetWorldTamriel
+unknown file: error: SEH exception with code 0xc0000005 thrown in the test body.
+Stack trace:
+
+
+[  FAILED  ] ESLoaderTest.GetWorldTamriel (0 ms)
+[----------] 8 tests from ESLoaderTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 8 tests from 1 test suite ran. (0 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 8 tests, listed below:
+[  FAILED  ] ESLoaderTest.BuildRecordCollection
+[  FAILED  ] ESLoaderTest.GetMapMarkerLandmark
+[  FAILED  ] ESLoaderTest.GetNpcFaendal
+[  FAILED  ] ESLoaderTest.GetNpcDlcSerana
+[  FAILED  ] ESLoaderTest.GetContainerPersonalChest
+[  FAILED  ] ESLoaderTest.GetClimateDlcApocrypha
+[  FAILED  ] ESLoaderTest.GetGameSettingFloatBribeScale
+[  FAILED  ] ESLoaderTest.GetWorldTamriel
+
+ 8 FAILED TESTS
+error: execv(C:\Users\panzz\Documents\Codex\2026-11-08\new-chat\outputs\SkyrimTrueCoop\build\windows\x64\releasedbg\ESLoader_Tests.exe ) failed(1), unknown reason

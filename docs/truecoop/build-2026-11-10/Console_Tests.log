@@ -1,0 +1,30 @@
+[==========] Running 6 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from ConsoleRegistryTest
+[ RUN      ] ConsoleRegistryTest.RegisterCommand
+[2026-11-10 10:31:08.797] [Test] [error] Expected 1 arguments but got 3
+[2026-11-10 10:31:08.797] [Test] [error] Expected argument of type numeric
+[2026-11-10 10:31:08.797] [Test] [error] Commands must begin with /
+[2026-11-10 10:31:08.797] [Test] [error] Failed to parse line
+[       OK ] ConsoleRegistryTest.RegisterCommand (0 ms)
+[ RUN      ] ConsoleRegistryTest.RegisterSetting
+[       OK ] ConsoleRegistryTest.RegisterSetting (0 ms)
+[----------] 2 tests from ConsoleRegistryTest (1 ms total)
+
+[----------] 2 tests from ConsoleUtils
+[ RUN      ] ConsoleUtils.TestUTF8
+[       OK ] ConsoleUtils.TestUTF8 (0 ms)
+[ RUN      ] ConsoleUtils.TestNumeric
+[       OK ] ConsoleUtils.TestNumeric (0 ms)
+[----------] 2 tests from ConsoleUtils (0 ms total)
+
+[----------] 2 tests from StringTokenizer
+[ RUN      ] StringTokenizer.Count
+[       OK ] StringTokenizer.Count (0 ms)
+[ RUN      ] StringTokenizer.Tokinize
+[       OK ] StringTokenizer.Tokinize (0 ms)
+[----------] 2 tests from StringTokenizer (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 6 tests from 3 test suites ran. (1 ms total)
+[  PASSED  ] 6 tests.

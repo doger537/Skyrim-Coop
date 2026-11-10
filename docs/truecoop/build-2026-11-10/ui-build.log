@@ -1,0 +1,21 @@
+
+> skyrim-together-ui@0.0.0 deploy:production C:\Users\panzz\Documents\Codex\2026-11-08\new-chat\outputs\SkyrimTrueCoop\Code\skyrim_ui
+> ng build --output-hashing none --configuration=production --base-href ./ --resources-output-path ./assets/
+
+- Generating browser application bundles (phase: setup)...
+√ Browser application bundle generation complete.
+√ Browser application bundle generation complete.
+- Copying assets...
+√ Copying assets complete.
+- Generating index html...
+√ Index html generation complete.
+
+Initial Chunk Files | Names         |  Raw Size | Estimated Transfer Size
+main.js             | main          | 564.91 kB |               134.98 kB
+polyfills.js        | polyfills     |  33.06 kB |                10.65 kB
+styles.css          | styles        |   4.91 kB |                 1.07 kB
+runtime.js          | runtime       |   1.06 kB |               601 bytes
+
+| Initial Total | 603.94 kB |               147.30 kB
+
+Build at: 2026-11-10T07:30:42.526Z - Hash: f9dbb45df4c927c5 - Time: 6838ms

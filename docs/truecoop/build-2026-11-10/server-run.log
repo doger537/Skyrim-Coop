@@ -1,0 +1,4 @@
+[2026-11-10 10:32:26.440] [info] [tid 24824]  Server v1.8.4-20-gf0785111 started on port 10579
+[2026-11-10 10:32:26.441] [warning] [tid 24824]  bAnnounceServer is set to false. The server will not show up as a public server. If you are just playing with friends, this is probably what you want.
+[2026-11-10 10:32:26.442] [info] [tid 24824]  Loaded 0 resources
+[2026-11-10 10:32:44.647] [info] [tid 24824]  Server shutdown requested

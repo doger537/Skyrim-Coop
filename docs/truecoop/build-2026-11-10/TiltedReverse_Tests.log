@@ -1,0 +1,21 @@
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ is a Catch v2.13.9 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+Load the reverse dll
+  Load
+-------------------------------------------------------------------------------
+Libraries\TiltedReverse\Code\tests\src\reverse.cpp(19)
+...............................................................................
+
+Libraries\TiltedReverse\Code\tests\src\reverse.cpp(19): FAILED:
+due to a fatal error condition:
+  SIGSEGV - Segmentation violation signal
+
+===============================================================================
+test cases: 1 | 1 failed
+assertions: 1 | 1 failed
+
+error: execv(C:\Users\panzz\Documents\Codex\2026-11-08\new-chat\outputs\SkyrimTrueCoop\build\windows\x64\releasedbg\TiltedReverse_Tests.exe ) failed(-1073741819), unknown reason

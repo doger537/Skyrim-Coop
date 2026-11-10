@@ -1,0 +1,631 @@
+Updating file: build/BranchInfo.h
+[  7%]: <ESLoader_Tests> compiling.releasedbg build\.gens\ESLoader_Tests\windows\x64\releasedbg\Code\components\es_loader\stdafx.h
+[  7%]: <Console_Tests> compiling.releasedbg Code\components\console\CommandSettingsProvider.cpp
+[  7%]: <Console_Tests> compiling.releasedbg Code\components\console\ConsoleRegistry.cpp
+[  7%]: <Console_Tests> compiling.releasedbg Code\components\console\ConsoleRegistryTest.cpp
+[  7%]: <SkyrimTogetherServer> compiling.releasedbg build\.gens\SkyrimTogetherServer\windows\x64\releasedbg\Code\server\Pch.h
+[  7%]: <ESLoader> compiling.releasedbg build\.gens\ESLoader\windows\x64\releasedbg\Code\components\es_loader\stdafx.h
+[  7%]: <SkyrimTogetherClient> compiling.releasedbg build\.gens\SkyrimTogetherClient\windows\x64\releasedbg\Code\client\TiltedOnlinePCH.h
+[  7%]: <SkyrimEncoding> compiling.releasedbg build\.gens\SkyrimEncoding\windows\x64\releasedbg\Code\encoding\EncodingPch.h
+[  7%]: <BaseLib> compiling.releasedbg Code\base\allocator\AllocatorSymbolOverride.cpp
+[  7%]: <BaseLib> compiling.releasedbg Code\base\dialogues\win\TaskDialog.cpp
+[  7%]: <BaseLib> compiling.releasedbg Code\base\tests\IniSettingTests.cpp
+[  7%]: <BaseLib> compiling.releasedbg Code\base\simpleini\ConvertUTF.cpp
+[  7%]: <BaseLib> compiling.releasedbg Code\base\tests\TestRunner.cpp
+[  7%]: <BaseLib> compiling.releasedbg Code\base\threading\ThreadUtils.cpp
+[  7%]: <Console_Tests> compiling.releasedbg Code\components\console\ConsoleUtils.cpp
+[  7%]: <Console_Tests> compiling.releasedbg Code\components\console\ConsoleUtilsTest.cpp
+[  8%]: <Console_Tests> compiling.releasedbg Code\components\console\IniSettingsProvider.cpp
+[  8%]: <Console_Tests> compiling.releasedbg Code\components\console\StringTokenizer.cpp
+Code\base\dialogues\win\TaskDialog.cpp(99): warning C4267: =: преобразование из "size_t" в "UINT"; возможна потеря данных
+[  8%]: <Console_Tests> compiling.releasedbg Code\components\console\StringTokenizerTest.cpp
+[  8%]: <Console_Tests> compiling.releasedbg Code\TestMain.cpp
+[  8%]: <UiProcess> compiling.releasedbg Libraries\TiltedUI\Code\ui_process\src\EventsV8Handler.cpp
+[  8%]: <UiProcess> compiling.releasedbg Libraries\TiltedUI\Code\ui_process\src\OverlayProc.cpp
+Code\components\console\StringTokenizer.cpp(44): warning C4244: =: преобразование "unsigned __int64" в "int", возможна потеря данных
+[  9%]: <UiProcess> compiling.releasedbg Libraries\TiltedUI\Code\ui_process\src\OverlayRenderProcessHandler.cpp
+[  9%]: <UiProcess> compiling.releasedbg Libraries\TiltedUI\Code\ui_process\src\OverlayV8Handler.cpp
+[  9%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\launcher.rc
+[  9%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\Launcher.cpp
+[  9%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\loader\ExeCache.cpp
+[  9%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\loader\ExeLoader.cpp
+[  9%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\loader\MemoryLayout.cpp
+[ 10%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\loader\PathRerouting.cpp
+[ 10%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\loader\TlsMemory.cpp
+[ 10%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\Main.cpp
+[ 10%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\memory\RipAllocator.cpp
+[ 10%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\oobe\PathArgument.cpp
+[ 10%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\oobe\PathSelection.cpp
+[ 11%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\oobe\SupportChecks.cpp
+[ 11%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\script_extender\SEMemoryBlock.cpp
+[ 11%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\steam\SteamCeg.cpp
+[ 11%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\steam\SteamLoader.cpp
+[ 11%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\stubs\CrtStartupHooks.cpp
+[ 11%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\stubs\DllBlocklist.cpp
+[ 12%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\stubs\FileMapping.cpp
+[ 12%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\usvfs\USVFS_Sentinel.cpp
+[ 12%]: <SkyrimImmersiveLauncher> compiling.releasedbg Code\immersive_launcher\utils\Error.cpp
+[ 12%]: <CommonLib> compiling.releasedbg Code\common\Cell.cpp
+[ 12%]: <CommonLib> compiling.releasedbg Code\common\DateTime.cpp
+[ 12%]: <CommonLib> compiling.releasedbg Code\common\Map.cpp
+[ 13%]: <Resources_Tests> compiling.releasedbg Code\components\resources\Pch.cpp
+[ 13%]: <Resources_Tests> compiling.releasedbg Code\components\resources\ResourceCollection.cpp
+[ 13%]: <Resources_Tests> compiling.releasedbg Code\components\resources\SemanticVersionTest.cpp
+[ 13%]: <Resources_Tests> compiling.releasedbg Code\TestMain.cpp
+[ 13%]: <TiltedConnect> compiling.releasedbg Libraries\TiltedConnect\Code\connect\src\Client.cpp
+[ 13%]: <TiltedConnect> compiling.releasedbg Libraries\TiltedConnect\Code\connect\src\Packet.cpp
+[ 14%]: <TiltedConnect> compiling.releasedbg Libraries\TiltedConnect\Code\connect\src\Server.cpp
+[ 14%]: <TiltedConnect> compiling.releasedbg Libraries\TiltedConnect\Code\connect\src\SteamInterface.cpp
+[ 14%]: <TiltedConnect> compiling.releasedbg Libraries\TiltedConnect\Code\connect\src\SynchronizedClock.cpp
+[ 14%]: <ImGuiImpl> compiling.releasedbg Code\components\imgui\ImGuiClipboard_Win32.cpp
+[ 14%]: <ImGuiImpl> compiling.releasedbg Code\components\imgui\ImGuiDriver.cpp
+[ 14%]: <ImGuiImpl> compiling.releasedbg Code\components\imgui\imgui_impl_dx11.cpp
+[ 15%]: <ImGuiImpl> compiling.releasedbg Code\components\imgui\imgui_impl_win32.cpp
+[ 15%]: <TiltedUi> compiling.releasedbg Libraries\TiltedUI\Code\ui\src\OverlayApp.cpp
+[ 15%]: <TiltedUi> compiling.releasedbg Libraries\TiltedUI\Code\ui\src\OverlayBrowserProcessHandler.cpp
+[ 15%]: <TiltedUi> compiling.releasedbg Libraries\TiltedUI\Code\ui\src\OverlayClient.cpp
+[ 15%]: <TiltedUi> compiling.releasedbg Libraries\TiltedUI\Code\ui\src\OverlayContextHandler.cpp
+[ 15%]: <TiltedUi> compiling.releasedbg Libraries\TiltedUI\Code\ui\src\OverlayLoadHandler.cpp
+[ 16%]: <TiltedUi> compiling.releasedbg Libraries\TiltedUI\Code\ui\src\OverlayRenderHandlerD3D11.cpp
+[ 16%]: <TiltedReverse> compiling.releasedbg Libraries\TiltedReverse\Code\reverse\src\App.cpp
+[ 16%]: <TiltedReverse> compiling.releasedbg Libraries\TiltedReverse\Code\reverse\src\AutoPtr.cpp
+[ 16%]: <TiltedReverse> compiling.releasedbg Libraries\TiltedReverse\Code\reverse\src\AutoPtrManager.cpp
+[ 16%]: <TiltedReverse> compiling.releasedbg Libraries\TiltedReverse\Code\reverse\src\Debug.cpp
+[ 16%]: <TiltedReverse> compiling.releasedbg Libraries\TiltedReverse\Code\reverse\src\Entry.cpp
+[ 17%]: <TiltedReverse> compiling.releasedbg Libraries\TiltedReverse\Code\reverse\src\FunctionHook.cpp
+[ 17%]: <TiltedReverse> compiling.releasedbg Libraries\TiltedReverse\Code\reverse\src\Pattern.cpp
+[ 17%]: <ImmersiveElf> compiling.releasedbg Code\immersive_elf\main.cpp
+[ 17%]: <Console> compiling.releasedbg Code\components\console\CommandSettingsProvider.cpp
+[ 17%]: <Console> compiling.releasedbg Code\components\console\ConsoleRegistry.cpp
+[ 17%]: <Console> compiling.releasedbg Code\components\console\ConsoleRegistryTest.cpp
+[ 18%]: <Console> compiling.releasedbg Code\components\console\ConsoleUtils.cpp
+[ 18%]: <Console> compiling.releasedbg Code\components\console\ConsoleUtilsTest.cpp
+[ 18%]: <Console> compiling.releasedbg Code\components\console\IniSettingsProvider.cpp
+[ 18%]: <Console> compiling.releasedbg Code\components\console\StringTokenizer.cpp
+[ 18%]: <Console> compiling.releasedbg Code\components\console\StringTokenizerTest.cpp
+[ 18%]: <TiltedHooks> compiling.releasedbg Libraries\TiltedHooks\Code\hooks\src\D3D11Hook.cpp
+[ 18%]: <TiltedHooks> compiling.releasedbg Libraries\TiltedHooks\Code\hooks\src\DInputHook.cpp
+[ 19%]: <TiltedHooks> compiling.releasedbg Libraries\TiltedHooks\Code\hooks\src\WindowsHook.cpp
+[ 19%]: <SkyrimServerRunner> compiling.releasedbg Code\server_runner\server_runner.rc
+Code\components\console\StringTokenizer.cpp(44): warning C4244: =: преобразование "unsigned __int64" в "int", возможна потеря данных
+[ 19%]: <SkyrimServerRunner> compiling.releasedbg Code\server_runner\DediRunner.cpp
+[ 19%]: <SkyrimServerRunner> compiling.releasedbg Code\server_runner\main.cpp
+[ 19%]: <Resources> compiling.releasedbg Code\components\resources\Pch.cpp
+[ 19%]: <Resources> compiling.releasedbg Code\components\resources\ResourceCollection.cpp
+[ 20%]: <Resources> compiling.releasedbg Code\components\resources\SemanticVersionTest.cpp
+[ 20%]: <TPProcess> compiling.releasedbg Code\tp_process\process.rc
+[ 20%]: <TPProcess> compiling.releasedbg Code\tp_process\main.cpp
+[ 20%]: <TPProcess> compiling.releasedbg Code\tp_process\ProcessHandler.cpp
+[ 20%]: <TPTests> compiling.releasedbg Code\tests\encoding.cpp
+[ 20%]: <TPTests> compiling.releasedbg Code\tests\main.cpp
+[ 21%]: <TPTests> compiling.releasedbg Code\tests\playback_clock.cpp
+[ 21%]: <TPTests> compiling.releasedbg Code\client\Systems\PlaybackClock.cpp
+[ 21%]: <TiltedReverse_Tests> compiling.releasedbg Libraries\TiltedReverse\Code\tests\src\main.cpp
+[ 21%]: <TiltedReverse_Tests> compiling.releasedbg Libraries\TiltedReverse\Code\tests\src\reverse.cpp
+[ 21%]: <BaseLib> archiving.releasedbg BaseLib.lib
+[ 21%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\ActivateRequest.cpp
+[ 22%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\AddTargetRequest.cpp
+[ 22%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\AssignCharacterRequest.cpp
+[ 22%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\AssignCharacterResponse.cpp
+[ 22%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\AssignObjectsRequest.cpp
+[ 22%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\AssignObjectsResponse.cpp
+[ 22%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\AuthenticationRequest.cpp
+[ 23%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\AuthenticationResponse.cpp
+[ 23%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\CharacterSpawnRequest.cpp
+Code\server_runner\main.cpp(147): warning C4996: 'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+[ 23%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\ClientMessageFactory.cpp
+[ 23%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\ClientReferencesMoveRequest.cpp
+[ 23%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\DialogueRequest.cpp
+[ 23%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\DrawWeaponRequest.cpp
+Code\tests\encoding.cpp(132): warning C4305: =: усечение из "double" в "T"
+        with
+        [
+            T=float
+        ]
+[ 24%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\EnterExteriorCellRequest.cpp
+[ 24%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\EnterInteriorCellRequest.cpp
+[ 24%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\InterruptCastRequest.cpp
+[ 24%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\LockChangeRequest.cpp
+[ 24%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\Message.cpp
+[ 24%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\MountRequest.cpp
+[ 25%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NewPackageRequest.cpp
+[ 25%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyActionEvents.cpp
+[ 25%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyActivate.cpp
+[ 25%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyActorMaxValueChanges.cpp
+[ 25%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyActorTeleport.cpp
+[ 25%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyActorValueChanges.cpp
+[ 26%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyAddTarget.cpp
+[ 26%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyChatMessageBroadcast.cpp
+[ 26%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyDeathStateChange.cpp
+[ 26%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyDialogue.cpp
+[ 26%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyDrawWeapon.cpp
+D:\Новая папка\VC\Tools\MSVC\14.44.35207\include\utility(274): warning C4244: инициализация: преобразование "uint64_t" в "_Ty1", возможна потеря данных
+        with
+        [
+            _Ty1=uint32_t
+        ]
+D:\Новая папка\VC\Tools\MSVC\14.44.35207\include\utility(274): note: контекст создания экземпляра шаблона (сначала самый старый)
+Code\encoding\Messages\NotifyActorMaxValueChanges.cpp(28): note: выполняется компиляция ссылки на экземпляр шаблон функции "std::pair<uint32_t,float>::pair<uint64_t&,float&,0>(_Other1,_Other2) noexcept"
+        with
+        [
+            _Other1=uint64_t &,
+            _Other2=float &
+        ]
+Code\encoding\Messages\NotifyActorMaxValueChanges.cpp(28): note: см. первую ссылку на "std::pair<uint32_t,float>::pair" в "NotifyActorMaxValueChanges::DeserializeRaw"
+[ 26%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyEquipmentChanges.cpp
+[ 27%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyFactionsChanges.cpp
+[ 27%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyHealthChangeBroadcast.cpp
+[ 27%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyInterruptCast.cpp
+[ 27%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyInventoryChanges.cpp
+[ 27%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyInventorySnapshot.cpp
+D:\Новая папка\VC\Tools\MSVC\14.44.35207\include\utility(274): warning C4244: инициализация: преобразование "_Ty" в "_Ty1", возможна потеря данных
+        with
+        [
+            _Ty=uint64_t
+        ]
+        and
+        [
+            _Ty1=uint32_t
+        ]
+D:\Новая папка\VC\Tools\MSVC\14.44.35207\include\utility(274): note: контекст создания экземпляра шаблона (сначала самый старый)
+Code\encoding\Messages\NotifyActorValueChanges.cpp(28): note: выполняется компиляция ссылки на экземпляр шаблон функции "std::pair<uint32_t,float>::pair<uint64_t,float&,0>(_Other1 &&,_Other2) noexcept"
+        with
+        [
+            _Other1=uint64_t,
+            _Other2=float &
+        ]
+[ 27%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyLockChange.cpp
+[ 28%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyMount.cpp
+[ 28%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyNewPackage.cpp
+[ 28%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyObjectInventoryChanges.cpp
+[ 28%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyOwnershipTransfer.cpp
+[ 28%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPartyInfo.cpp
+[ 28%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPartyInvite.cpp
+[ 28%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPartyJoined.cpp
+[ 29%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPartyLeft.cpp
+[ 29%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPlayerCellChanged.cpp
+[ 29%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPlayerDialogue.cpp
+[ 29%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPlayerHealthUpdate.cpp
+[ 29%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPlayerJoined.cpp
+[ 29%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPlayerLeft.cpp
+[ 30%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPlayerLevel.cpp
+[ 30%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPlayerList.cpp
+[ 30%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyPlayerRespawn.cpp
+[ 30%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyProjectileLaunch.cpp
+[ 30%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyQuestUpdate.cpp
+[ 30%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyRemoveCharacter.cpp
+[ 31%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyRemoveSpell.cpp
+[ 31%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyRemoveWaypoint.cpp
+[ 31%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyRespawn.cpp
+[ 31%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyScriptAnimation.cpp
+[ 31%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifySetTimeResult.cpp
+[ 31%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifySettingsChange.cpp
+[ 32%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifySetWaypoint.cpp
+[ 32%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifySpellCast.cpp
+[ 32%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifySubtitle.cpp
+[ 32%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifySyncExperience.cpp
+[ 32%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyTeleport.cpp
+Code\encoding\Messages\NotifyRemoveSpell.cpp(11): warning C4244: =: преобразование "uint64_t" в "uint32_t", возможна потеря данных
+[ 32%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\NotifyWeatherChange.cpp
+[ 33%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\PartyAcceptInviteRequest.cpp
+[ 33%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\PartyChangeLeaderRequest.cpp
+[ 33%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\PartyCreateRequest.cpp
+[ 33%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\PartyInviteRequest.cpp
+[ 33%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\PartyKickRequest.cpp
+[ 33%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\PartyLeaveRequest.cpp
+[ 34%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\PlayerDialogueRequest.cpp
+[ 34%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\PlayerLevelRequest.cpp
+[ 34%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\PlayerRespawnRequest.cpp
+[ 34%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\ProjectileLaunchRequest.cpp
+[ 34%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RemoveSpellRequest.cpp
+[ 34%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestActionEvents.cpp
+[ 35%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestActorMaxValueChanges.cpp
+[ 35%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestActorValueChanges.cpp
+[ 35%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestCurrentWeather.cpp
+[ 35%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestDeathStateChange.cpp
+[ 35%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestEquipmentChanges.cpp
+[ 35%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestFactionsChanges.cpp
+[ 36%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestHealthChangeBroadcast.cpp
+[ 36%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestInventoryChanges.cpp
+[ 36%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestInventorySnapshot.cpp
+[ 36%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestObjectInventoryChanges.cpp
+Code\encoding\Messages\RemoveSpellRequest.cpp(12): warning C4244: =: преобразование "uint64_t" в "uint32_t", возможна потеря данных
+[ 36%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestOwnershipClaim.cpp
+[ 36%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestOwnershipTransfer.cpp
+[ 37%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestPlayerHealthUpdate.cpp
+[ 37%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestQuestUpdate.cpp
+[ 37%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestRemoveWaypoint.cpp
+[ 37%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestRespawn.cpp
+[ 37%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestSetWaypoint.cpp
+D:\Новая папка\VC\Tools\MSVC\14.44.35207\include\utility(274): warning C4244: инициализация: преобразование "uint64_t" в "_Ty1", возможна потеря данных
+        with
+        [
+            _Ty1=uint32_t
+        ]
+D:\Новая папка\VC\Tools\MSVC\14.44.35207\include\utility(274): note: контекст создания экземпляра шаблона (сначала самый старый)
+Code\encoding\Messages\RequestActorValueChanges.cpp(28): note: выполняется компиляция ссылки на экземпляр шаблон функции "std::pair<uint32_t,float>::pair<uint64_t&,float&,0>(_Other1,_Other2) noexcept"
+        with
+        [
+            _Other1=uint64_t &,
+            _Other2=float &
+        ]
+Code\encoding\Messages\RequestActorValueChanges.cpp(28): note: см. первую ссылку на "std::pair<uint32_t,float>::pair" в "RequestActorValueChanges::DeserializeRaw"
+[ 37%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\RequestWeatherChange.cpp
+[ 37%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\ScriptAnimationRequest.cpp
+[ 38%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\SendChatMessageRequest.cpp
+[ 38%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\ServerMessageFactory.cpp
+[ 38%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\ServerReferencesMoveRequest.cpp
+[ 38%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\ServerTimeSettings.cpp
+[ 38%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\SetTimeCommandRequest.cpp
+[ 38%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\ShiftGridCellRequest.cpp
+[ 39%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\SpellCastRequest.cpp
+[ 39%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\StringCacheUpdate.cpp
+[ 39%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\SubtitleRequest.cpp
+[ 39%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\SyncExperienceRequest.cpp
+[ 39%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\TeleportCommandRequest.cpp
+[ 39%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\TeleportCommandResponse.cpp
+[ 40%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Messages\TeleportRequest.cpp
+[ 40%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\StringCache.cpp
+[ 40%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\ActionEvent.cpp
+[ 40%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\ActionReplayChain.cpp
+[ 40%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\ActorData.cpp
+Code\encoding\Messages\TeleportRequest.cpp(12): warning C4244: =: преобразование "uint64_t" в "uint16_t", возможна потеря данных
+[ 40%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\ActorValues.cpp
+[ 41%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\AnimationGraphDescriptorManager.cpp
+[ 41%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\AnimationVariables.cpp
+[ 41%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\CachedString.cpp
+[ 41%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\CharacterData.cpp
+[ 41%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Faction.cpp
+[ 41%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Factions.cpp
+[ 42%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\GameId.cpp
+[ 42%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\GridCellCoords.cpp
+[ 42%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Inventory.cpp
+[ 42%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\LockData.cpp
+[ 42%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\MagicEquipment.cpp
+Code\encoding\Structs\CachedString.cpp(36): warning C4244: аргумент: преобразование "const uint64_t" в "uint32_t", возможна потеря данных
+[ 42%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Mods.cpp
+[ 43%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Movement.cpp
+[ 43%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\ObjectData.cpp
+[ 43%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\QuestLog.cpp
+D:\Новая папка\VC\Tools\MSVC\14.44.35207\include\utility(274): warning C4244: инициализация: преобразование "uint64_t" в "_Ty1", возможна потеря данных
+        with
+        [
+            _Ty1=uint32_t
+        ]
+D:\Новая папка\VC\Tools\MSVC\14.44.35207\include\utility(274): note: контекст создания экземпляра шаблона (сначала самый старый)
+Code\encoding\Structs\ActorValues.cpp(40): note: выполняется компиляция ссылки на экземпляр шаблон функции "std::pair<uint32_t,float>::pair<uint64_t&,float&,0>(_Other1,_Other2) noexcept"
+        with
+        [
+            _Other1=uint64_t &,
+            _Other2=float &
+        ]
+Code\encoding\Structs\ActorValues.cpp(40): note: см. первую ссылку на "std::pair<uint32_t,float>::pair" в "ActorValues::Deserialize"
+[ 43%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Rotator2_NetQuantize.cpp
+[ 43%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\ServerSettings.cpp
+[ 43%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\TimeModel.cpp
+[ 44%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Tints.cpp
+[ 44%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Vector2_NetQuantize.cpp
+[ 44%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Vector3_NetQuantize.cpp
+[ 44%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptorManager.cpp
+[ 44%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_AtronachFrostRootBehavior.cpp
+[ 44%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_AtronachStormBehavior.cpp
+Code\encoding\StringCache.cpp(34): warning C4244: return: преобразование "const unsigned __int64" в "uint32_t", возможна потеря данных
+Code\encoding\StringCache.cpp(59): warning C4244: =: преобразование "unsigned __int64" в "uint32_t", возможна потеря данных
+[ 45%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_BearRootBehavior.cpp
+[ 45%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_BHR_Master.cpp
+Code\encoding\Structs\AnimationVariables.cpp(130): warning C4244: =: преобразование "uint64_t" в "_Ty", возможна потеря данных
+        with
+        [
+            _Ty=std::_Vbase
+        ]
+[ 45%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_Chaurus.cpp
+[ 45%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_Chicken.cpp
+[ 45%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_CowRootBehavior.cpp
+[ 45%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_DeerRootBehavior.cpp
+[ 46%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_DogRootBehavior.cpp
+[ 46%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_DraugrBehavior.cpp
+[ 46%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_DwarvenSpider.cpp
+[ 46%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_Falmer_Master_Behavior.cpp
+[ 46%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_FrostbiteSpider.cpp
+[ 46%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_GiantRootBehavior.cpp
+[ 47%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_GoatRootBehavior.cpp
+[ 47%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_HagravenMasterBehavior.cpp
+[ 47%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_HorkerRootBehavior.cpp
+[ 47%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_HorseRootBehavior.cpp
+[ 47%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_MammothRootBehavior.cpp
+[ 47%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_Master_Behavior.cpp
+[ 47%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_Mudcrab.cpp
+[ 48%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_Rabbit.cpp
+[ 48%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_SabreCatRootBehavior.cpp
+[ 48%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_ScribRootBehavior.cpp
+[ 48%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_SkeeverRootBehavior.cpp
+[ 48%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_Spriggan.cpp
+[ 48%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_SteamBehavior.cpp
+[ 49%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_TrollBehavior.cpp
+[ 49%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_VampireBruteRootBehavior.cpp
+[ 49%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_VampireLordBehavior.cpp
+[ 49%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_WerewolfBehavior.cpp
+[ 49%]: <SkyrimEncoding> compiling.releasedbg Code\encoding\Structs\Skyrim\AnimationGraphDescriptor_WolfRootBehavior.cpp
+[ 49%]: <UiProcess> archiving.releasedbg UiProcess.lib
+[ 50%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\ESLoader.cpp
+[ 50%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\ESLoaderTest.cpp
+[ 50%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\RecordCollection.cpp
+[ 50%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\Records\Chunks.cpp
+[ 50%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\Records\CLMT.cpp
+[ 50%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\Records\CONT.cpp
+[ 51%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\Records\GMST.cpp
+[ 51%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\Records\NAVM.cpp
+[ 51%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\Records\NPC.cpp
+[ 51%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\Records\Record.cpp
+[ 51%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\Records\REFR.cpp
+[ 51%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\Records\TES4.cpp
+[ 52%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\Records\WRLD.cpp
+[ 52%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\stdafx.cpp
+[ 52%]: <ESLoader_Tests> compiling.releasedbg Code\components\es_loader\TESFile.cpp
+[ 52%]: <ESLoader_Tests> compiling.releasedbg Code\TestMain.cpp
+[ 52%]: <ESLoader> compiling.releasedbg Code\components\es_loader\ESLoader.cpp
+[ 52%]: <ESLoader> compiling.releasedbg Code\components\es_loader\ESLoaderTest.cpp
+[ 53%]: <ESLoader> compiling.releasedbg Code\components\es_loader\RecordCollection.cpp
+Code\components\es_loader\Records\Record.cpp(102): warning C4060: оператор switch не содержит метку "case" или "default"
+[ 53%]: <ESLoader> compiling.releasedbg Code\components\es_loader\Records\Chunks.cpp
+[ 53%]: <ESLoader> compiling.releasedbg Code\components\es_loader\Records\CLMT.cpp
+[ 53%]: <ESLoader> compiling.releasedbg Code\components\es_loader\Records\CONT.cpp
+[ 53%]: <ESLoader> compiling.releasedbg Code\components\es_loader\Records\GMST.cpp
+[ 53%]: <ESLoader> compiling.releasedbg Code\components\es_loader\Records\NAVM.cpp
+[ 54%]: <ESLoader> compiling.releasedbg Code\components\es_loader\Records\NPC.cpp
+[ 54%]: <ESLoader> compiling.releasedbg Code\components\es_loader\Records\Record.cpp
+[ 54%]: <ESLoader> compiling.releasedbg Code\components\es_loader\Records\REFR.cpp
+[ 54%]: <ESLoader> compiling.releasedbg Code\components\es_loader\Records\TES4.cpp
+[ 54%]: <ESLoader> compiling.releasedbg Code\components\es_loader\Records\WRLD.cpp
+[ 54%]: <ESLoader> compiling.releasedbg Code\components\es_loader\stdafx.cpp
+[ 55%]: <ESLoader> compiling.releasedbg Code\components\es_loader\TESFile.cpp
+[ 55%]: <CommonLib> archiving.releasedbg CommonLib.lib
+[ 55%]: <ImGuiImpl> archiving.releasedbg ImGuiImpl.lib
+[ 55%]: <Console_Tests> linking.releasedbg Console_Tests.exe
+[ 55%]: <TiltedConnect> archiving.releasedbg TiltedConnect.lib
+[ 56%]: <ImmersiveElf> linking.releasedbg EarlyLoad.dll
+[ 56%]: <TiltedReverse> archiving.releasedbg TiltedReverse.lib
+[ 56%]: <TiltedUi> archiving.releasedbg TiltedUi.lib
+[ 57%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\server.rc
+Code\components\es_loader\Records\Record.cpp(102): warning C4060: оператор switch не содержит метку "case" или "default"
+[ 57%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Components\ModsComponent.cpp
+[ 57%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Animation\ActionReplayCache.cpp
+[ 57%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Animation\AnimationEventLists.cpp
+[ 57%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Cell.cpp
+[ 57%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Map.cpp
+[ 57%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Player.cpp
+[ 58%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\PlayerManager.cpp
+Code\server\Game\Animation\ActionReplayCache.cpp(35): warning C4244: инициализация: преобразование "unsigned __int64" в "int32_t", возможна потеря данных
+[ 58%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Game\Region.cpp
+[ 58%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\GameServer.cpp
+[ 58%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\main.cpp
+[ 58%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Pch.cpp
+[ 58%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Component_Bindings.cpp
+[ 59%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\ESLoader_Bindings.cpp
+[ 59%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\GameServer_Bindings.cpp
+[ 59%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\GLM_Bindings.cpp
+[ 59%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Player_Bindings.cpp
+[ 59%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\ScriptBindings.cpp
+[ 59%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\CalendarService_Bindings.cpp
+[ 60%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\CharacterService_Bindings.cpp
+[ 60%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\PartyService_Bindings.cpp
+[ 60%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\PlayerService_Bindings.cpp
+[ 60%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\QuestService_Bindings.cpp
+[ 60%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\Services\ScriptService_Bindings.cpp
+[ 60%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Scripting\World_Bindings.cpp
+[ 61%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\ActorValueService.cpp
+[ 61%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\CalendarService.cpp
+[ 61%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\CharacterService.cpp
+Code\server\Services\CalendarService.cpp(90): warning C4018: <: несоответствие типов со знаком и без знака
+Code\server\Services\CalendarService.cpp(94): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+[ 61%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\CombatService.cpp
+[ 61%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\CommandService.cpp
+[ 61%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\InventoryService.cpp
+[ 62%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\MagicService.cpp
+[ 62%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\MapService.cpp
+[ 62%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\ObjectService.cpp
+[ 62%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\OverlayService.cpp
+[ 62%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\PartyService.cpp
+[ 62%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\PlayerService.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\QuestService.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\ScriptService.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\ServerListService.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\StringCacheService.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\Services\WeatherService.cpp
+[ 63%]: <SkyrimTogetherServer> compiling.releasedbg Code\server\World.cpp
+[ 64%]: <Resources_Tests> linking.releasedbg Resources_Tests.exe
+[ 64%]: <Resources> archiving.releasedbg Resources.lib
+[ 64%]: <Console> archiving.releasedbg Console.lib
+[ 64%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\CrashHandler.cpp
+[ 64%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\ActorExtension.cpp
+[ 64%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Animation.cpp
+[ 65%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\BGSCreatedObjectManager.cpp
+[ 65%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\BSAnimationGraphManager.cpp
+[ 65%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\FormFactory.cpp
+[ 65%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Forms.cpp
+[ 65%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\IAnimationGraphManagerHolder.cpp
+[ 65%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\INISettingCollection.cpp
+[ 66%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Memory.cpp
+[ 66%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Misc\BSScript.cpp
+[ 66%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Misc\Lock.cpp
+[ 66%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Misc\MenuTopicManager.cpp
+[ 66%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Misc\SubtitleManager.cpp
+[ 66%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\ModManager.cpp
+[ 66%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Overrides.cpp
+[ 67%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\PapyrusFunctions.cpp
+[ 67%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Primitives.cpp
+[ 67%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\References.cpp
+[ 67%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Renderer.cpp
+[ 67%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\SaveLoad.cpp
+[ 67%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\TES.cpp
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\TimeManager.cpp
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\main.cpp
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\ModCompat\BehaviorOrig.cpp
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\ModCompat\BehaviorVar.cpp
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\ModCompat\BehaviorVarsMap.cpp
+Code\client\CrashHandler.cpp(17): warning C4996: 'gmtime': This function or variable may be unsafe. Consider using gmtime_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+[ 68%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\NvidiaUtil.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\ScriptExtender.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\DebugService.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\ActorValuesView.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\AnimDebugView.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\CalendarDebugView.cpp
+[ 69%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\CellView.cpp
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\CombatView.cpp
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\ComponentView.cpp
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\ContainerDebugView.cpp
+Code\client\Services\Debug\Views\CombatView.cpp(157): warning C4804: >: небезопасное использование типа "bool" в операции
+Code\client\Services\Debug\Views\CombatView.cpp(203): warning C4018: <: несоответствие типов со знаком и без знака
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\DragonSpawnerView.cpp
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\EntitiesView.cpp
+[ 70%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\FormDebugView.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\NetworkView.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\PartyView.cpp
+Code\client\Services\Debug\Views\ContainerDebugView.cpp(37): warning C4244: инициализация: преобразование "unsigned __int64" в "int", возможна потеря данных
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\PlayerDebugView.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\ProcessView.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\QuestDebugView.cpp
+[ 71%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\SkillView.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Debug\Views\WeatherView.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\ActorValueService.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\CalendarService.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\CharacterService.cpp
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\CombatService.cpp
+Code\client\Services\Generic\CalendarService.cpp(75): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+Code\client\Services\Generic\CalendarService.cpp(76): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+Code\client\Services\Generic\CalendarService.cpp(77): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+Code\client\Services\Generic\CalendarService.cpp(105): warning C4244: =: преобразование "uint32_t" в "float", возможна потеря данных
+Code\client\Services\Generic\CalendarService.cpp(106): warning C4244: =: преобразование "uint32_t" в "float", возможна потеря данных
+Code\client\Services\Generic\CalendarService.cpp(107): warning C4244: =: преобразование "uint32_t" в "float", возможна потеря данных
+[ 72%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\CommandService.cpp
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\DiscordService.cpp
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\DiscoveryService.cpp
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\ImguiService.cpp
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\InputService.cpp
+Code\server\Services\ServerListService.cpp(10): warning C4005: CPPHTTPLIB_OPENSSL_SUPPORT: изменение макроопределения
+Code\server\Services\ServerListService.cpp(10): note: "CPPHTTPLIB_OPENSSL_SUPPORT" ранее объявлен в командной строке
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\InventoryService.cpp
+[ 73%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\MagicService.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\MapService.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\ObjectService.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\OverlayClient.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\OverlayService.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\PapyrusService.cpp
+[ 74%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\PartyService.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\PlayerService.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\QuestService.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\RunnerService.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\StringCacheService.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\TransportService.cpp
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Services\Generic\WeatherService.cpp
+Code\server\GameServer.cpp(372): warning C4244: аргумент: преобразование "T" в "int", возможна потеря данных
+        with
+        [
+            T=int64_t
+        ]
+Code\server\GameServer.cpp(372): warning C4244: аргумент: преобразование "T" в "int", возможна потеря данных
+        with
+        [
+            T=int64_t
+        ]
+Code\server\GameServer.cpp(394): warning C4244: аргумент: преобразование "T" в "float", возможна потеря данных
+        with
+        [
+            T=int64_t
+        ]
+Code\server\GameServer.cpp(394): warning C4244: аргумент: преобразование "T" в "int", возможна потеря данных
+[ 75%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\SkyrimVM64.cpp
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\AnimationSystem.cpp
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\CacheSystem.cpp
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\FaceGenSystem.cpp
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\InterpolationSystem.cpp
+Code\client\Systems\AnimationSystem.cpp(94): warning C4244: =: преобразование "unsigned __int64" в "uint32_t", возможна потеря данных
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\LeveledNpcSystem.cpp
+[ 76%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\ModSystem.cpp
+Code\client\Systems\InterpolationSystem.cpp(116): warning C4305: -=: усечение из "double" в "float"
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\OwnershipSystem.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\PlaybackClock.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Systems\RenderSystemD3D11.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\TiltedOnlineApp.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\TiltedOnlinePCH.cpp
+[ 77%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Utils.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\VersionDb.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\World.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Actor.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\AI\AIProcess.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\AI\Movement\PlayerControls.cpp
+[ 78%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSCore\BSAtomic.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSCore\BSCRC32.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSGraphics\BSGraphicsRenderer.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSInput\BSInputDeviceManager.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSRandom\BSRandom.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSSystem\BSTaskletManager.cpp
+[ 79%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\BSSystem\BSThread.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Camera\PlayerCamera.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Camera\TESCamera.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\CellRespawnOverrides.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Combat\CombatController.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Components\TESActorBaseData.cpp
+[ 80%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Components\TESContainer.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Components\TESSpellList.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Components\TESTexture.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\DefaultObjectManager.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\DefaultStringManager.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Effects\InvisibilityEffect.cpp
+[ 81%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\EquipManager.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Events\EventDispacther.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\ExtraData\ExtraContainerChanges.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\ExtraData\ExtraDataList.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\ActorValueInfo.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\EnchantmentItem.cpp
+[ 82%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\MagicItem.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\TESObjectCELL.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\TESQuest.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Forms\TESWorldSpace.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Havok\bhkCharacterController.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Havok\hkbBehaviorGraph.cpp
+[ 83%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\ConsoleCommandGuard.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\IMenu.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\MenuControls.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\Menus\HUDMenuUtils.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\Menus\MapMenu.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\Menus\SkillsMenu.cpp
+[ 84%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Interface\UI.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\LoadingScreen.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Magic\ActorMagicCaster.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Magic\EffectItem.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Magic\MagicCaster.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Magic\MagicTarget.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\ActorState.cpp
+[ 85%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\BSFixedString.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\BSScript.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\GameVM.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\GarbageCollector.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Misc\WeatherManager.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\NetImmerse\NiCamera.cpp
+[ 86%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\PlayerCharacter.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Projectiles\Projectile.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\RTTI.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\SaveLoad.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\Sky\Sky.cpp
+[ 87%]: <SkyrimTogetherClient> compiling.releasedbg Code\client\Games\Skyrim\TESObjectREFR.cpp
+[ 87%]: <TPProcess> linking.releasedbg TPProcess.exe
+[ 88%]: <SkyrimEncoding> archiving.releasedbg SkyrimEncoding.lib
+[ 89%]: <TiltedHooks> archiving.releasedbg TiltedHooks.lib
+[ 89%]: <TiltedReverse_Tests> linking.releasedbg TiltedReverse_Tests.exe
+[ 89%]: <ESLoader_Tests> linking.releasedbg ESLoader_Tests.exe
+[ 90%]: <ESLoader> archiving.releasedbg ESLoader.lib
+Code\client\Services\Generic\OverlayService.cpp(487): warning C4244: аргумент: преобразование "float" в "int", возможна потеря данных
+Code\client\Services\Generic\OverlayService.cpp(488): warning C4244: аргумент: преобразование "float" в "int", возможна потеря данных
+[ 91%]: <SkyrimTogetherServer> linking.releasedbg STServer.dll
+[ 91%]: <TPTests> linking.releasedbg TPTests.exe
+Code\client\Games\Skyrim\TESObjectREFR.cpp(689): warning C4018: <: несоответствие типов со знаком и без знака
+[ 93%]: <SkyrimServerRunner> linking.releasedbg SkyrimTogetherServer.exe
+Code\client\Services\Generic\TransportService.cpp(87): warning C4267: аргумент: преобразование из "size_t" в "uint32_t"; возможна потеря данных
+Code\client\Services\Generic\TransportService.cpp(162): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+Code\client\Services\Generic\TransportService.cpp(163): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+Code\client\Services\Generic\TransportService.cpp(164): warning C4244: =: преобразование "float" в "uint32_t", возможна потеря данных
+[ 94%]: <SkyrimTogetherClient> archiving.releasedbg SkyrimTogetherClient.lib
+[ 94%]: <SkyrimImmersiveLauncher> linking.releasedbg SkyrimTogether.exe
+[100%]: build ok, spent 228.407s
+warning: add_cxflags("-fPIC") is ignored, please pass `{force = true}` or call `set_policy("check.auto_ignore_flags", false)` if you want to set it.

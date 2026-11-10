@@ -18,3 +18,5 @@ try {
 } finally {
     if ($null -ne $oldReport) { [IO.File]::WriteAllBytes($reportPath, $oldReport) }
 }
+# The intentionally failing child must not leave a failure exit code for callers.
+exit 0

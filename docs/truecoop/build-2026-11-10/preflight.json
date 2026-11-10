@@ -1,0 +1,16 @@
+{
+  "Revision": "f0785111ec433f9e947f376f89d9208302b8b25d",
+  "Mode": "releasedbg",
+  "SkyrimVersion": "latest",
+  "VisualStudio": "D:\\Новая папка",
+  "WindowsSDK": true,
+  "Xmake": "C:\\Users\\panzz\\Documents\\Codex\\2026-11-08\\new-chat\\work\\toolchain\\xmake\\xmake\\xmake.exe",
+  "Submodules": [
+    " e6f5759364a64462e717db1153781a7eae26a13e Libraries/TiltedConnect (heads/master)",
+    " d7c175b86975679eb05883c097d7eb1c2165226a Libraries/TiltedHooks (heads/master)",
+    " 55ee3f29c62fea247148e57b94ec4941055139ed Libraries/TiltedReverse (heads/master)",
+    " c7789de2149ab107038ed189f6fa5eb7507914d1 Libraries/TiltedUI (heads/master)"
+  ],
+  "Missing": [],
+  "Ready": true
+}
