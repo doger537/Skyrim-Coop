@@ -1,0 +1,13 @@
+PASS: stale movement/action generations and reordered movement are rejected
+PASS: inventory replay and stale ownership do not duplicate items
+PASS: matching active content
+PASS: runtime mismatch
+PASS: same filename with different bytes
+PASS: missing active plugin
+PASS: unsupported extra Creation
+PASS: different load order
+PASS: missing fingerprint
+PASS: invalid initial location
+PASS: old protocol version
+PASS: session contract remains after disconnect
+PASS: reconnect to the unchanged session

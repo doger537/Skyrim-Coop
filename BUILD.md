@@ -1,11 +1,19 @@
 # Сборка Windows
 
 База: upstream 8b2b1b0cd9fc53ab7518a2c980486d07e5edea97, ветка truecoop/bootstrap.
-Полная история и закреплённые подмодули загружены. Публичный форк не создавался.
+Полная история и закреплённые подмодули загружены. Исходники опубликованы в
+https://github.com/doger537/Skyrim-Coop (main); исходный remote сохранён как upstream.
 Источник истины: xmake.lua, Libraries/*/xmake.lua и .github/workflows/windows.yml.
 См. также [upstream guide](https://wiki.tiltedphoques.com/tilted-online/technical-documentation/build-guide).
 
 ## Требования
+
+При клонировании использовать `git clone --recurse-submodules https://github.com/doger537/Skyrim-Coop.git`.
+Для воспроизведения идентификатора готового локального ZIP дополнительно получить исходный
+тег: `git fetch https://github.com/tiltedphoques/TiltedEvolution.git tag v1.8.4`, затем выбрать
+точный native-коммит из VALIDATION_3.md. Теги upstream автоматически не публиковались в новом
+репозитории, чтобы не запускать чужие release-workflow. Без тега BUILD_COMMIT будет коротким
+SHA; клиенты и сервер, собираемые вместе, всё равно получат одинаковый идентификатор.
 
 - Visual Studio 2022 / Build Tools: Desktop development with C++, MSVC v143 x64/x86 и Windows 10/11 SDK.
 - xmake 3.1.0 (версия CI); проект требует минимум 3.0.0. CMake/Ninja и C++-библиотеки получает xmake.
