@@ -2,6 +2,8 @@
 
 #include <Systems/OwnershipSystem.h>
 #include <World.h>
+#include <Systems/InterpolationSystem.h>
+#include <Systems/AnimationSystem.h>
 
 std::optional<entt::entity> OwnershipSystem::AcceptRemoteUpdate(World& aWorld, const uint32_t aServerId, const uint32_t aOwnershipEpoch) noexcept
 {
@@ -21,6 +23,14 @@ std::optional<entt::entity> OwnershipSystem::AcceptRemoteUpdate(World& aWorld, c
     {
         spdlog::info("Adopting ownership epoch {} for remote actor {:X}, the transfer from epoch {} was missed", aOwnershipEpoch, aServerId, remoteComponent.OwnershipEpoch);
         remoteComponent.OwnershipEpoch = aOwnershipEpoch;
+        // A missed transfer also changes capture clocks. Never mix the two histories.
+        if (const auto* pInterpolation = aWorld.try_get<InterpolationComponent>(*it))
+        {
+            const glm::vec3 position = pInterpolation->Position;
+            InterpolationSystem::Setup(aWorld, *it).Position = position;
+        }
+        if (aWorld.all_of<RemoteAnimationComponent>(*it))
+            AnimationSystem::Setup(aWorld, *it);
     }
 
     return *it;
@@ -32,11 +42,13 @@ std::optional<entt::entity> OwnershipSystem::AcceptOwnerUpdate(World& aWorld, co
         return std::nullopt;
 
     auto view = aWorld.view<LocalComponent>();
-    const auto it = std::find_if(view.begin(), view.end(), [view, aServerId, aOwnershipEpoch](const entt::entity aEntity)
-    {
-        const auto& localComponent = view.get<LocalComponent>(aEntity);
-        return localComponent.Id == aServerId && localComponent.OwnershipEpoch == aOwnershipEpoch;
-    });
+    const auto it = std::find_if(
+        view.begin(), view.end(),
+        [view, aServerId, aOwnershipEpoch](const entt::entity aEntity)
+        {
+            const auto& localComponent = view.get<LocalComponent>(aEntity);
+            return localComponent.Id == aServerId && localComponent.OwnershipEpoch == aOwnershipEpoch;
+        });
 
     if (it == view.end())
         return std::nullopt;

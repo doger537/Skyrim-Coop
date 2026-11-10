@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Label = 'iteration2')
+param([string]$Label = 'iteration3')
 $ErrorActionPreference = 'Stop'
 if ($Label -notmatch '^[a-zA-Z0-9-]+$') { throw 'Use letters, numbers and dashes in Label' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -36,7 +36,7 @@ foreach ($item in Get-ChildItem (Join-Path $repo 'GameFiles/Skyrim')) {
 }
 $info = Join-Path $stage 'TrueCoop-Test-Info'
 New-Item -ItemType Directory -Path $info | Out-Null
-foreach ($name in @('LICENSE','ITERATION_2.md','TEST_PLAN.md','CONTENT_COMPATIBILITY.md')) {
+foreach ($name in @('LICENSE','ITERATION_2.md','ITERATION_3.md','TEST_PLAN.md','CONTENT_COMPATIBILITY.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $info
 }
 Copy-Item -LiteralPath (Join-Path $repo 'build/BuildInfo.h') -Destination $info
@@ -44,10 +44,10 @@ foreach ($name in @('TiltedConnect','TiltedHooks','TiltedReverse','TiltedUI')) {
     Copy-Item -LiteralPath (Join-Path $repo "Libraries/$name/LICENSE") -Destination (Join-Path $info "$name-LICENSE.txt")
 }
 $instructions = @"
-# True Coop — итерация 2
+# True Coop — $Label
 
 Сборка: $version. Skyrim SE Steam: 1.7.104.0. Игровые проверки новой версии ещё нужны.
-Оба клиента и сервер обновляются вместе. Старый архив f0785111 с этой версией несовместим.
+Оба клиента и сервер обновляются вместе. Предыдущие сборки с этой версией несовместимы.
 
 ## Установка через Vortex
 
@@ -76,8 +76,11 @@ SHA-256 сравнивает содержимое активных ESP/ESM/ESL. 
 Не отключайте DLC посреди основного прохождения ради этого теста.
 
 В новой версии исправлены неизвестные сетевые ID плагинов, дубли одинаковых операций инвентаря,
-обработка некорректного времени. Это не гарантия отсутствия всех дюпов или рывков.
-Автоматические и сетевые проверки описаны в ITERATION_2.md; полное прохождение, дома,
+обработка некорректного времени. Добавлены ограничение предсказания и поколения движения/анимаций.
+Alternate Start: проверка USSEP и изоляция личных стартовых квестов; полный совместный старт не готов.
+Для него сначала завершите выбор начала офлайн. Файлы ASLAL/USSEP устанавливаются отдельно.
+Это не гарантия отсутствия всех дюпов, рывков и ошибок Havok/скелетов.
+Автоматические и сетевые проверки описаны в ITERATION_3.md; полное прохождение, дома,
 постоянный мир, адаптация квестов и гражданская война ещё впереди.
 "@
 $instructions | Set-Content -LiteralPath (Join-Path $info 'INSTALL-RU.md') -Encoding UTF8

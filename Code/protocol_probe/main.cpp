@@ -13,6 +13,10 @@
 #include <Messages/RequestInventoryChanges.h>
 #include <Messages/NotifyInventoryChanges.h>
 #include <Messages/EnterInteriorCellRequest.h>
+#include <Messages/ClientReferencesMoveRequest.h>
+#include <Messages/ServerReferencesMoveRequest.h>
+#include <Messages/RequestActionEvents.h>
+#include <Messages/NotifyActionEvents.h>
 #include <Messages/ServerMessageFactory.h>
 #include <BuildInfo.h>
 #include <chrono>
@@ -29,6 +33,10 @@ struct Probe final : Client
     std::optional<AuthenticationResponse> Reply;
     std::optional<AssignCharacterResponse> Assignment;
     uint32_t InventoryNotifications{};
+    uint32_t MovementNotifications{};
+    uint32_t ActionNotifications{};
+    uint32_t LastActionEpoch{};
+    float LastPositionX{};
     void OnUpdate() override {}
     void OnDisconnected(EDisconnectReason) override {}
     void OnConnected() override { SendMessage(Request); }
@@ -53,6 +61,20 @@ struct Probe final : Client
             Assignment = *static_cast<AssignCharacterResponse*>(message.get());
         else if (message && message->GetOpcode() == NotifyInventoryChanges::Opcode)
             ++InventoryNotifications;
+        else if (message && message->GetOpcode() == ServerReferencesMoveRequest::Opcode)
+        {
+            const auto& moves = *static_cast<ServerReferencesMoveRequest*>(message.get());
+            MovementNotifications += moves.Updates.size();
+            for (const auto& [id, move] : moves.Updates)
+                LastPositionX = move.Position.x;
+        }
+        else if (message && message->GetOpcode() == NotifyActionEvents::Opcode)
+        {
+            const auto& actions = *static_cast<NotifyActionEvents*>(message.get());
+            ActionNotifications += actions.Actions.size();
+            for (const auto& [id, epoch] : actions.OwnershipEpochs)
+                LastActionEpoch = epoch;
+        }
     }
 };
 
@@ -140,6 +162,40 @@ bool CheckInventoryReplay(Probe& aOwner, const std::string& acAddress)
         std::cerr << "FAIL: inventory test did not receive expected deltas\n";
         return false;
     }
+    ClientReferencesMoveRequest moves;
+    moves.Tick = 100;
+    auto& move = moves.Updates[aOwner.Assignment->ServerId];
+    move.OwnershipEpoch = aOwner.Assignment->OwnershipEpoch + 99;
+    move.CellId = enter.CellId;
+    move.Position.x = 999;
+    aOwner.SendMessage(moves); // Wrong generation must not move or relay the actor.
+    move.OwnershipEpoch = aOwner.Assignment->OwnershipEpoch;
+    move.Position.x = 10;
+    aOwner.SendMessage(moves);
+    moves.Tick = 90;
+    move.Position.x = 900;
+    aOwner.SendMessage(moves); // An old unreliable snapshot must not roll the canonical position back.
+    moves.Tick = 101;
+    move.Position.x = 20;
+    aOwner.SendMessage(moves);
+    RequestActionEvents actions;
+    const uint32_t actorId = aOwner.Assignment->ServerId;
+    actions.OwnershipEpochs[actorId] = aOwner.Assignment->OwnershipEpoch + 99;
+    actions.Actions[actorId].emplace_back().Tick = 101;
+    aOwner.SendMessage(actions);
+    actions.OwnershipEpochs[actorId] = aOwner.Assignment->OwnershipEpoch;
+    aOwner.SendMessage(actions);
+    if (!pumpUntil([&] { return observer.MovementNotifications >= 2 && observer.ActionNotifications >= 1; }))
+    {
+        std::cerr << "FAIL: movement/action probe did not receive the valid updates\n";
+        return false;
+    }
+    const auto settle = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+    pumpUntil([&] { return std::chrono::steady_clock::now() >= settle; });
+    const bool playbackPassed =
+        observer.MovementNotifications == 2 && observer.LastPositionX == 20 && observer.ActionNotifications == 1 && observer.LastActionEpoch == aOwner.Assignment->OwnershipEpoch;
+    std::cout << (playbackPassed ? "PASS: " : "FAIL: ") << "stale movement/action generations and reordered movement are rejected\n";
+
     observer.SendMessage(assign); // query the already owned NPC: return authoritative inventory
     if (!pumpUntil([&] { return observer.Assignment.has_value(); }))
     {
@@ -150,7 +206,7 @@ bool CheckInventoryReplay(Probe& aOwner, const std::string& acAddress)
     const bool cPassed = observer.Assignment->CurrentInventory.GetEntryCountById(itemId) == 20 && observer.InventoryNotifications == 3;
     observer.Close();
     std::cout << (cPassed ? "PASS: " : "FAIL: ") << "inventory replay and stale ownership do not duplicate items\n";
-    return cPassed;
+    return cPassed && playbackPassed && observer.Assignment->Position.x == 20;
 }
 
 int main(int argc, char** argv)

@@ -276,7 +276,7 @@ TEST_CASE("Differential structures", "[encoding.differential]")
     GIVEN("AnimationVariables")
     {
         AnimationVariables vars, recvVars;
- 
+
         vars.Booleans.resize(76);
         String testString("\xDE\xAD\xBE\xEF"
                           "\xDE\xAD\xBE\xEF\x76\xB");
@@ -432,6 +432,7 @@ TEST_CASE("Packets", "[encoding.packets]")
         ClientReferencesMoveRequest sendMessage, recvMessage;
         sendMessage.Tick = 1712345678901;
         auto& move = sendMessage.Updates[1];
+        move.OwnershipEpoch = 17;
         move.Position.x = 1234.5f;
         move.Direction = 0.75f;
         move.HasLookAt = true;
@@ -491,6 +492,8 @@ TEST_CASE("Packets", "[encoding.packets]")
         secondAction.TargetEventName = "toast";
 
         RequestActionEvents sendMessage, recvMessage;
+        sendMessage.OwnershipEpochs[1] = 31;
+        sendMessage.OwnershipEpochs[7] = 47;
         sendMessage.Actions[1] = {firstAction, secondAction};
         sendMessage.Actions[7] = {secondAction};
 
@@ -516,6 +519,7 @@ TEST_CASE("Packets", "[encoding.packets]")
         action.EventName = "blockStart";
 
         NotifyActionEvents sendMessage;
+        sendMessage.OwnershipEpochs[3] = 0xFFFFFFFF;
         sendMessage.Actions[3] = {action, action};
 
         Buffer buff(1000);

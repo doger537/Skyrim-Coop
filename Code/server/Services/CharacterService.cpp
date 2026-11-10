@@ -154,11 +154,15 @@ void CharacterService::OnCharacterExteriorCellChange(const CharacterExteriorCell
         if (acEvent.Owner == pPlayer)
             continue;
 
-        if (pPlayer->GetCellComponent().WorldSpaceId != acEvent.WorldSpaceId || pPlayer->GetCellComponent().WorldSpaceId == acEvent.WorldSpaceId && !GridCellCoords::IsCellInGridCell(acEvent.CurrentCoords, pPlayer->GetCellComponent().CenterCoords, false))
+        if (pPlayer->GetCellComponent().WorldSpaceId != acEvent.WorldSpaceId ||
+            pPlayer->GetCellComponent().WorldSpaceId == acEvent.WorldSpaceId &&
+                !GridCellCoords::IsCellInGridCell(acEvent.CurrentCoords, pPlayer->GetCellComponent().CenterCoords, false))
         {
             pPlayer->Send(removeMessage);
         }
-        else if (pPlayer->GetCellComponent().WorldSpaceId == acEvent.WorldSpaceId && GridCellCoords::IsCellInGridCell(acEvent.CurrentCoords, pPlayer->GetCellComponent().CenterCoords, false))
+        else if (
+            pPlayer->GetCellComponent().WorldSpaceId == acEvent.WorldSpaceId &&
+            GridCellCoords::IsCellInGridCell(acEvent.CurrentCoords, pPlayer->GetCellComponent().CenterCoords, false))
         {
             pPlayer->Send(spawnMessage);
         }
@@ -221,10 +225,7 @@ void CharacterService::OnAssignCharacterRequest(const PacketEvent<AssignCharacte
             {
                 characterComponent.LeveledNpcPickId = FormIdComponent(message.LeveledNpcPickId);
                 spdlog::debug(
-                    "Stored previously unknown leveled NPC pick {:x}:{:x} for FormId {:x}:{:x}",
-                    message.LeveledNpcPickId.ModId,
-                    message.LeveledNpcPickId.BaseId,
-                    refId.ModId,
+                    "Stored previously unknown leveled NPC pick {:x}:{:x} for FormId {:x}:{:x}", message.LeveledNpcPickId.ModId, message.LeveledNpcPickId.BaseId, refId.ModId,
                     refId.BaseId);
             }
 
@@ -264,8 +265,8 @@ void CharacterService::OnOwnershipTransferRequest(const PacketEvent<RequestOwner
     {
         const uint32_t ownerId = ownerComponent.GetOwner() ? ownerComponent.GetOwner()->GetId() : 0;
         spdlog::debug(
-            "Ignored ownership release from player {:X} for actor {:X}; current owner is {:X} and requested epoch {} does not match {}",
-            acMessage.pPlayer->GetId(), message.ServerId, ownerId, message.OwnershipEpoch, ownerComponent.OwnershipEpoch);
+            "Ignored ownership release from player {:X} for actor {:X}; current owner is {:X} and requested epoch {} does not match {}", acMessage.pPlayer->GetId(),
+            message.ServerId, ownerId, message.OwnershipEpoch, ownerComponent.OwnershipEpoch);
         return;
     }
 
@@ -410,10 +411,17 @@ void CharacterService::OnReferencesMoveRequest(const PacketEvent<ClientReference
             continue;
         }
 
+        if (!view.get<OwnerComponent>(*itor).IsCurrentOwner(acMessage.pPlayer, movement.OwnershipEpoch))
+            continue;
+
         auto& movementComponent = view.get<MovementComponent>(*itor);
         auto& cellIdComponent = view.get<CellIdComponent>(*itor);
         const auto& characterComponent = view.get<CharacterComponent>(*itor);
 
+        // Never roll the canonical position back with a delayed unreliable packet.
+        if (movementComponent.OwnershipEpoch == movement.OwnershipEpoch && message.Tick <= movementComponent.Tick)
+            continue;
+        movementComponent.OwnershipEpoch = movement.OwnershipEpoch;
         movementComponent.Tick = message.Tick;
         movementComponent.Position = movement.Position;
         movementComponent.Rotation = glm::vec3(movement.Rotation.x, 0.f, movement.Rotation.y);
@@ -457,7 +465,12 @@ void CharacterService::OnActionEventsRequest(const PacketEvent<RequestActionEven
             continue;
         }
 
+        const auto epoch = message.OwnershipEpochs.find(id);
+        if (epoch == message.OwnershipEpochs.end() || !view.get<OwnerComponent>(*itor).IsCurrentOwner(acMessage.pPlayer, epoch->second))
+            continue;
+
         NotifyActionEvents notify;
+        notify.OwnershipEpochs[id] = epoch->second;
         auto& acceptedActions = notify.Actions[id];
 
         for (auto& action : actions)
@@ -467,7 +480,7 @@ void CharacterService::OnActionEventsRequest(const PacketEvent<RequestActionEven
                 acceptedActions.push_back(action);
         }
 
-        view.get<AnimationComponent>(*itor).ActionsReplayCache.AppendAll(actions);
+        view.get<AnimationComponent>(*itor).ActionsReplayCache.AppendAll(acceptedActions);
 
         if (!acceptedActions.empty())
             GameServer::Get()->SendToPlayersInRange(notify, entity, acMessage.pPlayer);
@@ -519,9 +532,8 @@ void CharacterService::OnMountRequest(const PacketEvent<MountRequest>& acMessage
     if (riderOwner.GetOwner() != acMessage.pPlayer || riderOwner.OwnershipEpoch != message.RiderOwnershipEpoch || mountOwner.OwnershipEpoch != message.MountOwnershipEpoch)
     {
         spdlog::debug(
-            "Rejected stale mount request from player {:X} for rider {:X} at epoch {} and mount {:X} at epoch {}; current epochs are {} and {}",
-            acMessage.pPlayer->GetId(), message.RiderId, message.RiderOwnershipEpoch, message.MountId, message.MountOwnershipEpoch,
-            riderOwner.OwnershipEpoch, mountOwner.OwnershipEpoch);
+            "Rejected stale mount request from player {:X} for rider {:X} at epoch {} and mount {:X} at epoch {}; current epochs are {} and {}", acMessage.pPlayer->GetId(),
+            message.RiderId, message.RiderOwnershipEpoch, message.MountId, message.MountOwnershipEpoch, riderOwner.OwnershipEpoch, mountOwner.OwnershipEpoch);
         return;
     }
 
@@ -754,12 +766,8 @@ void CharacterService::PopulateAssignmentResponse(const entt::entity aEntity, As
         if (pCharacterComponent->LeveledNpcPickId)
         {
             spdlog::debug(
-                "Including leveled NPC pick in assignment response for actor {:X}, pick: {:x}:{:x}, owner: {}, epoch: {}",
-                aResponse.ServerId,
-                aResponse.LeveledNpcPickId.ModId,
-                aResponse.LeveledNpcPickId.BaseId,
-                aResponse.Owner,
-                aResponse.OwnershipEpoch);
+                "Including leveled NPC pick in assignment response for actor {:X}, pick: {:x}:{:x}, owner: {}, epoch: {}", aResponse.ServerId, aResponse.LeveledNpcPickId.ModId,
+                aResponse.LeveledNpcPickId.BaseId, aResponse.Owner, aResponse.OwnershipEpoch);
         }
     }
 
@@ -780,16 +788,11 @@ const char* CharacterService::GetOwnershipTransferReasonName(const OwnershipTran
 {
     switch (aReason)
     {
-    case OwnershipTransferReason::LeaderAssignment:
-        return "party leader assignment";
-    case OwnershipTransferReason::LeaderClaim:
-        return "party leader claim";
-    case OwnershipTransferReason::Mount:
-        return "mounting";
-    case OwnershipTransferReason::Relinquish:
-        return "owner relinquished control";
-    case OwnershipTransferReason::OwnerUnavailable:
-        return "owner became unavailable";
+    case OwnershipTransferReason::LeaderAssignment: return "party leader assignment";
+    case OwnershipTransferReason::LeaderClaim: return "party leader claim";
+    case OwnershipTransferReason::Mount: return "mounting";
+    case OwnershipTransferReason::Relinquish: return "owner relinquished control";
+    case OwnershipTransferReason::OwnerUnavailable: return "owner became unavailable";
     }
 
     return "unknown reason";
@@ -816,8 +819,8 @@ bool CharacterService::CanClaimOwnership(Player* apPlayer, const entt::entity aE
     const auto reject = [&](const char* apReason)
     {
         spdlog::debug(
-            "Rejected {} from player {:X} for actor {:X}: {} (requested epoch {}, current owner {:X}, current epoch {})",
-            pReasonName, apPlayer->GetId(), serverId, apReason, aExpectedOwnershipEpoch, currentOwnerId, ownerComponent.OwnershipEpoch);
+            "Rejected {} from player {:X} for actor {:X}: {} (requested epoch {}, current owner {:X}, current epoch {})", pReasonName, apPlayer->GetId(), serverId, apReason,
+            aExpectedOwnershipEpoch, currentOwnerId, ownerComponent.OwnershipEpoch);
         return false;
     };
 
@@ -886,8 +889,8 @@ bool CharacterService::TransferOwnership(Player* apPlayer, const entt::entity aE
         pOldOwner->Send(notify);
 
     spdlog::debug(
-        "Transferred ownership of actor {:X} from player {:X} to player {:X} for {} (epoch {} to {})",
-        notify.ServerId, oldOwnerId, notify.OwnerPlayerId, pReasonName, oldEpoch, newEpoch);
+        "Transferred ownership of actor {:X} from player {:X} to player {:X} for {} (epoch {} to {})", notify.ServerId, oldOwnerId, notify.OwnerPlayerId, pReasonName, oldEpoch,
+        newEpoch);
 
     return true;
 }

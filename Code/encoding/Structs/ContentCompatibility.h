@@ -16,7 +16,8 @@ enum class Issue : uint8_t
     MissingPlugin,
     ExtraPlugin,
     DifferentPlugin,
-    DifferentOrder
+    DifferentOrder,
+    MissingDependency
 };
 
 struct Result

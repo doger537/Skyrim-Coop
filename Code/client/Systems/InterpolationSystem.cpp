@@ -1,6 +1,7 @@
 #include <TiltedOnlinePCH.h>
 
 #include <Systems/InterpolationSystem.h>
+#include <Systems/MovementPlayback.h>
 #include <Components.h>
 
 #include <AI/AIProcess.h>
@@ -11,10 +12,6 @@
 
 namespace
 {
-// Past the newest snapshot the actor keeps moving for at most this long, then holds still until data arrives
-constexpr double cMaxExtrapolation = 150.0;
-// Consecutive snapshots further apart than this are a teleport, not movement to interpolate across
-constexpr float cTeleportDistance = 1024.f;
 // Larger corrections snap instead of sliding the actor into place
 constexpr float cMaxPositionCorrection = 256.f;
 // Time constant of the correction fading out, ~95% of it is gone after three times this
@@ -46,36 +43,9 @@ void InterpolationSystem::Update(Actor* apActor, InterpolationComponent& aInterp
     const auto& first = *(movements.begin());
     const auto& second = *(++movements.begin());
 
-    const auto tickDelta = static_cast<double>(second.Tick - first.Tick);
-    const bool cIsTeleport = glm::distance(first.Position, second.Position) > cTeleportDistance;
-
-    glm::vec3 position{};
-    auto delta = 1.f;
-    bool isExtrapolating = false;
-
-    if (cRenderTick <= static_cast<double>(second.Tick))
-    {
-        if (tickDelta > 0.0)
-            delta = static_cast<float>(std::clamp((cRenderTick - static_cast<double>(first.Tick)) / tickDelta, 0.0, 1.0));
-
-        // Stay at the old position until the teleport happens
-        if (cIsTeleport && delta < 1.f)
-            delta = 0.f;
-
-        position = TiltedPhoques::Lerp(first.Position, second.Position, delta);
-    }
-    else
-    {
-        // The next snapshot is late, keep going the way the actor was moving rather than freezing it
-        position = second.Position;
-
-        if (!cIsTeleport && tickDelta > 0.0)
-        {
-            const double cExtrapolationTime = std::min(cRenderTick - static_cast<double>(second.Tick), cMaxExtrapolation);
-            position = TiltedPhoques::Lerp(first.Position, second.Position, static_cast<float>(1.0 + cExtrapolationTime / tickDelta));
-            isExtrapolating = true;
-        }
-    }
+    const auto sample = MovementPlayback::Sample(first.Position, second.Position, first.Tick, second.Tick, cRenderTick);
+    const auto& position = sample.Position;
+    const float delta = sample.Delta;
 
     auto& positionError = aInterpolationComponent.PositionError;
 
@@ -83,13 +53,13 @@ void InterpolationSystem::Update(Actor* apActor, InterpolationComponent& aInterp
     if (aInterpolationComponent.HasNewTimePoint && aInterpolationComponent.IsExtrapolating)
         positionError = aInterpolationComponent.Position - position;
 
-    if (cIsTeleport || glm::length(positionError) > cMaxPositionCorrection)
+    if (sample.IsTeleport || !MovementPlayback::IsFinite(positionError) || glm::length(positionError) > cMaxPositionCorrection)
         positionError = {};
     else
         positionError *= static_cast<float>(std::exp(-cDeltaTime / cPositionCorrectionTime));
 
     aInterpolationComponent.HasNewTimePoint = false;
-    aInterpolationComponent.IsExtrapolating = isExtrapolating;
+    aInterpolationComponent.IsExtrapolating = sample.IsExtrapolating;
     aInterpolationComponent.Position = position + positionError;
 
     // Don't try to move a null actor
@@ -142,6 +112,12 @@ void InterpolationSystem::Update(Actor* apActor, InterpolationComponent& aInterp
 
 void InterpolationSystem::AddPoint(InterpolationComponent& aInterpolationComponent, InterpolationComponent::TimePoint aPoint, const double aArrivalTime) noexcept
 {
+    // Validate before adding a timing sample or exposing values to the actor's animation graph.
+    if (!MovementPlayback::IsFinite(aPoint.Position) || !MovementPlayback::IsFinite(aPoint.Rotation) || !std::isfinite(aPoint.Direction) ||
+        (aPoint.HasLookAt && !MovementPlayback::IsFinite(aPoint.LookOffset)) ||
+        !std::all_of(aPoint.Variables.Floats.begin(), aPoint.Variables.Floats.end(), [](float aValue) { return std::isfinite(aValue); }))
+        return;
+
     if (!aInterpolationComponent.Clock.AddSample(aArrivalTime, aPoint.Tick))
         return;
 

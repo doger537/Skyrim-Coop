@@ -6,6 +6,7 @@
 #include <Events/UpdateEvent.h>
 
 #include <Services/QuestService.h>
+#include <ModCompat/AlternateStart.h>
 #include <Services/ImguiService.h>
 #include <Services/OverlayService.h>
 #include <Services/TransportService.h>
@@ -130,7 +131,7 @@ BSTEventResult QuestService::OnEvent(const TESQuestStartStopEvent* apEvent, cons
     {
         if (IsNonSyncableQuest(pQuest))
             return BSTEventResult::kOk;
-     
+
         if (pQuest->type == TESQuest::Type::None || pQuest->type == TESQuest::Type::Miscellaneous)
         {
             // Perhaps redundant, but necessary. We need the logging and
@@ -139,13 +140,13 @@ BSTEventResult QuestService::OnEvent(const TESQuestStartStopEvent* apEvent, cons
             auto& modSys = m_world.GetModSystem();
             if (modSys.GetServerModId(pQuest->formID, Id))
             {
-                spdlog::info(__FUNCTION__ ": queuing type none/misc quest gameId {:X} questStage {} questStatus {} questType {} formId {:X} name {}",
-                             Id.LogFormat(),  pQuest->currentStage, pQuest->IsStopped() ? RequestQuestUpdate::Stopped : RequestQuestUpdate::Started,
-                             static_cast<std::underlying_type_t<TESQuest::Type>>(pQuest->type), 
-                             pQuest->formID, pQuest->fullName.value.AsAscii());
+                spdlog::info(
+                    __FUNCTION__ ": queuing type none/misc quest gameId {:X} questStage {} questStatus {} questType {} formId {:X} name {}", Id.LogFormat(), pQuest->currentStage,
+                    pQuest->IsStopped() ? RequestQuestUpdate::Stopped : RequestQuestUpdate::Started, static_cast<std::underlying_type_t<TESQuest::Type>>(pQuest->type),
+                    pQuest->formID, pQuest->fullName.value.AsAscii());
             }
         }
-        
+
         m_world.GetRunner().Queue(
             [&, formId = pQuest->formID, stageId = pQuest->currentStage, stopped = pQuest->IsStopped(), type = pQuest->type]()
             {
@@ -157,7 +158,7 @@ BSTEventResult QuestService::OnEvent(const TESQuestStartStopEvent* apEvent, cons
                     update.Id = Id;
                     update.Stage = stageId;
                     update.Status = stopped ? RequestQuestUpdate::Stopped : RequestQuestUpdate::Started;
-                    update.ClientQuestType = static_cast<std::underlying_type_t<TESQuest::Type>>(type); 
+                    update.ClientQuestType = static_cast<std::underlying_type_t<TESQuest::Type>>(type);
 
                     m_world.GetTransport().Send(update);
                 }
@@ -194,11 +195,9 @@ BSTEventResult QuestService::OnEvent(const TESQuestStageEvent* apEvent, const Ev
             auto& modSys = m_world.GetModSystem();
             if (modSys.GetServerModId(pQuest->formID, Id))
             {
-                spdlog::info(__FUNCTION__ ": queuing type none/misc quest gameId {:X} questStage {} questStatus {} questType {} formId {:X} name {}",
-                             Id.LogFormat(), pQuest->currentStage,
-                             RequestQuestUpdate::StageUpdate,
-                             static_cast<std::underlying_type_t<TESQuest::Type>>(pQuest->type),
-                             pQuest->formID, pQuest->fullName.value.AsAscii());
+                spdlog::info(
+                    __FUNCTION__ ": queuing type none/misc quest gameId {:X} questStage {} questStatus {} questType {} formId {:X} name {}", Id.LogFormat(), pQuest->currentStage,
+                    RequestQuestUpdate::StageUpdate, static_cast<std::underlying_type_t<TESQuest::Type>>(pQuest->type), pQuest->formID, pQuest->fullName.value.AsAscii());
             }
         }
 
@@ -389,8 +388,7 @@ static bool IsCheckedByPlayingScene(TESQuest* apQuest, uint16_t aStage) noexcept
 
             // The running phase is past its start conditions
             const bool cIsRunning = pScene->currentPhaseIndex == i;
-            if ((!cIsRunning && IsCheckedByStage(pPhase->startConditions, apQuest, aStage, true)) ||
-                IsCheckedByStage(pPhase->completionConditions, apQuest, aStage, true))
+            if ((!cIsRunning && IsCheckedByStage(pPhase->startConditions, apQuest, aStage, true)) || IsCheckedByStage(pPhase->completionConditions, apQuest, aStage, true))
             {
                 return true;
             }
@@ -444,15 +442,13 @@ static void ReleaseStagesForWaitingPhases(TESQuest* apQuest, HeldStages& aHeld) 
             continue;
 
         // Conditions first, they rarely mention a held stage and are cheaper than walking the phase's actions
-        const auto cStageIt = std::find_if(
-            aHeld.Stages.begin(), aHeld.Stages.end(),
-            [&](uint16_t aStage) { return IsCheckedByStage(pPhase->completionConditions, apQuest, aStage, false); });
+        const auto cStageIt =
+            std::find_if(aHeld.Stages.begin(), aHeld.Stages.end(), [&](uint16_t aStage) { return IsCheckedByStage(pPhase->completionConditions, apQuest, aStage, false); });
         if (cStageIt == aHeld.Stages.end() || !IsPhaseWaitingOnConditions(pScene, pScene->currentPhaseIndex))
             continue;
 
         spdlog::info(
-            "Releasing held member quest stages for {:X} up to {}, scene {:X} phase {} waits on it", apQuest->formID, *cStageIt, pScene->formID,
-            pScene->currentPhaseIndex);
+            "Releasing held member quest stages for {:X} up to {}, scene {:X} phase {} waits on it", apQuest->formID, *cStageIt, pScene->formID, pScene->currentPhaseIndex);
         ApplyHeldStages(apQuest, aHeld, cStageIt - aHeld.Stages.begin() + 1);
     }
 }
@@ -511,6 +507,8 @@ void QuestService::OnQuestUpdate(const NotifyQuestUpdate& aUpdate) noexcept
     ModSystem& modSystem = World::Get().GetModSystem();
     uint32_t formId = modSystem.GetGameId(aUpdate.Id);
     TESQuest* pQuest = Cast<TESQuest>(TESForm::GetById(formId));
+    if (AlternateStart::IsPersonalQuest(formId))
+        return;
     if (!pQuest)
     {
         spdlog::error("Failed to find quest, base id: {:X}, mod id: {:X}", aUpdate.Id.BaseId, aUpdate.Id.ModId);
@@ -542,9 +540,9 @@ void QuestService::OnQuestUpdate(const NotifyQuestUpdate& aUpdate) noexcept
 
     if (pQuest->type == TESQuest::Type::None || pQuest->type == TESQuest::Type::Miscellaneous)
     {
-        spdlog::info(__FUNCTION__ ": receiving type none/misc quest update gameId {:X} questStage {} questStatus {} questType {} formId {:X} name {}",
-                     aUpdate.Id.LogFormat(), aUpdate.Stage, aUpdate.Status,
-                     aUpdate.ClientQuestType, formId, pQuest->fullName.value.AsAscii());
+        spdlog::info(
+            __FUNCTION__ ": receiving type none/misc quest update gameId {:X} questStage {} questStatus {} questType {} formId {:X} name {}", aUpdate.Id.LogFormat(), aUpdate.Stage,
+            aUpdate.Status, aUpdate.ClientQuestType, formId, pQuest->fullName.value.AsAscii());
     }
 
     // The quest events fire synchronously while the stage is set, don't send them back
@@ -624,8 +622,8 @@ bool QuestService::IsNonSyncableQuest(TESQuest* apQuest)
     // Quests with no quest stages are never synced. Most TESQues::Type:: quests should
     // be synced, including Type::None and Type::Miscellaneous, but there are a few
     // known exceptions that should be excluded that are in the table.
-    return    apQuest->stages.Empty() 
-           || std::find(kNonSyncableQuestIds.begin(), kNonSyncableQuestIds.end(), apQuest->formID) != kNonSyncableQuestIds.end();
+    return AlternateStart::IsPersonalQuest(apQuest->formID) || apQuest->stages.Empty() ||
+           std::find(kNonSyncableQuestIds.begin(), kNonSyncableQuestIds.end(), apQuest->formID) != kNonSyncableQuestIds.end();
 }
 
 void QuestService::DebugDumpQuests()

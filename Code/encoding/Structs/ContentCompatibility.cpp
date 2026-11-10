@@ -1,4 +1,5 @@
 #include "ContentCompatibility.h"
+#include "AlternateStartPolicy.h"
 
 #include <algorithm>
 #include <set>
@@ -41,6 +42,16 @@ Result Validate(const Mods& acMods) noexcept
         if (std::all_of(entry.Digest.begin(), entry.Digest.end(), [](uint8_t byte) { return byte == 0; }))
             return {Issue::UnreadablePlugin, entry.Filename};
     }
+    const auto start = std::find_if(acMods.ModList.begin(), acMods.ModList.end(), [](const auto& entry) { return NormalizeName(entry.Filename) == AlternateStartPolicy::cPlugin; });
+    if (start != acMods.ModList.end())
+    {
+        const auto dependency =
+            std::find_if(acMods.ModList.begin(), acMods.ModList.end(), [](const auto& entry) { return NormalizeName(entry.Filename) == AlternateStartPolicy::cDependency; });
+        if (dependency == acMods.ModList.end())
+            return {Issue::MissingDependency, "Unofficial Skyrim Special Edition Patch.esp"};
+        if (dependency >= start)
+            return {Issue::DifferentOrder, start->Filename};
+    }
     return {};
 }
 
@@ -79,6 +90,7 @@ String Describe(const Result& acResult) noexcept
     case Issue::ExtraPlugin: pReason = "Extra active plugin is not supported by this session"; break;
     case Issue::DifferentPlugin: pReason = "Active plugin has different contents or ESL flag"; break;
     case Issue::DifferentOrder: pReason = "Active plugin load order differs"; break;
+    case Issue::MissingDependency: pReason = "Alternate Start requires this active dependency"; break;
     case Issue::None: break;
     }
     return String(pReason) + (acResult.Filename.empty() ? String{} : ": " + acResult.Filename);

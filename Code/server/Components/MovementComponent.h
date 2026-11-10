@@ -8,7 +8,8 @@
 
 struct MovementComponent
 {
-    uint64_t Tick;
+    uint32_t OwnershipEpoch{};
+    uint64_t Tick{};
     glm::vec3 Position;
     glm::vec3 Rotation;
     AnimationVariables Variables;

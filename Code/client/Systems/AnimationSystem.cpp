@@ -81,8 +81,7 @@ void AnimationSystem::Clean(World& aWorld, const entt::entity aEntity) noexcept
         aWorld.remove<RemoteAnimationComponent>(aEntity);
 }
 
-void AnimationSystem::AddActionsForReplay(RemoteAnimationComponent& aAnimationComponent,
-                                          const ActionReplayChain& acReplay) noexcept
+void AnimationSystem::AddActionsForReplay(RemoteAnimationComponent& aAnimationComponent, const ActionReplayChain& acReplay) noexcept
 {
     // A replay rebuilds past state, so it is due right away rather than when playback reaches the original ticks
     for (auto action : acReplay.Actions)
@@ -148,6 +147,7 @@ void AnimationSystem::SerializeActions(RequestActionEvents& aMessage, LocalCompo
 
     localComponent.CurrentAction = animationComponent.Actions.back();
 
+    aMessage.OwnershipEpochs[localComponent.Id] = localComponent.OwnershipEpoch;
     aMessage.Actions[localComponent.Id] = std::move(animationComponent.Actions);
     animationComponent.Actions.clear();
 }

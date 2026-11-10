@@ -19,6 +19,7 @@ struct Movement
     void Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept;
     void Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept;
 
+    uint32_t OwnershipEpoch{};
     GameId CellId{};
     GameId WorldSpaceId{};
     Vector3_NetQuantize Position{};

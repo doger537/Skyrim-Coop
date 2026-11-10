@@ -25,7 +25,7 @@ struct InterpolationComponent
 
     List<TimePoint> TimePoints;
     // Last displayed position
-    glm::vec3 Position;
+    glm::vec3 Position{};
 
     PlaybackClock Clock;
 
