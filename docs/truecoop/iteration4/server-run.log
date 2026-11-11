@@ -1,0 +1,46 @@
+[2026-11-11 10:47:13.800] [info] [tid 1664]  Server v1.8.4-28-g68ccf66c started on port 10584
+[2026-11-11 10:47:13.801] [warning] [tid 1664]  bAnnounceServer is set to false. The server will not show up as a public server. If you are just playing with friends, this is probably what you want.
+[2026-11-11 10:47:13.801] [info] [tid 1664]  Loaded 0 resources
+[2026-11-11 10:47:31.669] [info] [tid 1664]  Connection received 2c6cca9d
+[2026-11-11 10:47:31.683] [info] [tid 1664]  New player 'Protocol probe' [2c6cca9d] connected with 2 mods
+	: Skyrim.esm, Update.esm
+[2026-11-11 10:47:31.715] [info] [tid 1664]  Connection received e89e14d3
+[2026-11-11 10:47:31.730] [info] [tid 1664]  New player 'Protocol probe' [e89e14d3] connected with 2 mods
+	: Skyrim.esm, Update.esm
+[2026-11-11 10:47:32.212] [info] [tid 1664]  Connection ended e89e14d3 - 'Protocol probe' disconnected
+[2026-11-11 10:47:32.212] [info] [tid 1664]  Connection received ef965c6e
+[2026-11-11 10:47:32.227] [info] [tid 1664]  New player 'Protocol probe' [ef965c6e] connected with 2 mods
+	: Skyrim.esm, Update.esm
+[2026-11-11 10:47:32.257] [info] [tid 1664]  Connection ended ef965c6e - 'Protocol probe' disconnected
+[2026-11-11 10:47:32.258] [info] [tid 1664]  Connection received db13efee
+[2026-11-11 10:47:32.273] [warning] [tid 1664]  Refused incompatible content: Skyrim runtime differs from this session: expected 1.7.104.0
+[2026-11-11 10:47:32.273] [info] [tid 1664]  Connection ended db13efee - 'NULL' disconnected
+[2026-11-11 10:47:32.305] [info] [tid 1664]  Connection received c5eb3e13
+[2026-11-11 10:47:32.319] [warning] [tid 1664]  Refused incompatible content: Active plugin has different contents or ESL flag: Update.esm
+[2026-11-11 10:47:32.320] [info] [tid 1664]  Connection ended c5eb3e13 - 'NULL' disconnected
+[2026-11-11 10:47:32.351] [info] [tid 1664]  Connection received 26964809
+[2026-11-11 10:47:32.366] [warning] [tid 1664]  Refused incompatible content: Missing active plugin required by this session: Update.esm
+[2026-11-11 10:47:32.366] [info] [tid 1664]  Connection ended 26964809 - 'NULL' disconnected
+[2026-11-11 10:47:32.398] [info] [tid 1664]  Connection received 367564aa
+[2026-11-11 10:47:32.413] [warning] [tid 1664]  Refused incompatible content: Extra active plugin is not supported by this session: ccExtra.esl
+[2026-11-11 10:47:32.413] [info] [tid 1664]  Connection ended 367564aa - 'NULL' disconnected
+[2026-11-11 10:47:32.443] [info] [tid 1664]  Connection received 27af6b92
+[2026-11-11 10:47:32.459] [warning] [tid 1664]  Refused incompatible content: Invalid or oversized active plugin manifest
+[2026-11-11 10:47:32.459] [info] [tid 1664]  Connection ended 27af6b92 - 'NULL' disconnected
+[2026-11-11 10:47:32.490] [info] [tid 1664]  Connection received 5c40192f
+[2026-11-11 10:47:32.505] [warning] [tid 1664]  Refused incompatible content: Cannot fingerprint active plugin: Skyrim.esm
+[2026-11-11 10:47:32.506] [info] [tid 1664]  Connection ended 5c40192f - 'NULL' disconnected
+[2026-11-11 10:47:32.536] [info] [tid 1664]  Connection received e9710d62
+[2026-11-11 10:47:32.551] [info] [tid 1664]  Connection ended e9710d62 - 'NULL' disconnected
+[2026-11-11 10:47:32.583] [info] [tid 1664]  Connection received 97f875aa
+[2026-11-11 10:47:32.599] [info] [tid 1664]  New player 97f875aa '127.0.0.1' tried to connect with client old-client - Version mismatch
+[2026-11-11 10:47:32.599] [info] [tid 1664]  Connection ended 97f875aa - 'NULL' disconnected
+[2026-11-11 10:47:32.631] [info] [tid 1664]  Connection ended 2c6cca9d - 'Protocol probe' disconnected
+[2026-11-11 10:47:32.739] [info] [tid 1664]  Connection received 6c925c1
+[2026-11-11 10:47:32.754] [warning] [tid 1664]  Refused incompatible content: Active plugin has different contents or ESL flag: Skyrim.esm
+[2026-11-11 10:47:32.754] [info] [tid 1664]  Connection ended 6c925c1 - 'NULL' disconnected
+[2026-11-11 10:47:32.801] [info] [tid 1664]  Connection received 9c9f45a4
+[2026-11-11 10:47:32.815] [info] [tid 1664]  New player 'Protocol probe' [9c9f45a4] connected with 2 mods
+	: Skyrim.esm, Update.esm
+[2026-11-11 10:47:32.847] [info] [tid 1664]  Connection ended 9c9f45a4 - 'Protocol probe' disconnected
+[2026-11-11 10:47:42.092] [info] [tid 1664]  Server shutdown requested
