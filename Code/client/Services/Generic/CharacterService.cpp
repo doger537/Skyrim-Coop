@@ -24,6 +24,7 @@
 #include <Systems/FaceGenSystem.h>
 #include <Systems/LeveledNpcSystem.h>
 #include <Systems/OwnershipSystem.h>
+#include <Structs/OwnershipTimeline.h>
 
 #include <Events/ActorAddedEvent.h>
 #include <Events/ActorRemovedEvent.h>
@@ -725,6 +726,8 @@ void CharacterService::OnReferencesMoveRequest(const ServerReferencesMoveRequest
 
         InterpolationComponent::TimePoint point;
         point.Tick = acMessage.Tick;
+        point.Cell = movement.CellId.LogFormat();
+        point.WorldSpace = movement.WorldSpaceId.LogFormat();
         point.Position = movement.Position;
         point.Rotation = {movement.Rotation.x, 0.f, movement.Rotation.y};
         point.Variables = movement.Variables;
@@ -825,7 +828,9 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
 
     const uint32_t currentEpoch = entity ? OwnershipSystem::GetOwnershipEpoch(m_world, *entity) : 0;
 
-    if (currentEpoch != 0 && acMessage.OwnershipEpoch <= currentEpoch)
+    const auto* pRemote = entity ? m_world.try_get<RemoteComponent>(*entity) : nullptr;
+    const uint32_t lastTransferEpoch = pRemote ? pRemote->LastTransferEpoch : currentEpoch;
+    if (!OwnershipTimeline::ShouldApplyTransfer(currentEpoch, lastTransferEpoch, acMessage.OwnershipEpoch))
     {
         spdlog::debug("Ignored stale ownership update for actor {:X} at epoch {}; current epoch is {}", acMessage.ServerId, acMessage.OwnershipEpoch, currentEpoch);
         return;
@@ -863,7 +868,11 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
 
             m_world.remove<LocalAnimationComponent, LocalComponent>(cEntity);
             if (m_world.all_of<RemoteComponent>(cEntity))
-                m_world.get<RemoteComponent>(cEntity).OwnershipEpoch = acMessage.OwnershipEpoch;
+            {
+                auto& remote = m_world.get<RemoteComponent>(cEntity);
+                remote.OwnershipEpoch = acMessage.OwnershipEpoch;
+                remote.LastTransferEpoch = acMessage.OwnershipEpoch;
+            }
             else if (cachedRefId != 0)
                 m_world.emplace<RemoteComponent>(cEntity, acMessage.ServerId, cachedRefId, acMessage.OwnershipEpoch);
 
@@ -914,6 +923,7 @@ void CharacterService::OnOwnershipTransfer(const NotifyOwnershipTransfer& acMess
     else if (auto* pRemoteComponent = m_world.try_get<RemoteComponent>(cEntity))
     {
         pRemoteComponent->OwnershipEpoch = acMessage.OwnershipEpoch;
+        pRemoteComponent->LastTransferEpoch = acMessage.OwnershipEpoch;
     }
 
     ReconcileActorData(cEntity, pActor, acMessage.OwnershipEpoch, acMessage.CurrentActorData, pActor && pActor->GetNiNode(), false);

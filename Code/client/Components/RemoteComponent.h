@@ -12,10 +12,12 @@ struct RemoteComponent
         : Id(aId)
         , CachedRefId(aRefId)
         , OwnershipEpoch(aOwnershipEpoch)
+        , LastTransferEpoch(aOwnershipEpoch)
     {
     }
 
     uint32_t Id;
     uint32_t CachedRefId;
     uint32_t OwnershipEpoch;
+    uint32_t LastTransferEpoch;
 };

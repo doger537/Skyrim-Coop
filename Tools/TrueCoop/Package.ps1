@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Label = 'iteration3')
+param([string]$Label = 'iteration4')
 $ErrorActionPreference = 'Stop'
 if ($Label -notmatch '^[a-zA-Z0-9-]+$') { throw 'Use letters, numbers and dashes in Label' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -36,7 +36,7 @@ foreach ($item in Get-ChildItem (Join-Path $repo 'GameFiles/Skyrim')) {
 }
 $info = Join-Path $stage 'TrueCoop-Test-Info'
 New-Item -ItemType Directory -Path $info | Out-Null
-foreach ($name in @('LICENSE','ITERATION_2.md','ITERATION_3.md','TEST_PLAN.md','CONTENT_COMPATIBILITY.md')) {
+foreach ($name in @('LICENSE','ITERATION_2.md','ITERATION_3.md','ITERATION_4.md','TEST_PLAN.md','CONTENT_COMPATIBILITY.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $info
 }
 Copy-Item -LiteralPath (Join-Path $repo 'build/BuildInfo.h') -Destination $info
@@ -80,7 +80,7 @@ SHA-256 сравнивает содержимое активных ESP/ESM/ESL. 
 Alternate Start: проверка USSEP и изоляция личных стартовых квестов; полный совместный старт не готов.
 Для него сначала завершите выбор начала офлайн. Файлы ASLAL/USSEP устанавливаются отдельно.
 Это не гарантия отсутствия всех дюпов, рывков и ошибок Havok/скелетов.
-Автоматические и сетевые проверки описаны в ITERATION_3.md; полное прохождение, дома,
+Исправления порядка передачи владельца и переходов описаны в ITERATION_4.md; полное прохождение, дома,
 постоянный мир, адаптация квестов и гражданская война ещё впереди.
 "@
 $instructions | Set-Content -LiteralPath (Join-Path $info 'INSTALL-RU.md') -Encoding UTF8
@@ -103,3 +103,4 @@ try {
 $checksum=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
 "$checksum  $([IO.Path]::GetFileName($archive))" | Set-Content "$archive.sha256" -Encoding ASCII
 [ordered]@{Archive=$archive;Bytes=(Get-Item $archive).Length;FilesVerified=$manifest.Count;Build=$version;SHA256=$checksum} | ConvertTo-Json
+

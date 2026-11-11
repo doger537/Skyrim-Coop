@@ -13,6 +13,8 @@ struct InterpolationComponent
     {
         // The owner's capture tick
         uint64_t Tick{};
+        uint64_t Cell{};
+        uint64_t WorldSpace{};
         glm::vec3 Position{};
         glm::vec3 Rotation{};
         AnimationVariables Variables{};

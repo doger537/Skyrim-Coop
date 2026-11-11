@@ -17,6 +17,12 @@ inline bool IsFinite(const glm::vec3& acValue) noexcept
     return std::isfinite(acValue.x) && std::isfinite(acValue.y) && std::isfinite(acValue.z);
 }
 
+// Adjacent exterior cells share coordinates; interiors and different worlds do not.
+inline bool IsLocationDiscontinuity(uint64_t aFirstWorld, uint64_t aFirstCell, uint64_t aSecondWorld, uint64_t aSecondCell) noexcept
+{
+    return aFirstWorld != aSecondWorld || (aSecondWorld == 0 && aFirstCell != aSecondCell);
+}
+
 struct Result
 {
     glm::vec3 Position{};
@@ -25,7 +31,7 @@ struct Result
     bool IsExtrapolating{};
 };
 
-inline Result Sample(const glm::vec3& acFirst, const glm::vec3& acSecond, uint64_t aFirstTick, uint64_t aSecondTick, double aRenderTick) noexcept
+inline Result Sample(const glm::vec3& acFirst, const glm::vec3& acSecond, uint64_t aFirstTick, uint64_t aSecondTick, double aRenderTick, bool aDiscontinuity = false) noexcept
 {
     Result result{acSecond};
     if (!IsFinite(acFirst) || !IsFinite(acSecond) || !std::isfinite(aRenderTick))
@@ -35,7 +41,7 @@ inline Result Sample(const glm::vec3& acFirst, const glm::vec3& acSecond, uint64
     const double dy = static_cast<double>(acSecond.y) - acFirst.y;
     const double dz = static_cast<double>(acSecond.z) - acFirst.z;
     const double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
-    result.IsTeleport = distance > cTeleportDistance;
+    result.IsTeleport = aDiscontinuity || distance > cTeleportDistance;
 
     // Compare before subtracting unsigned ticks: reversed or equal ticks must not create a huge velocity.
     if (aSecondTick <= aFirstTick)

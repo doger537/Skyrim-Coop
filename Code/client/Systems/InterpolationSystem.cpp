@@ -43,7 +43,8 @@ void InterpolationSystem::Update(Actor* apActor, InterpolationComponent& aInterp
     const auto& first = *(movements.begin());
     const auto& second = *(++movements.begin());
 
-    const auto sample = MovementPlayback::Sample(first.Position, second.Position, first.Tick, second.Tick, cRenderTick);
+    const bool discontinuity = MovementPlayback::IsLocationDiscontinuity(first.WorldSpace, first.Cell, second.WorldSpace, second.Cell);
+    const auto sample = MovementPlayback::Sample(first.Position, second.Position, first.Tick, second.Tick, cRenderTick, discontinuity);
     const auto& position = sample.Position;
     const float delta = sample.Delta;
 
