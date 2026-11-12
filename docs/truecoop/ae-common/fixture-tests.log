@@ -1,0 +1,8 @@
+PASS: plan is read-only
+PASS: missing launcher blocks before moving files
+PASS: plugin and archive preserved outside Data
+PASS: repeated common-mode enable
+PASS: restore is byte-identical
+PASS: dependent plugin blocks all moves
+PASS: restore conflict preserves backup and prevents partial restore
+Fixture: C:\Users\panzz\AppData\Local\Temp\ae-fixture-bbbef3360b504ddfb6bf764511e858a8

@@ -35,6 +35,10 @@ foreach ($item in Get-ChildItem (Join-Path $repo 'GameFiles/Skyrim')) {
     Copy-Item -LiteralPath $item.FullName -Destination $stage -Recurse
 }
 $info = Join-Path $stage 'TrueCoop-Test-Info'
+foreach ($name in @('SharedContent.ps1','Play-CommonSE.cmd','Restore-Creations.cmd')) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $runtime
+}
+Copy-Item -LiteralPath (Join-Path $repo 'AE_COMMON_MODE.md') -Destination $runtime
 New-Item -ItemType Directory -Path $info | Out-Null
 foreach ($name in @('LICENSE','ITERATION_2.md','ITERATION_3.md','ITERATION_4.md','TEST_PLAN.md','CONTENT_COMPATIBILITY.md')) {
     Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $info
