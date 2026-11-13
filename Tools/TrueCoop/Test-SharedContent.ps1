@@ -34,6 +34,13 @@ Write-Output 'PASS: repeated common-mode enable'
 & $Helper -GamePath $base -Action Restore | Out-Null
 if((Get-FileHash (Join-Path $data 'ccTest.bsa')).Hash -ne $sha){throw 'Hash mismatch'}
 Write-Output 'PASS: restore is byte-identical'
+$unsupported='ccTest - '+[char]0x0442+'.bsa'
+[IO.File]::WriteAllText((Join-Path $data $unsupported),'fixture unsupported archive')
+$blocked=$false
+try { & $Helper -GamePath $base -Action Enable | Out-Null } catch { $blocked=$true }
+if(!$blocked -or !(Test-Path (Join-Path $data 'ccTest.esl'))){throw 'Unsupported filename moved files'}
+Remove-Item -LiteralPath (Join-Path $data $unsupported)
+Write-Output 'PASS: unsupported filename is rejected before moving files'
 Write-Plugin 'NeedsCC.esp' @('ccTest.esl')
 $blocked=$false
 try { & $Helper -GamePath $base -Action Enable | Out-Null } catch { $blocked=$true }
@@ -47,6 +54,46 @@ $blocked=$false
 try { & $Helper -GamePath $base -Action Restore | Out-Null } catch { $blocked=$true }
 if(!$blocked -or !(Test-Path (Join-Path $base 'TrueCoop-CommonSE-Backup/ccTest.esl'))){throw 'Conflict not blocked before partial restore'}
 Write-Output 'PASS: restore conflict preserves backup and prevents partial restore'
+$before=(Get-FileHash (Join-Path $base 'TrueCoop-CommonSE-Backup/manifest.json')).Hash
+$blocked=$false
+try { & $Helper -GamePath $base -Action Enable | Out-Null } catch { $blocked=$true }
+if(!$blocked -or (Get-FileHash (Join-Path $base 'TrueCoop-CommonSE-Backup/manifest.json')).Hash -ne $before){throw 'Changed files did not block enable before journal replacement'}
+Write-Output 'PASS: changed duplicate blocks resume without altering journal'
+# Replace only the deliberately altered fixture, then exercise identical duplicate recovery.
+Copy-Item -LiteralPath (Join-Path $base 'TrueCoop-CommonSE-Backup/ccTest.bsa') -Destination (Join-Path $data 'ccTest.bsa') -Force
+& $Helper -GamePath $base -Action Restore | Out-Null
+& $Helper -GamePath $base -Action Restore | Out-Null
+if((Get-FileHash (Join-Path $data 'ccTest.bsa')).Hash -ne $sha){throw 'Identical duplicate restore failed'}
+Write-Output 'PASS: restore accepts identical duplicates and repeated restore'
+& $Helper -GamePath $base -Action Enable | Out-Null
+foreach($n in @('ccTest.esl','ccTest.bsa')){Copy-Item -LiteralPath (Join-Path $base ('TrueCoop-CommonSE-Backup/'+$n)) -Destination (Join-Path $data $n)}
+Write-Plugin 'ccNew.esl'
+& $Helper -GamePath $base -Action Enable | Out-Null
+$state=Get-Content (Join-Path $base 'TrueCoop-CommonSE-Backup/manifest.json') -Raw | ConvertFrom-Json
+if(@($state.Files).Count -ne 3 -or (Test-Path (Join-Path $data 'ccTest.esl')) -or !(Get-ChildItem (Join-Path $base 'TrueCoop-CommonSE-Backup/History') -Recurse -Filter 'ccTest.bsa')){throw 'Duplicate resume/new file merge failed'}
+Write-Output 'PASS: reappeared files resume safely and new Creations merge into journal'
+& $Helper -GamePath $base -Action Restore | Out-Null
+Move-Item -LiteralPath (Join-Path $data 'ccTest.esl') -Destination (Join-Path $base 'TrueCoop-CommonSE-Backup/ccTest.esl')
+& $Helper -GamePath $base -Action Enable | Out-Null
+if(Test-Path (Join-Path $data 'ccTest.bsa')){throw 'Partial operation did not resume'}
+& $Helper -GamePath $base -Action Restore | Out-Null
+Write-Output 'PASS: interrupted move resumes and restores every file'
+[IO.File]::WriteAllText((Join-Path $data 'ccNew.bsa'),'new fixture archive')
+for($i=0;$i -lt 72;$i++) {
+    $n='ccBulk'+$i.ToString('000')
+    Write-Plugin ($n+'.esl')
+    [IO.File]::WriteAllText((Join-Path $data ($n+'.bsa')),'fixture '+$i)
+}
+$bulk=@{}
+foreach($f in Get-ChildItem -LiteralPath $data -File | Where-Object Name -like 'cc*'){$bulk[$f.Name]=(Get-FileHash $f.FullName).Hash}
+if($bulk.Count -ne 148){throw 'Bulk fixture count wrong'}
+& $Helper -GamePath $base -Action Enable | Out-Null
+foreach($n in @($bulk.Keys | Select-Object -First 7)){Copy-Item -LiteralPath (Join-Path $base ('TrueCoop-CommonSE-Backup/'+$n)) -Destination (Join-Path $data $n)}
+& $Helper -GamePath $base -Action Enable | Out-Null
+if(@(Get-ChildItem -LiteralPath $data -File | Where-Object Name -like 'cc*').Count){throw 'Bulk resume left Creation files'}
+& $Helper -GamePath $base -Action Restore | Out-Null
+foreach($n in $bulk.Keys){if((Get-FileHash (Join-Path $data $n)).Hash -ne $bulk[$n]){throw 'Bulk restore hash mismatch'}}
+Write-Output 'PASS: 74 Creation plugins / 148 files survive resume and byte-identical restore'
 $entry = Join-Path $base 'entry point with spaces'
 $entryData = Join-Path $entry 'Data'
 $runtime = Join-Path $entryData 'SkyrimTogetherReborn'
@@ -56,9 +103,15 @@ Copy-Item -LiteralPath (Join-Path $base 'SkyrimSE.exe') -Destination (Join-Path 
 foreach($name in @('Skyrim.esm','Update.esm','Dawnguard.esm','HearthFires.esm','Dragonborn.esm')) {
     Copy-Item -LiteralPath (Join-Path $data $name) -Destination $entryData
 }
-Copy-Item -LiteralPath (Join-Path $base 'TrueCoop-CommonSE-Backup/ccTest.esl') -Destination $entryData
-Copy-Item -LiteralPath (Join-Path $base 'TrueCoop-CommonSE-Backup/ccTest.bsa') -Destination $entryData
+Copy-Item -LiteralPath (Join-Path $data 'ccTest.esl') -Destination $entryData
+Copy-Item -LiteralPath (Join-Path $data 'ccTest.bsa') -Destination $entryData
 Copy-Item -LiteralPath $Helper -Destination $runtime
+# Only the fixture copy bypasses process detection: a real game may be open on the host.
+$fixtureHelper=Join-Path $runtime 'SharedContent.ps1'
+$fixtureCode=Get-Content -LiteralPath $fixtureHelper -Raw
+$guard='Get-Process SkyrimSE,SkyrimTogether,SkyrimSELauncher -ErrorAction SilentlyContinue'
+if(!$fixtureCode.Contains($guard)){throw 'Fixture process guard not found'}
+[IO.File]::WriteAllText($fixtureHelper,$fixtureCode.Replace($guard,'$false'))
 foreach($name in @('Play-CommonSE.cmd','Restore-Creations.cmd')) {
     Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $Helper) $name) -Destination $runtime
 }

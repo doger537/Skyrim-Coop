@@ -1,0 +1,17 @@
+PASS: plan is read-only
+PASS: missing launcher blocks before moving files
+PASS: plugin and archive preserved outside Data
+PASS: repeated common-mode enable
+PASS: restore is byte-identical
+PASS: unsupported filename is rejected before moving files
+PASS: dependent plugin blocks all moves
+PASS: restore conflict preserves backup and prevents partial restore
+PASS: changed duplicate blocks resume without altering journal
+PASS: restore accepts identical duplicates and repeated restore
+PASS: reappeared files resume safely and new Creations merge into journal
+PASS: interrupted move resumes and restores every file
+PASS: 74 Creation plugins / 148 files survive resume and byte-identical restore
+PASS: Windows PowerShell -File discovers game without -GamePath from another working directory
+PASS: actual Play CMD prepares fixture and launches fake executable with spaces in path
+PASS: actual Restore CMD returns original bytes
+Fixture: C:\Users\panzz\AppData\Local\Temp\ae-fixture-700e6f641f8e4f4fafdd87b25b5b0f82

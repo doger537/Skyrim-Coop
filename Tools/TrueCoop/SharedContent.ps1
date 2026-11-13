@@ -46,24 +46,50 @@ function Get-Masters([string]$Path) {
 function Assert-Stopped {
     if (Get-Process SkyrimSE,SkyrimTogether,SkyrimSELauncher -ErrorAction SilentlyContinue) { throw 'Close Skyrim and its launchers first.' }
 }
+function Read-BackupState {
+    $state = Get-Content -LiteralPath $journal -Raw | ConvertFrom-Json
+    if ($state.GamePath -ne $game -or $state.Version -ne 1) { throw 'Backup belongs to another game directory or format.' }
+    $seen = @{}
+    foreach ($item in $state.Files) {
+        if ($item.Name -notmatch '^cc[a-zA-Z0-9_ -]+\.(esm|esp|esl|bsa)$' -or $item.SHA256 -notmatch '^[a-fA-F0-9]{64}$' -or $seen.ContainsKey($item.Name)) { throw 'Unsafe or duplicate backup entry.' }
+        $seen[$item.Name] = $true
+        $original = Join-Path $data $item.Name
+        $saved = Join-Path $backup $item.Name
+        if (!(Test-Path -LiteralPath $original) -and !(Test-Path -LiteralPath $saved)) { throw "Missing original and backup: $($item.Name)" }
+        foreach ($path in @($original,$saved)) {
+            if (Test-Path -LiteralPath $path) {
+                Write-Progress -Activity 'Checking CommonSE backup' -Status $item.Name
+                if (!(Test-Path -LiteralPath $path -PathType Leaf) -or (Get-FileHash -LiteralPath $path).Hash -ne $item.SHA256) { throw "Changed file: $path. Nothing will be overwritten; keep the backup." }
+            }
+        }
+    }
+    Write-Progress -Activity 'Checking CommonSE backup' -Completed
+    return $state
+}
+function Preserve-Duplicate([string]$Path) {
+    # This is a move inside the same backup root, never deletion or replacement.
+    $history = Join-Path $backup ('History\' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $history -Force | Out-Null
+    Move-Item -LiteralPath $Path -Destination (Join-Path $history ([IO.Path]::GetFileName($Path)))
+}
 if ($Action -eq 'Restore') {
     Assert-Stopped
     if (!(Test-Path -LiteralPath $journal)) { throw 'No CommonSE backup to restore.' }
-    $state = Get-Content -LiteralPath $journal -Raw | ConvertFrom-Json
-    if ($state.GamePath -ne $game -or $state.Version -ne 1) { throw 'Backup belongs to another game directory or format.' }
-    # Validate the entire restore before moving any file. Never replace a file changed by Steam/Vortex.
+    # Validate BOTH copies of every file before moving anything.
+    $state = Read-BackupState
     foreach ($item in $state.Files) {
-        if ($item.Name -notmatch '^cc[a-zA-Z0-9_ -]+\.(esm|esp|esl|bsa)$') { throw 'Unsafe backup filename.' }
         $source = Join-Path $backup $item.Name
-        $destination = Join-Path $data $item.Name
         if (Test-Path -LiteralPath $source) {
-            if ((Get-FileHash -LiteralPath $source).Hash -ne $item.SHA256 -or (Test-Path -LiteralPath $destination)) { throw "Restore conflict: $($item.Name). Resolve the Steam/Vortex change first; backup is preserved." }
-        } elseif (!(Test-Path -LiteralPath $destination) -or (Get-FileHash -LiteralPath $destination).Hash -ne $item.SHA256) { throw "Missing or changed restore file: $($item.Name)" }
+            $destination = Join-Path $data $item.Name
+            if (Test-Path -LiteralPath $destination) { Preserve-Duplicate $source }
+            else { Move-Item -LiteralPath $source -Destination $destination }
+        }
     }
     foreach ($item in $state.Files) {
-        $source = Join-Path $backup $item.Name
-        if (Test-Path -LiteralPath $source) { Move-Item -LiteralPath $source -Destination (Join-Path $data $item.Name) }
+        Write-Progress -Activity 'Verifying restored files' -Status $item.Name
+        if ((Get-FileHash -LiteralPath (Join-Path $data $item.Name)).Hash -ne $item.SHA256) { throw "File changed during restore: $($item.Name). Keep the backup and stop other file operations." }
     }
+    Write-Progress -Activity 'Verifying restored files' -Completed
     # Keep the journal as evidence; next enable verifies that every old file has returned.
     Write-Output 'Creation files restored. Re-select your original Vortex profile before solo play.'
     exit
@@ -83,33 +109,52 @@ foreach ($plugin in $plugins) {
         if (Test-CreationName $master) { $blockers += "$($plugin.Name) requires $master" }
     }
 }
-[pscustomobject]@{ Mode='CommonSE'; GamePath=$game; CreationPlugins=$creations.Count; FilesToPreserve=$files.Count; BlockingDependencies=$blockers; Note='All cc* plugins are excluded, including the four free Creations. Use a NEW Vortex profile and NEW character. Other mods still must match.' } | Format-List
+[pscustomobject]@{ Mode='CommonSE'; ToolsVersion='fix2'; GamePath=$game; CreationPlugins=$creations.Count; FilesToPreserve=$files.Count; BlockingDependencies=$blockers; Note='This is a plan before changes. Wait for CommonSE enabled. Use a new co-op save; other mods must match.' } | Format-List
 if ($blockers.Count) { throw ('Disable dependent mods in the separate Vortex co-op profile first: ' + ($blockers -join '; ')) }
 if ($Action -eq 'Enable') {
     Assert-Stopped
     if ($Launch -and !(Test-Path -LiteralPath (Join-Path $data 'SkyrimTogetherReborn\SkyrimTogether.exe'))) { throw 'Install the same TrueCoop build on both PCs first; no files have been moved.' }
     $version = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $game 'SkyrimSE.exe')).FileVersion
     if ($version -notmatch '^1\.7\.104(\.0)?$') { throw "This package targets Steam 1.7.104.0, found $version. Both players need the same supported runtime." }
-    if ($files.Count) {
+    $known = @{}
+    if (Test-Path -LiteralPath $journal) {
+        $previous = Read-BackupState
+        foreach ($item in $previous.Files) { $known[$item.Name] = $item }
+    }
+    foreach ($file in $files) {
+        if (!$known.ContainsKey($file.Name)) {
+            if ($file.Name -notmatch '^cc[a-zA-Z0-9_ -]+\.(esm|esp|esl|bsa)$') { throw "Unsupported Creation filename: $($file.Name). No files have been moved." }
+            if (Test-Path -LiteralPath (Join-Path $backup $file.Name)) { throw "Untracked backup file: $($file.Name). Keep the backup and resolve this before continuing." }
+            Write-Progress -Activity 'Preparing CommonSE' -Status $file.Name
+            $known[$file.Name] = [pscustomobject]@{Name=$file.Name;SHA256=(Get-FileHash -LiteralPath $file.FullName).Hash}
+        }
+    }
+    Write-Progress -Activity 'Preparing CommonSE' -Completed
+    if ($known.Count) {
+        New-Item -ItemType Directory -Path $backup -Force | Out-Null
+        $entries = @($known.Values | Sort-Object Name)
+        # Commit the merged journal before any move, retaining its previous version.
+        $next = Join-Path $backup ('manifest.next-' + [guid]::NewGuid().ToString('N') + '.json')
+        [pscustomobject]@{Version=1;GamePath=$game;Files=$entries} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $next -Encoding UTF8
         if (Test-Path -LiteralPath $journal) {
-            $previous = Get-Content -LiteralPath $journal -Raw | ConvertFrom-Json
-            if ($previous.GamePath -ne $game) { throw 'Backup path conflict.' }
-            foreach ($item in $previous.Files) {
-                if ($item.Name -notmatch '^cc[a-zA-Z0-9_ -]+\.(esm|esp|esl|bsa)$' -or (Test-Path -LiteralPath (Join-Path $backup $item.Name))) { throw 'A backup is still active. Restore it before Steam/Vortex deployment or another enable.' }
-                $restored = Join-Path $data $item.Name
-                if (!(Test-Path -LiteralPath $restored) -or (Get-FileHash -LiteralPath $restored).Hash -ne $item.SHA256) { throw 'Restored files changed. Preserve the previous backup journal before creating a new profile.' }
+            $old = Join-Path $backup ('manifest.previous-' + [guid]::NewGuid().ToString('N') + '.json')
+            [IO.File]::Replace($next,$journal,$old)
+        } else { [IO.File]::Move($next,$journal) }
+        foreach ($item in $entries) {
+            $source = Join-Path $data $item.Name
+            $saved = Join-Path $backup $item.Name
+            if (Test-Path -LiteralPath $source) {
+                # Recheck immediately before the move as well as during whole-plan validation.
+                if ((Get-FileHash -LiteralPath $source).Hash -ne $item.SHA256) { throw "File changed during preparation: $($item.Name). Backup preserved; do not launch until resolved." }
+                if (Test-Path -LiteralPath $saved) { Preserve-Duplicate $saved }
+                Move-Item -LiteralPath $source -Destination $saved
             }
         }
-        New-Item -ItemType Directory -Path $backup -Force | Out-Null
-        $entries = @(foreach ($file in $files) {
-            if (Test-Path -LiteralPath (Join-Path $backup $file.Name)) { throw "Backup already contains $($file.Name)" }
-            [pscustomobject]@{Name=$file.Name;SHA256=(Get-FileHash -LiteralPath $file.FullName).Hash}
-        })
-        # Persist the full plan before the first move; interrupted runs can use Restore.
-        [pscustomobject]@{Version=1;GamePath=$game;Files=$entries} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $journal -Encoding UTF8
-        foreach ($file in $files) { Move-Item -LiteralPath $file.FullName -Destination (Join-Path $backup $file.Name) }
     }
+    $remaining = @(Get-ChildItem -LiteralPath $data -File | Where-Object { Test-CreationName $_.Name })
+    if ($remaining.Count) { throw 'Creation plugins reappeared during preparation. Stop Steam/Vortex file operations and retry; game not launched.' }
     Write-Output 'CommonSE enabled. Creations are preserved in TrueCoop-CommonSE-Backup. Do not load a save that used them.'
+    Write-Output 'Active Creation plugins remaining: 0'
 }
 if ($Launch) {
     if ($Action -ne 'Enable') { throw 'Launch requires -Action Enable.' }
