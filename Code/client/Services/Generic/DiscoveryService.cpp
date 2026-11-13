@@ -1,6 +1,7 @@
 #include <TiltedOnlinePCH.h>
 
 #include <Services/DiscoveryService.h>
+#include <Services/TransportService.h>
 #include <Games/TES.h>
 
 #include <Games/References.h>
@@ -64,10 +65,15 @@ void DiscoveryService::VisitCell(bool aForceTrigger) noexcept
     if (!pPlayer)
         return;
 
-    if (pPlayer->GetWorldSpace())
-        VisitExteriorCell(aForceTrigger);
-    else if (pPlayer->GetParentCellEx())
-        VisitInteriorCell(aForceTrigger);
+    // Server plugin IDs exist only after authentication has installed the Mods mapping.
+    // Offline actor discovery and local location notifications must still run normally.
+    if (m_world.GetTransport().IsConnected())
+    {
+        if (pPlayer->GetWorldSpace())
+            VisitExteriorCell(aForceTrigger);
+        else if (pPlayer->GetParentCellEx())
+            VisitInteriorCell(aForceTrigger);
+    }
 
     // exactly how the game does it too
     if (m_pLocation != pPlayer->locationForm)
