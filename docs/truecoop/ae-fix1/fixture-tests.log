@@ -1,0 +1,11 @@
+PASS: plan is read-only
+PASS: missing launcher blocks before moving files
+PASS: plugin and archive preserved outside Data
+PASS: repeated common-mode enable
+PASS: restore is byte-identical
+PASS: dependent plugin blocks all moves
+PASS: restore conflict preserves backup and prevents partial restore
+PASS: Windows PowerShell -File discovers game without -GamePath from another working directory
+PASS: actual Play CMD prepares fixture and launches fake executable with spaces in path
+PASS: actual Restore CMD returns original bytes
+Fixture: C:\Users\panzz\AppData\Local\Temp\ae-fixture-f0ffd585cc08468f8fede0396241ee56

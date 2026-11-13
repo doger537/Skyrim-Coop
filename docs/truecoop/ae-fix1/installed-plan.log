@@ -1,0 +1,12 @@
+
+
+Mode                 : CommonSE
+GamePath             : D:\SteamLibrary\steamapps\common\Skyrim Special Edition
+CreationPlugins      : 4
+FilesToPreserve      : 8
+BlockingDependencies : {}
+Note                 : All cc* plugins are excluded, including the four free Creations. Use a NEW Vortex profile and NE
+                       W character. Other mods still must match.
+
+
+

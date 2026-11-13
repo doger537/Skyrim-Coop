@@ -1,10 +1,20 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Plan','Enable','Restore')][string]$Action = 'Plan',
-    [string]$GamePath = (Join-Path $PSScriptRoot '../..'),
+    [string]$GamePath = '',
     [switch]$Launch
 )
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($GamePath)) {
+    # Windows PowerShell -File can evaluate parameter defaults before PSScriptRoot is set.
+    # Resolve only after parameter binding; never depend on the caller's working directory.
+    $scriptDirectory = $PSScriptRoot
+    if ([string]::IsNullOrWhiteSpace($scriptDirectory)) {
+        $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    if ([string]::IsNullOrWhiteSpace($scriptDirectory)) { throw 'Cannot locate SharedContent.ps1. Specify -GamePath explicitly.' }
+    $GamePath = Join-Path $scriptDirectory '../..'
+}
 $game = (Resolve-Path -LiteralPath $GamePath).Path.TrimEnd('\')
 $data = Join-Path $game 'Data'
 if (!(Test-Path -LiteralPath (Join-Path $game 'SkyrimSE.exe')) -or !(Test-Path -LiteralPath $data)) { throw 'Select the Skyrim Special Edition game directory.' }
