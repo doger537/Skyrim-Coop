@@ -107,5 +107,3 @@ try {
 $checksum=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
 "$checksum  $([IO.Path]::GetFileName($archive))" | Set-Content "$archive.sha256" -Encoding ASCII
 [ordered]@{Archive=$archive;Bytes=(Get-Item $archive).Length;FilesVerified=$manifest.Count;Build=$version;SHA256=$checksum} | ConvertTo-Json
-
-
