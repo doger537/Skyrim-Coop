@@ -104,7 +104,7 @@ bool QuestService::CheckCampaign(bool aApply, String& aError) noexcept
         QuestReplayPlan plan;
         if (!IsSharedQuest(quest) || !known.insert(form).second || !PlanQuestReplay(message.Data, message.ReplayStages, message.ReplayLifecycle, Observe(quest), plan))
         {
-            aError = "Quest " + std::to_string(message.Data.Id.LogFormat()).c_str() + ": " +
+            aError = String("Quest ") + std::to_string(message.Data.Id.LogFormat()).c_str() + ": " +
                      (plan.Error.empty() ? String("Missing, duplicate or unsupported quest in the shared campaign") : plan.Error);
             return false;
         }

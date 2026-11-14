@@ -207,3 +207,37 @@ TEST_CASE("A failed quest audit write rolls back the snapshot and leaves the cac
     REQUIRE(restored.QuestRevision() == revision);
     REQUIRE(restored.FindQuest(id)->Data.Events.size() == 1);
 }
+
+TEST_CASE("Legacy object worlds upgrade their campaign contract and old servers cannot decode the new format", "[quest.migration]")
+{
+    QuestDirectory directory;
+    {
+        WorldStore legacy;
+        REQUIRE(legacy.Open(directory.File));
+        Campaign::Contract contract{"1.7.104.0", QuestContent()};
+        WorldStore::Record record;
+        record.Key = "$contract";
+        REQUIRE(Campaign::Encode(contract, record.Value));
+        REQUIRE(record.Value.size() >= 7);
+        REQUIRE(record.Value[4] == 2); // header version new H decoder refuses
+        record.Value[4] = 1;              // H's otherwise identical contract codec
+        uint64_t revision = 0;
+        REQUIRE(legacy.Commit({record}, revision) == WorldStore::WriteResult::Committed);
+    }
+    {
+        Campaign::State upgraded;
+        REQUIRE(upgraded.Open(directory.File));
+        REQUIRE(upgraded.GetContract().has_value());
+        REQUIRE(upgraded.GetContract()->Content == QuestContent());
+        REQUIRE_FALSE(upgraded.IsBootstrapped());
+    }
+    WorldStore raw;
+    REQUIRE(raw.Open(directory.File));
+    WorldStore::Record record;
+    REQUIRE(raw.Read("$contract", record) == WorldStore::ReadResult::Found);
+    REQUIRE(record.Value.size() >= 7);
+    REQUIRE(record.Value[4] == 2);
+    Campaign::Contract decoded;
+    REQUIRE(Campaign::Decode(record.Value, decoded));
+    REQUIRE(decoded.Content == QuestContent());
+}

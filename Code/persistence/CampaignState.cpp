@@ -42,6 +42,27 @@ bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) 
     }
     if (!LoadQuestState(acAdapters))
         return false;
+    if (m_contract)
+    {
+        // Upgrade only after validating the pinned policy and journal. Older H
+        // servers reject contract v2 instead of silently ignoring the common story.
+        Vector<uint8_t> current;
+        if (!Encode(*m_contract, current))
+        {
+            m_error = "Cannot encode the campaign format upgrade";
+            return false;
+        }
+        if (record.Value != current)
+        {
+            record.Value = std::move(current);
+            uint64_t revision = 0;
+            if (m_store.Commit({record}, revision) != WorldStore::WriteResult::Committed)
+            {
+                m_error = "Cannot commit campaign format upgrade: " + m_store.Error();
+                return false;
+            }
+        }
+    }
     m_ready = true;
     return true;
 }

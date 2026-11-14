@@ -181,15 +181,16 @@ template <class A, class T> bool QuestFields(A& aArchive, T& aQuest) noexcept
 
 bool Header(Writer& aWriter, uint8_t aKind) noexcept
 {
-    return aWriter.Number(uint32_t{0x53574354}) && aWriter.Number(static_cast<uint16_t>(aKind == 3 ? 2 : 1)) && aWriter.Number(aKind);
+    return aWriter.Number(uint32_t{0x53574354}) && aWriter.Number(static_cast<uint16_t>(aKind == 2 ? 1 : 2)) && aWriter.Number(aKind);
 }
 
-bool Header(Reader& aReader, uint8_t aKind) noexcept
+bool Header(Reader& aReader, uint8_t aKind, bool aLegacyContract = false) noexcept
 {
     uint32_t magic = 0;
     uint16_t schema = 0;
     uint8_t kind = 0;
-    return aReader.Number(magic) && aReader.Number(schema) && aReader.Number(kind) && magic == 0x53574354 && schema == (aKind == 3 ? 2 : 1) && kind == aKind;
+    return aReader.Number(magic) && aReader.Number(schema) && aReader.Number(kind) && magic == 0x53574354 &&
+           (schema == (aKind == 2 ? 1 : 2) || (aLegacyContract && aKind == 1 && schema == 1)) && kind == aKind;
 }
 } // namespace
 
@@ -203,7 +204,8 @@ bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, Contract& aContract) 
 {
     aContract = {};
     Reader reader(acBytes);
-    return acBytes.size() <= WorldStore::kMaxRecordBytes && Header(reader, 1) && Manifest(reader, aContract) && reader.End() && ContentCompatibility::Validate(aContract.Content);
+    return acBytes.size() <= WorldStore::kMaxRecordBytes && Header(reader, 1, true) && Manifest(reader, aContract) && reader.End() &&
+           ContentCompatibility::Validate(aContract.Content);
 }
 
 bool Encode(const ObjectData& acObject, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept
