@@ -129,6 +129,23 @@ TEST_CASE("Every Anniversary plugin and archive is checked independently", "[con
     }
 }
 
+TEST_CASE("SE and AE ownership labels cannot authorize mismatched active content", "[content.limited]")
+{
+    using namespace ContentCompatibility;
+    const auto ae = AnniversaryManifest();
+    auto common = ae;
+    common.ModList.resize(5);
+    common.Resources.erase(common.Resources.begin(), common.Resources.begin() + 74);
+    REQUIRE(static_cast<bool>(Validate(common)));
+    REQUIRE(Compare(ae, common).Reason == Issue::MissingPlugin);
+    REQUIRE(Compare(common, ae).Reason == Issue::ExtraPlugin);
+    // Equal active content is permitted regardless of an unverified ownership label.
+    REQUIRE(static_cast<bool>(Compare(common, common)));
+    auto differentLibrary = common;
+    differentLibrary.Resources[0].Digest[0] ^= 1;
+    REQUIRE(Compare(common, differentLibrary).Reason == Issue::DifferentResource);
+}
+
 TEST_CASE("Masters and resources fail closed with actionable diagnostics", "[content.ae]")
 {
     using namespace ContentCompatibility;
