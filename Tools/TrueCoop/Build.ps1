@@ -66,7 +66,7 @@ try {
         $env:VSInstallDir = $vsPath.TrimEnd('\') + '\'
         $env:VCInstallDir = (Join-Path $vsPath 'VC').TrimEnd('\') + '\'
         $env:VisualStudioVersion = '17.0'
-        # xmake caches config-file substitutions, including GIT_TAG, until configuration is cleaned.
+        # Refresh configuration; the shared build identity uses git describe --tags --always.
         Invoke-Checked $xmake.Source @('config', '--clean', '--plat=windows', '--arch=x64', "--mode=$Mode", "--skyrim_version=$SkyrimVersion", '--yes') 'configure.log'
         $expectedVersion = & $git.Source describe --tags --always
         if ($LASTEXITCODE -ne 0) { throw 'Cannot determine build version' }

@@ -313,9 +313,11 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
         if (acMessage.SKSEActive)
             ErrorInfo += "\"SKSE\"";
         if (acMessage.MO2Active)
+        {
             if (acMessage.SKSEActive)
                 ErrorInfo += ",";
-        ErrorInfo += "\"MO2\"";
+            ErrorInfo += "\"MO2\"";
+        }
         ErrorInfo += "]}";
         break;
     }

@@ -1,0 +1,16 @@
+[2026-11-14 12:21:28.151] [info] [tid 16957]  Server 5cf53c5f started on port 10583
+[2026-11-14 12:21:29.557] [warning] [tid 16957]  Refused incompatible content: Cannot resolve the initial location. Load a save in a supported installed cell and reconnect
+[2026-11-14 12:21:30.647] [info] [tid 16957]  New player 733f93e '127.0.0.1' has a bad password, kicking.
+[2026-11-14 12:21:30.679] [warning] [tid 16957]  Refused incompatible content: Skyrim runtime differs. Match the host runtime: 1.7.104.0
+[2026-11-14 12:21:30.711] [warning] [tid 16957]  Refused incompatible content: Plugin bytes, masters or ESL flag differ. Install the same plugin version as the host: Update.esm
+[2026-11-14 12:21:30.741] [warning] [tid 16957]  Refused incompatible content: Missing active plugin. Install and enable the same legally owned version as the host: ccbgssse034-mntuni.esl
+[2026-11-14 12:21:30.773] [warning] [tid 16957]  Refused incompatible content: Resource or library bytes differ. Match the host version; for data/loose-files compare loose assets and scripts: data/ccbgssse001-fish.bsa
+[2026-11-14 12:21:30.803] [warning] [tid 16957]  Refused incompatible content: Missing required resource. Verify the same game, library and mod installation as the host: data/loose-files
+[2026-11-14 12:21:30.835] [warning] [tid 16957]  Refused incompatible content: Missing active master. Install and enable this dependency before its dependent plugin: ccbgssse034-mntuni.esl -> missing-master.esm
+[2026-11-14 12:21:30.865] [warning] [tid 16957]  Refused incompatible content: Invalid or oversized content manifest. Restore a supported profile and keep its manifest below 48 KiB: ccExtra.esl
+[2026-11-14 12:21:30.897] [warning] [tid 16957]  Refused incompatible content: Plugin load order differs or a master loads too late. Match the host order with masters before dependents: Dawnguard.esm
+[2026-11-14 12:21:30.927] [warning] [tid 16957]  Refused incompatible content: Cannot read a valid active plugin. Verify its files and stop modifying them during connection: Skyrim.esm
+[2026-11-14 12:21:30.959] [warning] [tid 16957]  Refused incompatible content: Cannot resolve the initial location. Load a save in a supported installed cell and reconnect
+[2026-11-14 12:21:30.989] [info] [tid 16957]  New player 130baf25 '127.0.0.1' tried to connect with client old-client - Version mismatch
+[2026-11-14 12:21:31.121] [warning] [tid 16957]  Refused incompatible content: Plugin bytes, masters or ESL flag differ. Install the same plugin version as the host: Skyrim.esm
+[2026-11-14 12:22:32.284] [info] [tid 16957]  Server shutdown requested
