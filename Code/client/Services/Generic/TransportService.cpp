@@ -154,10 +154,15 @@ void TransportService::OnConnected()
         entry.Filename = pMod->filename;
     }
 
-    if (pPlayer->GetWorldSpace())
-        ContentCompatibility::EncodeInitialForm(pPlayer->GetWorldSpace()->formID, request.UserMods, request.WorldSpaceId);
-
-    ContentCompatibility::EncodeInitialForm(pPlayer->parentCell->formID, request.UserMods, request.CellId);
+    const bool cWorldMapped = !pPlayer->GetWorldSpace() || ContentCompatibility::EncodeInitialForm(pPlayer->GetWorldSpace()->formID, request.UserMods, request.WorldSpaceId);
+    if (!cWorldMapped || !pPlayer->parentCell || !ContentCompatibility::EncodeInitialForm(pPlayer->parentCell->formID, request.UserMods, request.CellId))
+    {
+        ConnectionErrorEvent event;
+        event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"Cannot map the current location. Load a save in a supported installed cell and reconnect\"}}";
+        m_dispatcher.trigger(event);
+        Close();
+        return;
+    }
 
     request.Level = pPlayer->GetLevel();
 
@@ -207,16 +212,20 @@ void TransportService::OnUpdate()
         m_queuedAuthentication.reset();
         m_manifestGeneration = m_connectionGeneration;
         const auto dataPath = std::filesystem::current_path() / L"Data";
+        auto runtime = request.RuntimeVersion;
+        std::replace(runtime.begin(), runtime.end(), '.', '-');
+        const auto addressLibrary = dataPath / L"SKSE" / L"Plugins" / (std::string("versionlib-") + runtime.c_str() + ".bin");
+        const auto scriptExtender = GetScriptExtenderPath();
         // Only file IO and copies of the manifest cross threads; no engine objects do.
         m_manifestTask = std::async(
             std::launch::async,
-            [request = std::move(request), dataPath]() mutable
+            [request = std::move(request), dataPath, addressLibrary, scriptExtender]() mutable
             {
-                for (auto& entry : request.UserMods.ModList)
+                FingerprintContent(dataPath, addressLibrary, scriptExtender, request.UserMods);
+                if (request.SKSEActive && scriptExtender.empty())
                 {
-                    const std::u8string filename(reinterpret_cast<const char8_t*>(entry.Filename.data()), entry.Filename.size());
-                    const auto path = dataPath / filename;
-                    FingerprintPluginFile(path, entry.Digest);
+                    auto& missing = request.UserMods.Resources.emplace_back();
+                    missing.Filename = "runtime/skse";
                 }
                 return request;
             });
@@ -251,6 +260,15 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
     using AR = AuthenticationResponse::ResponseType;
     if (acMessage.Type == AR::kAccepted)
     {
+        if (acMessage.Version != BUILD_COMMIT)
+        {
+            ConnectionErrorEvent event;
+            event.ErrorDetail =
+                "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"Server build differs. Install the same Skyrim True Coop build on all clients and the server\"}}";
+            m_dispatcher.trigger(event);
+            Close();
+            return;
+        }
         m_connected = true;
 
         m_world.SetServerSettings(acMessage.Settings);

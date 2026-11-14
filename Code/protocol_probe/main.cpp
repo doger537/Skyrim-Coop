@@ -88,6 +88,12 @@ AuthenticationRequest MakeRequest()
     request.UserMods.ModList.push_back({"Update.esm", 1, false});
     for (auto& entry : request.UserMods.ModList)
         entry.Digest.fill(42);
+    for (const char* name : {"runtime/address-library", "data/loose-files"})
+    {
+        auto& resource = request.UserMods.Resources.emplace_back();
+        resource.Filename = name;
+        resource.Digest.fill(42);
+    }
     request.CellId = GameId(1, 0x123);
     return request;
 }

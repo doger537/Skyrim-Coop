@@ -22,12 +22,18 @@ Mods MakeManifest()
     result.ModList.push_back({"ccExample.esl", 0, true});
     for (auto& entry : result.ModList)
         entry.Digest.fill(static_cast<uint8_t>(entry.Filename.size()));
+    for (const char* name : {"runtime/address-library", "data/loose-files"})
+    {
+        auto& resource = result.Resources.emplace_back();
+        resource.Filename = name;
+        resource.Digest.fill(42);
+    }
     return result;
 }
 
 template <class T> void CheckRoundTrip(const T& acMessage)
 {
-    TiltedPhoques::Buffer buffer(4096);
+    TiltedPhoques::Buffer buffer(65536);
     TiltedPhoques::Buffer::Writer writer(&buffer);
     acMessage.Serialize(writer);
     TiltedPhoques::Buffer::Reader reader(&buffer);

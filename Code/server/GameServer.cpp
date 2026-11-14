@@ -51,8 +51,7 @@ Console::Setting bAllowConsoleCommands{
     true};
 // ModPolicy Stuff
 Console::Setting bEnableModCheck{"ModPolicy:bEnableModCheck", "Refuse clients whose mods do not match Data/loadorder.txt", false, Console::SettingsFlags::kLocked};
-Console::Setting bEnableContentCheck{
-    "ModPolicy:bEnableContentCheck", "Require matching active plugin fingerprints and order for the lifetime of this server session", true, Console::SettingsFlags::kLocked};
+Console::Setting bEnableContentCheck{"ModPolicy:bEnableContentCheck", "Legacy setting; strict content compatibility is always enforced", true, Console::SettingsFlags::kLocked};
 Console::Setting bAllowSKSE{"ModPolicy:bAllowSKSE", "Allow players using SKSE to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 Console::Setting bAllowMO2{"ModPolicy:bAllowMO2", "Allow players using Mod Organizer 2 to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 
@@ -809,15 +808,18 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         // the previous message is a lingering kick, it still gets delivered.
         Kick(aConnectionId);
     };
-#if 1
-    // to make our testing life a bit easier.
+    if (acRequest->ProtocolVersion != kTrueCoopProtocolVersion)
+    {
+        serverResponse.ContentError = "Network protocol differs. Install the same Skyrim True Coop client and server build";
+        sendKick(RT::kContentMismatch);
+        return;
+    }
     if (acRequest->Version != BUILD_COMMIT)
     {
         spdlog::info("New player {:x} '{}' tried to connect with client {} - Version mismatch", aConnectionId, remoteAddress, acRequest->Version.c_str());
         sendKick(RT::kWrongVersion);
         return;
     }
-#endif
 
     if (m_pWorld->GetPlayerManager().Count() >= uMaxPlayerCount.value_as<uint32_t>())
     {
@@ -851,16 +853,26 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
     if (acRequest->Token == sPassword.value() || adminPasswordUsed)
     {
         String contentError;
-        if (acRequest->RuntimeVersion.empty() || acRequest->RuntimeVersion.size() > 32)
-            contentError = "Cannot determine the Skyrim runtime version";
+        if (acRequest->RuntimeVersion != "1.7.104.0" && acRequest->RuntimeVersion != "1.6.1170.0" && acRequest->RuntimeVersion != "1.6.1179.0")
+            contentError = "Unsupported Skyrim runtime. Use a supported SkyrimSE.exe and its matching True Coop build and Address Library";
         else if (!m_sessionRuntime.empty() && m_sessionRuntime != acRequest->RuntimeVersion)
-            contentError = "Skyrim runtime differs from this session: expected " + m_sessionRuntime;
-        else if (bEnableContentCheck)
+            contentError = "Skyrim runtime differs. Match the host runtime: " + m_sessionRuntime;
+        else
         {
             const auto result = m_contentContract ? ContentCompatibility::Compare(*m_contentContract, acRequest->UserMods) : ContentCompatibility::Validate(acRequest->UserMods);
             if (!result)
                 contentError = ContentCompatibility::Describe(result);
         }
+        const bool cHasSKSE = std::any_of(
+            acRequest->UserMods.Resources.begin(), acRequest->UserMods.Resources.end(),
+            [](const auto& resource) { return ContentCompatibility::NormalizeName(resource.Filename) == "runtime/skse"; });
+        if (contentError.empty() && cHasSKSE != acRequest->SKSEActive)
+            contentError = "SKSE state and library manifest disagree. Restart with a supported SKSE installation or remove SKSE from this profile";
+        GameId checkedLocation;
+        if (contentError.empty() &&
+            (!ContentCompatibility::ResolveInitialForm(acRequest->WorldSpaceId, acRequest->UserMods, acRequest->UserMods, checkedLocation) ||
+             !ContentCompatibility::ResolveInitialForm(acRequest->CellId, acRequest->UserMods, acRequest->UserMods, checkedLocation) || acRequest->CellId.ModId == 0))
+            contentError = "Cannot resolve the initial location. Load a save in a supported installed cell and reconnect";
         if (!contentError.empty())
         {
             serverResponse.ContentError = contentError;
@@ -901,7 +913,8 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
             // mods that may exist on the server, but not on the client
             for (const auto& entry : modsComponent.GetServerMods())
             {
-                const auto it = std::find_if(userMods.begin(), userMods.end(), [&](const Mods::Entry& it) { return it.Filename == entry.first; });
+                const auto it =
+                    std::find_if(userMods.begin(), userMods.end(), [&](const Mods::Entry& it) { return ContentCompatibility::NormalizeName(it.Filename) == entry.first; });
 
                 if (it == userMods.end())
                 {
