@@ -37,13 +37,21 @@ void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acMessa
     notify.Status = message.Status;
     notify.ClientQuestType = message.ClientQuestType;
 
-    if (notify.ClientQuestType == 0 ||  notify.ClientQuestType == 6) // Types None or Miscellaneous. Hard-coded to avoid client header file.
+    if (notify.ClientQuestType == 0 || notify.ClientQuestType == 6) // Types None or Miscellaneous. Hard-coded to avoid client header file.
     {
         if (!bEnableMiscQuestSync)
             return;
-        spdlog::debug("{}: syncing type none/misc quest to party, gameId {:X} questStage {} questStatus {} questType {}",
-                     __FUNCTION__, notify.Id.LogFormat(), notify.Stage, notify.Status, notify.ClientQuestType);
+        spdlog::debug(
+            "{}: syncing type none/misc quest to party, gameId {:X} questStage {} questStatus {} questType {}", __FUNCTION__, notify.Id.LogFormat(), notify.Stage, notify.Status,
+            notify.ClientQuestType);
     }
+
+    static_assert(RequestQuestUpdate::StageUpdate == static_cast<uint8_t>(QuestEventHistory::StageUpdate));
+    static_assert(RequestQuestUpdate::Started == static_cast<uint8_t>(QuestEventHistory::Started));
+    static_assert(RequestQuestUpdate::Stopped == static_cast<uint8_t>(QuestEventHistory::Stopped));
+    PartyService::Party* pParty = m_world.GetPartyService().GetPlayerParty(pPlayer);
+    if (!pParty || !pParty->QuestHistory[message.Id].Accept(message.Status, message.Stage))
+        return;
 
     if (message.Status == RequestQuestUpdate::Started || message.Status == RequestQuestUpdate::StageUpdate)
     {
@@ -91,24 +99,5 @@ void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acMessa
     }
 
     const auto& partyComponent = acMessage.pPlayer->GetParty();
-    PartyService::Party* pParty = m_world.GetPartyService().GetPlayerParty(pPlayer);
-    if (!pParty)
-        return;
-
-    // Party members' scripts often reach the same stage on their own, only relay it once
-    if (message.Status == RequestQuestUpdate::StageUpdate)
-    {
-        if (!pParty->QuestStages[message.Id].insert(message.Stage).second)
-        {
-            spdlog::debug("Dropped duplicate quest stage from player {}, quest: {:X}, stage: {}", pPlayer->GetId(), message.Id.LogFormat(), message.Stage);
-            return;
-        }
-    }
-    else
-    {
-        // A started quest has run none of its stages yet, a stopped one may run them again when restarted
-        pParty->QuestStages.erase(message.Id);
-    }
-
     GameServer::Get()->SendToParty(notify, partyComponent, acMessage.GetSender());
 }
