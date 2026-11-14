@@ -1,0 +1,9 @@
+{
+  "changed_keys": [
+    "$contract"
+  ],
+  "same_keys": true,
+  "before_contract_version": 1,
+  "after_contract_version": 2,
+  "unchanged_quest_and_object_records": true
+}
