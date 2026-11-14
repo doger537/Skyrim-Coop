@@ -1,0 +1,1713 @@
+{
+  "schema": 1,
+  "scope": "Anniversary Upgrade (2021), 74 Creations; later Creations are separate content",
+  "sources": {
+    "bundle": "https://help.bethesda.net/app/answers/detail/a_id/54327/",
+    "filenames": "https://github.com/loot/skyrimse/blob/master/masterlist.yaml"
+  },
+  "dependency_policy": "Read actual TES4 MAST records from each installed plugin; static guesses are not authoritative. Include transitive masters in active load order.",
+  "creations": [
+    {
+      "title": "Fishing",
+      "plugin": "ccbgssse001-fish.esm",
+      "archives": [
+        "ccbgssse001-fish.bsa"
+      ],
+      "distribution": "free-SE-update",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Survival Mode",
+      "plugin": "ccqdrsse001-survivalmode.esl",
+      "archives": [
+        "ccqdrsse001-survivalmode.bsa"
+      ],
+      "distribution": "free-SE-update",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Rare Curios",
+      "plugin": "ccbgssse037-curios.esl",
+      "archives": [
+        "ccbgssse037-curios.bsa"
+      ],
+      "distribution": "free-SE-update",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Saints & Seducers",
+      "plugin": "ccbgssse025-advdsgs.esm",
+      "archives": [
+        "ccbgssse025-advdsgs.bsa"
+      ],
+      "distribution": "free-SE-update",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Adventurer's Backpack",
+      "plugin": "ccfsvsse001-backpacks.esl",
+      "archives": [
+        "ccfsvsse001-backpacks.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Daedric Mail",
+      "plugin": "ccbgssse051-ba_daedricmail.esl",
+      "archives": [
+        "ccbgssse051-ba_daedricmail.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Daedric Plate",
+      "plugin": "ccbgssse050-ba_daedric.esl",
+      "archives": [
+        "ccbgssse050-ba_daedric.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Dragon Plate",
+      "plugin": "ccbgssse059-ba_dragonplate.esl",
+      "archives": [
+        "ccbgssse059-ba_dragonplate.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Dragonscale",
+      "plugin": "ccbgssse060-ba_dragonscale.esl",
+      "archives": [
+        "ccbgssse060-ba_dragonscale.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Dwarven Mail",
+      "plugin": "ccbgssse062-ba_dwarvenmail.esl",
+      "archives": [
+        "ccbgssse062-ba_dwarvenmail.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Dwarven Plate",
+      "plugin": "ccbgssse061-ba_dwarven.esl",
+      "archives": [
+        "ccbgssse061-ba_dwarven.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Ebony Plate",
+      "plugin": "ccbgssse063-ba_ebony.esl",
+      "archives": [
+        "ccbgssse063-ba_ebony.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Elven Hunter",
+      "plugin": "ccbgssse064-ba_elven.esl",
+      "archives": [
+        "ccbgssse064-ba_elven.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Iron",
+      "plugin": "ccbgssse052-ba_iron.esl",
+      "archives": [
+        "ccbgssse052-ba_iron.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Leather",
+      "plugin": "ccbgssse053-ba_leather.esl",
+      "archives": [
+        "ccbgssse053-ba_leather.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Orcish Plate",
+      "plugin": "ccbgssse054-ba_orcish.esl",
+      "archives": [
+        "ccbgssse054-ba_orcish.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Orcish Scaled",
+      "plugin": "ccbgssse055-ba_orcishscaled.esl",
+      "archives": [
+        "ccbgssse055-ba_orcishscaled.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Silver",
+      "plugin": "ccbgssse056-ba_silver.esl",
+      "archives": [
+        "ccbgssse056-ba_silver.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Stalhrim Fur",
+      "plugin": "ccbgssse057-ba_stalhrim.esl",
+      "archives": [
+        "ccbgssse057-ba_stalhrim.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Alternative Armors - Steel Soldier",
+      "plugin": "ccbgssse058-ba_steel.esl",
+      "archives": [
+        "ccbgssse058-ba_steel.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Arcane Accessories",
+      "plugin": "ccbgssse014-spellpack01.esl",
+      "archives": [
+        "ccbgssse014-spellpack01.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Arcane Archer Pack",
+      "plugin": "ccbgssse002-exoticarrows.esl",
+      "archives": [
+        "ccbgssse002-exoticarrows.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Arms of Chaos",
+      "plugin": "ccpewsse002-armsofchaos.esl",
+      "archives": [
+        "ccpewsse002-armsofchaos.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Bittercup",
+      "plugin": "cckrtsse001_altar.esl",
+      "archives": [
+        "cckrtsse001_altar.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Bloodchill Manor",
+      "plugin": "cceejsse005-cave.esm",
+      "archives": [
+        "cceejsse005-cave.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Bone Wolf",
+      "plugin": "ccbgssse036-petbwolf.esl",
+      "archives": [
+        "ccbgssse036-petbwolf.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Bow of Shadows",
+      "plugin": "ccbgssse038-bowofshadows.esl",
+      "archives": [
+        "ccbgssse038-bowofshadows.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Camping",
+      "plugin": "ccqdrsse002-firewood.esl",
+      "archives": [
+        "ccqdrsse002-firewood.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Chrysamere",
+      "plugin": "ccbgssse007-chrysamere.esl",
+      "archives": [
+        "ccbgssse007-chrysamere.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Civil War Champions",
+      "plugin": "ccffbsse001-imperialdragon.esl",
+      "archives": [
+        "ccffbsse001-imperialdragon.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Dawnfang & Duskfang",
+      "plugin": "ccbgssse013-dawnfang.esl",
+      "archives": [
+        "ccbgssse013-dawnfang.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Dead Man's Dread",
+      "plugin": "ccbgssse031-advcyrus.esm",
+      "archives": [
+        "ccbgssse031-advcyrus.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Divine Crusader",
+      "plugin": "ccmtysse001-knightsofthenine.esl",
+      "archives": [
+        "ccmtysse001-knightsofthenine.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Dwarven Armored Mudcrab",
+      "plugin": "ccbgssse010-petdwarvenarmoredmudcrab.esl",
+      "archives": [
+        "ccbgssse010-petdwarvenarmoredmudcrab.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Elite Crossbows",
+      "plugin": "ccbgssse043-crosselv.esl",
+      "archives": [
+        "ccbgssse043-crosselv.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Expanded Crossbow Pack",
+      "plugin": "ccffbsse002-crossbowpack.esl",
+      "archives": [
+        "ccffbsse002-crossbowpack.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Farming",
+      "plugin": "ccvsvsse004-beafarmer.esl",
+      "archives": [
+        "ccvsvsse004-beafarmer.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Fearsome Fists",
+      "plugin": "cccbhsse001-gaunt.esl",
+      "archives": [
+        "cccbhsse001-gaunt.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Forgotten Seasons",
+      "plugin": "cctwbsse001-puzzledungeon.esm",
+      "archives": [
+        "cctwbsse001-puzzledungeon.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Gallows Hall",
+      "plugin": "ccrmssse001-necrohouse.esl",
+      "archives": [
+        "ccrmssse001-necrohouse.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Ghosts of the Tribunal",
+      "plugin": "ccasvsse001-almsivi.esm",
+      "archives": [
+        "ccasvsse001-almsivi.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Goblins",
+      "plugin": "ccbgssse040-advobgobs.esl",
+      "archives": [
+        "ccbgssse040-advobgobs.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Goldbrand",
+      "plugin": "ccbgssse005-goldbrand.esl",
+      "archives": [
+        "ccbgssse005-goldbrand.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Headman's Cleaver",
+      "plugin": "ccbgssse068-bloodfall.esl",
+      "archives": [
+        "ccbgssse068-bloodfall.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Hendhraheim",
+      "plugin": "cceejsse004-hall.esl",
+      "archives": [
+        "cceejsse004-hall.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Horse Armor - Elven",
+      "plugin": "ccbgssse011-hrsarmrelvn.esl",
+      "archives": [
+        "ccbgssse011-hrsarmrelvn.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Horse Armor - Steel",
+      "plugin": "ccbgssse012-hrsarmrstl.esl",
+      "archives": [
+        "ccbgssse012-hrsarmrstl.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Lord's Mail",
+      "plugin": "ccbgssse021-lordsmail.esl",
+      "archives": [
+        "ccbgssse021-lordsmail.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Myrwatch",
+      "plugin": "cceejsse002-tower.esl",
+      "archives": [
+        "cceejsse002-tower.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Nchuanthumz: Dwarven Home",
+      "plugin": "ccafdsse001-dwesanctuary.esm",
+      "archives": [
+        "ccafdsse001-dwesanctuary.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Necromantic Grimoire",
+      "plugin": "ccvsvsse003-necroarts.esl",
+      "archives": [
+        "ccvsvsse003-necroarts.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Netch Leather Armor",
+      "plugin": "ccbgssse041-netchleather.esl",
+      "archives": [
+        "ccbgssse041-netchleather.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Nix-Hound",
+      "plugin": "ccbgssse035-petnhound.esl",
+      "archives": [
+        "ccbgssse035-petnhound.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Nordic Jewelry",
+      "plugin": "ccedhsse001-norjewel.esl",
+      "archives": [
+        "ccedhsse001-norjewel.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Pets of Skyrim",
+      "plugin": "ccvsvsse002-pets.esl",
+      "archives": [
+        "ccvsvsse002-pets.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Plague of the Dead",
+      "plugin": "ccbgssse003-zombies.esl",
+      "archives": [
+        "ccbgssse003-zombies.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Redguard Elite Armaments",
+      "plugin": "ccedhsse003-redguard.esl",
+      "archives": [
+        "ccedhsse003-redguard.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Ruin's Edge",
+      "plugin": "ccbgssse004-ruinsedge.esl",
+      "archives": [
+        "ccbgssse004-ruinsedge.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Saturalia Holiday Pack",
+      "plugin": "ccvsvsse001-winter.esl",
+      "archives": [
+        "ccvsvsse001-winter.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Shadowfoot Sanctum",
+      "plugin": "cceejsse003-hollow.esl",
+      "archives": [
+        "cceejsse003-hollow.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Shadowrend",
+      "plugin": "ccbgssse018-shadowrend.esl",
+      "archives": [
+        "ccbgssse018-shadowrend.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Spell Knight Armor",
+      "plugin": "ccedhsse002-splkntset.esl",
+      "archives": [
+        "ccedhsse002-splkntset.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Staff of Hasedoki",
+      "plugin": "ccbgssse045-hasedoki.esl",
+      "archives": [
+        "ccbgssse045-hasedoki.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Staff of Sheogorath",
+      "plugin": "ccbgssse019-staffofsheogorath.esl",
+      "archives": [
+        "ccbgssse019-staffofsheogorath.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Staves",
+      "plugin": "ccbgssse066-staves.esl",
+      "archives": [
+        "ccbgssse066-staves.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Stendarr's Hammer",
+      "plugin": "ccbgssse006-stendarshammer.esl",
+      "archives": [
+        "ccbgssse006-stendarshammer.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Sunder & Wraithguard",
+      "plugin": "ccbgssse008-wraithguard.esl",
+      "archives": [
+        "ccbgssse008-wraithguard.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "The Cause",
+      "plugin": "ccbgssse067-daedinv.esm",
+      "archives": [
+        "ccbgssse067-daedinv.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "The Contest",
+      "plugin": "ccbgssse069-contest.esl",
+      "archives": [
+        "ccbgssse069-contest.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "The Gray Cowl Returns!",
+      "plugin": "ccbgssse020-graycowl.esl",
+      "archives": [
+        "ccbgssse020-graycowl.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Tundra Homestead",
+      "plugin": "cceejsse001-hstead.esm",
+      "archives": [
+        "cceejsse001-hstead.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Umbra",
+      "plugin": "ccbgssse016-umbra.esm",
+      "archives": [
+        "ccbgssse016-umbra.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Vigil Enforcer Armor Set",
+      "plugin": "ccmtysse002-ve.esl",
+      "archives": [
+        "ccmtysse002-ve.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    },
+    {
+      "title": "Wild Horses",
+      "plugin": "ccbgssse034-mntuni.esl",
+      "archives": [
+        "ccbgssse034-mntuni.bsa"
+      ],
+      "distribution": "paid-Anniversary-Upgrade",
+      "dependencies_status": "requires-installed-TES4-audit",
+      "file_status": "reference-name-not-verified-against-installation",
+      "network_status": "not-game-tested",
+      "tests": [
+        "AE-CONNECT",
+        "AE-ITEM",
+        "AE-NPC",
+        "AE-MAGIC",
+        "AE-CELL",
+        "AE-CONTAINER",
+        "AE-QUEST",
+        "AE-RECONNECT",
+        "AE-WORLD"
+      ],
+      "evidence": []
+    }
+  ]
+}
