@@ -191,6 +191,24 @@ TEST_CASE("Unmapped standard plugins never alias the base game", "[content.mappi
     REQUIRE_FALSE(map.Resolve(0, id));
 }
 
+TEST_CASE("Network form IDs are checked instead of truncated", "[content.mapping]")
+{
+    uint32_t runtime = 123;
+    REQUIRE(ComposeRuntimeForm(0xFFF, true, 0xFFF, runtime));
+    REQUIRE(runtime == 0xFEFFFFFF);
+    REQUIRE(ComposeRuntimeForm(0xFD, false, 0xFFFFFF, runtime));
+    REQUIRE(runtime == 0xFDFFFFFF);
+    REQUIRE(ComposeRuntimeForm(0, true, 0x800, runtime));
+    REQUIRE(runtime == 0xFE000800);
+    REQUIRE_FALSE(ComposeRuntimeForm(0, true, 0x1000, runtime));
+    REQUIRE(runtime == 0xFE000800);
+    REQUIRE_FALSE(ComposeRuntimeForm(0x1000, true, 1, runtime));
+    REQUIRE_FALSE(ComposeRuntimeForm(0xFE, false, 1, runtime));
+    REQUIRE_FALSE(ComposeRuntimeForm(0xFF, false, 1, runtime));
+    REQUIRE_FALSE(ComposeRuntimeForm(0, false, 0x1000000, runtime));
+    REQUIRE_FALSE(ComposeRuntimeForm(0, false, UINT32_MAX, runtime));
+}
+
 TEST_CASE("Inventory operations are applied at most once per connection", "[inventory.operations]")
 {
     OperationWindow window;
