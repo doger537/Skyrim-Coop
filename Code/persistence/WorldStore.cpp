@@ -107,7 +107,7 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
     sqlite3_busy_timeout(m_db, 250);
     sqlite3_limit(m_db, SQLITE_LIMIT_LENGTH, static_cast<int>(kMaxRecordBytes + 4096));
     sqlite3_limit(m_db, SQLITE_LIMIT_SQL_LENGTH, 65536);
-    if (!Execute("PRAGMA locking_mode=EXCLUSIVE; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA trusted_schema=OFF;"))
+    if (!Execute("PRAGMA locking_mode=EXCLUSIVE; PRAGMA trusted_schema=OFF;"))
     {
         Close();
         return false;
@@ -147,7 +147,7 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
             return false;
         }
     }
-    if (!Execute("BEGIN IMMEDIATE;"
+    if (!Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; BEGIN IMMEDIATE;"
                  "CREATE TABLE IF NOT EXISTS identity(id INTEGER PRIMARY KEY CHECK(id=1), world_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>=0)) STRICT;"
                  "CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, value BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32), revision INTEGER NOT NULL "
                  "CHECK(revision>0)) STRICT;"
@@ -281,4 +281,24 @@ WorldStore::WriteResult WorldStore::Commit(const Vector<Record>& acRecords, uint
     m_revision = revision;
     aRevision = revision;
     return WriteResult::Committed;
+}
+
+bool WorldStore::VerifyRecords() noexcept
+{
+    if (!m_db)
+        return Fail("Cannot verify a closed world");
+    Statement statement(m_db, "SELECT key,value,digest,revision FROM state ORDER BY key");
+    if (!statement)
+        return Fail("Cannot prepare world integrity scan");
+    int result = 0;
+    while ((result = sqlite3_step(statement.Value)) == SQLITE_ROW)
+    {
+        Record record;
+        if (!ReadRecord(statement.Value, record) || record.Revision > m_revision)
+        {
+            m_error = "World record SHA-256 or revision is invalid; restore a verified backup";
+            return false;
+        }
+    }
+    return result == SQLITE_DONE || Fail("Cannot complete world integrity scan");
 }

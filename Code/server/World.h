@@ -8,6 +8,7 @@
 #include <Services/ScriptService.h>
 
 #include "Game/PlayerManager.h"
+#include <CampaignState.h>
 
 namespace ESLoader
 {
@@ -36,6 +37,8 @@ struct World : entt::registry
     PlayerManager& GetPlayerManager() noexcept { return m_playerManager; }
     const PlayerManager& GetPlayerManager() const noexcept { return m_playerManager; }
     ScriptService& GetScriptService() const noexcept { return *m_pScriptService; }
+    Campaign::State& GetCampaign() noexcept { return ctx().at<Campaign::State>(); }
+    const Campaign::State& GetCampaign() const noexcept { return ctx().at<const Campaign::State>(); }
 
     // Null checked at start when MoPo is on!
     ESLoader::RecordCollection* GetRecordCollection() noexcept { return m_recordCollection.get(); }

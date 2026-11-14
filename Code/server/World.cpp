@@ -25,6 +25,7 @@ World::World()
     ctx().emplace<CalendarService>(*this, m_dispatcher);
     ctx().emplace<ObjectService>(*this, m_dispatcher);
     ctx().emplace<ModsComponent>();
+    ctx().emplace<Campaign::State>();
     ctx().emplace<ServerListService>(*this, m_dispatcher);
     ctx().emplace<QuestService>(*this, m_dispatcher);
     ctx().emplace<PartyService>(*this, m_dispatcher);
@@ -43,7 +44,7 @@ World::World()
     m_recordCollection = loader.BuildRecordCollection();
     for (const auto& it : loader.GetLoadOrder())
     {
-        ctx().emplace<ModsComponent>().AddServerMod(it);
+        ctx().at<ModsComponent>().AddServerMod(it);
     }
 
     // late initialize the ScriptService to ensure all components are valid

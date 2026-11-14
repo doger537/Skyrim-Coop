@@ -1,5 +1,6 @@
 
 #include "GameServer.h"
+#include <BuildInfo.h>
 
 #include <common/GameServerInstance.h>
 

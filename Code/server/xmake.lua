@@ -23,6 +23,7 @@ local function build_server()
         "BaseLib",
         "TiltedConnect"
     )
+    add_deps("TrueCoopState")
     add_packages(
         "gamenetworkingsockets",
         "spdlog",

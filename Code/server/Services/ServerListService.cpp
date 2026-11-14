@@ -3,6 +3,7 @@
 #include <Events/UpdateEvent.h>
 #include <GameServer.h>
 #include <Services/ServerListService.h>
+#include <BuildInfo.h>
 
 #include <console/Setting.h>
 #include <future>

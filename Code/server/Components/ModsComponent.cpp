@@ -3,6 +3,19 @@
 #include <es_loader/ESLoader.h>
 #include <Structs/ContentCompatibility.h>
 
+void ModsComponent::BindContract(const Mods& acContract) noexcept
+{
+    m_standardMods.clear();
+    m_liteMods.clear();
+    m_seed = 0;
+    // Stable IDs are ordinal positions in the pinned manifest, not local load slots.
+    for (const auto& entry : acContract.ModList)
+        if (entry.IsLite)
+            AddLite(entry.Filename);
+        else
+            AddStandard(entry.Filename);
+}
+
 uint32_t ModsComponent::AddStandard(const String& acpFilename) noexcept
 {
     const auto name = ContentCompatibility::NormalizeName(acpFilename);

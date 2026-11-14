@@ -1,5 +1,6 @@
 ﻿#include <Components.h>
 #include <GameServer.h>
+#include <BuildInfo.h>
 #include <Packet.hpp>
 
 #include <Events/CharacterRemoveEvent.h>
@@ -52,6 +53,7 @@ Console::Setting bAllowConsoleCommands{
 // ModPolicy Stuff
 Console::Setting bEnableModCheck{"ModPolicy:bEnableModCheck", "Refuse clients whose mods do not match Data/loadorder.txt", false, Console::SettingsFlags::kLocked};
 Console::Setting bEnableContentCheck{"ModPolicy:bEnableContentCheck", "Legacy setting; strict content compatibility is always enforced", true, Console::SettingsFlags::kLocked};
+Console::StringSetting sWorldPath{"Persistence:sWorldPath", "Persistent campaign database path; use a separate file for each world", "Data/TrueCoop/world.sqlite3"};
 Console::Setting bAllowSKSE{"ModPolicy:bAllowSKSE", "Allow players using SKSE to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 Console::Setting bAllowMO2{"ModPolicy:bAllowMO2", "Allow players using Mod Organizer 2 to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 
@@ -203,6 +205,19 @@ GameServer::GameServer(Console::ConsoleRegistry& aConsole) noexcept
     UpdateTitle();
 
     m_pWorld = MakeUnique<World>();
+    auto& campaign = m_pWorld->GetCampaign();
+    if (!campaign.Open(std::filesystem::path(reinterpret_cast<const char8_t*>(sWorldPath.value()))))
+    {
+        spdlog::critical("Cannot open persistent campaign: {}", campaign.Error());
+        Kill();
+    }
+    else if (campaign.GetContract())
+    {
+        m_contentContract = campaign.GetContract()->Content;
+        m_sessionRuntime = campaign.GetContract()->Runtime;
+        m_pWorld->ctx().at<ModsComponent>().BindContract(*m_contentContract);
+        spdlog::info("Restored campaign {} at revision {}", campaign.WorldId(), campaign.Revision());
+    }
 
     BindMessageHandlers();
     UpdateTimeScale();
@@ -246,6 +261,21 @@ void GameServer::Kill()
 {
     spdlog::info("Server shutdown requested");
     m_requestStop = true;
+}
+
+void GameServer::StopForWorldError(const String& acReason)
+{
+    spdlog::critical("Persistent world stopped: {}", acReason);
+    AuthenticationResponse response;
+    response.Type = AuthenticationResponse::ResponseType::kContentMismatch;
+    response.Version = BUILD_COMMIT;
+    response.ContentError = "Cannot save or restore the server world: " + acReason + ". Preserve the database and check the server log before reconnecting";
+    for (Player* pPlayer : m_pWorld->GetPlayerManager())
+    {
+        pPlayer->Send(response);
+        Kick(pPlayer->GetConnectionId());
+    }
+    Kill();
 }
 
 bool GameServer::CheckMoPo()
@@ -853,7 +883,9 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
     if (acRequest->Token == sPassword.value() || adminPasswordUsed)
     {
         String contentError;
-        if (acRequest->RuntimeVersion != "1.7.104.0" && acRequest->RuntimeVersion != "1.6.1170.0" && acRequest->RuntimeVersion != "1.6.1179.0")
+        if (!m_pWorld->GetCampaign().IsReady())
+            contentError = "Server world storage is unavailable. Check the server log and restore a verified database backup";
+        else if (acRequest->RuntimeVersion != "1.7.104.0" && acRequest->RuntimeVersion != "1.6.1170.0" && acRequest->RuntimeVersion != "1.6.1179.0")
             contentError = "Unsupported Skyrim runtime. Use a supported SkyrimSE.exe and its matching True Coop build and Address Library";
         else if (!m_sessionRuntime.empty() && m_sessionRuntime != acRequest->RuntimeVersion)
             contentError = "Skyrim runtime differs. Match the host runtime: " + m_sessionRuntime;
@@ -943,6 +975,9 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         Vector<String> playerMods;
         Vector<uint16_t> playerModsIds;
 
+        if (!m_contentContract)
+            modsComponent.BindContract(acRequest->UserMods);
+
         size_t i = 0;
         for (auto& mod : acRequest->UserMods.ModList)
         {
@@ -989,6 +1024,13 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         serverResponse.PlayerId = pPlayer->GetId();
         if (!m_contentContract)
         {
+            if (!m_pWorld->GetCampaign().Bind(acRequest->RuntimeVersion, acRequest->UserMods))
+            {
+                serverResponse.ContentError = "Cannot create the persistent world contract: " + m_pWorld->GetCampaign().Error();
+                sendKick(RT::kContentMismatch);
+                m_pWorld->GetPlayerManager().Remove(pPlayer);
+                return;
+            }
             m_contentContract = acRequest->UserMods;
             m_sessionRuntime = acRequest->RuntimeVersion;
         }

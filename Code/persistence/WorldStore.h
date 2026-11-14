@@ -38,6 +38,7 @@ public:
     void Close() noexcept;
     ReadResult Read(const TiltedPhoques::String& acKey, Record& aRecord) noexcept;
     bool ReadPrefix(const TiltedPhoques::String& acPrefix, TiltedPhoques::Vector<Record>& aRecords) noexcept;
+    bool VerifyRecords() noexcept;
     WriteResult Commit(const TiltedPhoques::Vector<Record>& acRecords, uint64_t& aRevision) noexcept;
     const TiltedPhoques::String& Error() const noexcept { return m_error; }
     const TiltedPhoques::String& WorldId() const noexcept { return m_worldId; }

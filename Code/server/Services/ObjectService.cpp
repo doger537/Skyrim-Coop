@@ -3,6 +3,8 @@
 #include <GameServer.h>
 #include <World.h>
 #include <Components.h>
+#include <Services/PersistentObjects.h>
+#include <set>
 
 #include <Events/PlayerLeaveCellEvent.h>
 
@@ -59,60 +61,76 @@ void ObjectService::OnPlayerLeaveCellEvent(const PlayerLeaveCellEvent& acEvent) 
 // This is fine for containers and doors, but if this system is expanded, think of temporaries.
 void ObjectService::OnAssignObjectsRequest(const PacketEvent<AssignObjectsRequest>& acMessage) noexcept
 {
+    auto& campaign = m_world.GetCampaign();
     auto view = m_world.view<FormIdComponent, ObjectComponent, InventoryComponent>();
-
-    AssignObjectsResponse response;
-
+    const auto find = [&](GameId aId)
+    {
+        return std::find_if(view.begin(), view.end(), [&](auto entity) { return view.get<FormIdComponent>(entity).Id == aId; });
+    };
+    Vector<ObjectData> resolved;
+    Vector<ObjectData> initial;
+    std::set<uint64_t> ids;
     for (const ObjectData& object : acMessage.Packet.Objects)
     {
-        const auto iter = std::find_if(
-            std::begin(view), std::end(view),
-            [view, id = object.Id](auto entity)
-            {
-                const auto& formIdComponent = view.get<FormIdComponent>(entity);
-                return formIdComponent.Id == id;
-            });
-
-        if (iter != std::end(view))
+        if (!campaign.ValidForm(object.Id) || !campaign.ValidForm(object.CellId) || !campaign.ValidForm(object.WorldSpaceId, true) || !ids.insert(object.Id.LogFormat()).second)
         {
-            ObjectData objectData;
-            objectData.ServerId = World::ToInteger(*iter);
-
-            auto& formIdComponent = view.get<FormIdComponent>(*iter);
-            objectData.Id = formIdComponent.Id;
-
-            auto& objectComponent = view.get<ObjectComponent>(*iter);
-            objectData.CurrentLockData = objectComponent.CurrentLockData;
-
-            auto& inventoryComponent = view.get<InventoryComponent>(*iter);
-            objectData.CurrentInventory = inventoryComponent.Content;
-
-            objectData.IsSenderFirst = false;
-
-            response.Objects.push_back(objectData);
+            spdlog::warn("Refused invalid or duplicate persistent object assignment");
+            GameServer::Get()->Kick(acMessage.pPlayer->GetConnectionId());
+            return;
+        }
+        ObjectData data;
+        const auto existing = find(object.Id);
+        if (existing != view.end())
+        {
+            if (!GetPersistentObject(m_world, *existing, data))
+                return;
         }
         else
         {
-            const auto cEntity = m_world.create();
-
-            m_world.emplace<FormIdComponent>(cEntity, object.Id);
-
-            auto& objectComponent = m_world.emplace<ObjectComponent>(cEntity, acMessage.pPlayer);
-            objectComponent.CurrentLockData = object.CurrentLockData;
-
-            m_world.emplace<CellIdComponent>(cEntity, object.CellId, object.WorldSpaceId, object.CurrentCoords);
-            auto& inventoryComp = m_world.emplace<InventoryComponent>(cEntity);
-            inventoryComp.Content = object.CurrentInventory;
-
-            ObjectData objectData;
-            objectData.Id = object.Id;
-            objectData.ServerId = World::ToInteger(cEntity);
-            objectData.IsSenderFirst = true;
-
-            response.Objects.push_back(objectData);
+            bool found = false;
+            if (!campaign.LoadObject(object.Id, data, found))
+            {
+                GameServer::Get()->StopForWorldError(campaign.Error());
+                return;
+            }
+            if (!found)
+            {
+                data = object;
+                data.IsSenderFirst = true;
+                initial.push_back(data);
+            }
         }
+        if (data.CellId != object.CellId || data.WorldSpaceId != object.WorldSpaceId)
+        {
+            spdlog::warn("Refused a static object moving between persistent cells");
+            GameServer::Get()->Kick(acMessage.pPlayer->GetConnectionId());
+            return;
+        }
+        resolved.push_back(std::move(data));
     }
-
+    // Persist the entire initial batch before creating any ECS entities or returning a snapshot.
+    if (!initial.empty() && !campaign.SaveObjects(initial))
+    {
+        GameServer::Get()->StopForWorldError(campaign.Error());
+        return;
+    }
+    AssignObjectsResponse response;
+    for (auto& data : resolved)
+    {
+        const auto existing = find(data.Id);
+        if (existing != view.end())
+            data.ServerId = World::ToInteger(*existing);
+        else
+        {
+            const auto entity = m_world.create();
+            m_world.emplace<FormIdComponent>(entity, data.Id);
+            m_world.emplace<ObjectComponent>(entity, acMessage.pPlayer).CurrentLockData = data.CurrentLockData;
+            m_world.emplace<CellIdComponent>(entity, data.CellId, data.WorldSpaceId, data.CurrentCoords);
+            m_world.emplace<InventoryComponent>(entity).Content = data.CurrentInventory;
+            data.ServerId = World::ToInteger(entity);
+        }
+        response.Objects.push_back(std::move(data));
+    }
     if (!response.Objects.empty())
         acMessage.pPlayer->Send(response);
 }
@@ -152,10 +170,20 @@ void ObjectService::OnLockChange(const PacketEvent<LockChangeRequest>& acMessage
 
     if (iter != std::end(objectView))
     {
-        auto& objectComponent = objectView.get<ObjectComponent>(*iter);
-        objectComponent.CurrentLockData.IsLocked = acMessage.Packet.IsLocked;
-        objectComponent.CurrentLockData.LockLevel = acMessage.Packet.LockLevel;
+        ObjectData data;
+        if (!GetPersistentObject(m_world, *iter, data))
+            return;
+        data.CurrentLockData.IsLocked = acMessage.Packet.IsLocked;
+        data.CurrentLockData.LockLevel = acMessage.Packet.LockLevel;
+        if (!m_world.GetCampaign().SaveObject(data))
+        {
+            GameServer::Get()->StopForWorldError(m_world.GetCampaign().Error());
+            return;
+        }
+        objectView.get<ObjectComponent>(*iter).CurrentLockData = data.CurrentLockData;
     }
+    else
+        return; // No authoritative registered object exists; do not relay an unsaved change.
 
     for (Player* pPlayer : m_world.GetPlayerManager())
     {

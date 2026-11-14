@@ -43,6 +43,7 @@ struct GameServer final : Server
 
     void Initialize();
     void Kill();
+    void StopForWorldError(const String& acReason);
 
     bool CheckMoPo();
     void BindMessageHandlers();
