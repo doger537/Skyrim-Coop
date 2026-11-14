@@ -11,6 +11,8 @@ using TiltedPhoques::String;
 struct AuthenticationRequest;
 struct Player;
 struct PartyComponent;
+struct RequestCampaignReady;
+struct RequestCampaignSeed;
 
 namespace Resources
 {
@@ -43,6 +45,8 @@ struct GameServer final : Server
 
     void Initialize();
     void Kill();
+    void StopForWorldError(const String& acReason);
+    void RejectCampaign(ConnectionId_t aConnectionId, const String& acReason);
 
     bool CheckMoPo();
     void BindMessageHandlers();
@@ -91,6 +95,11 @@ struct GameServer final : Server
 protected:
     bool ValidateAuthParams(ConnectionId_t aConnectionId, const UniquePtr<AuthenticationRequest>& acRequest);
     void HandleAuthenticationRequest(ConnectionId_t aConnectionId, const UniquePtr<AuthenticationRequest>& acRequest);
+    void BeginCampaignSync(Player* apPlayer);
+    void HandleCampaignReady(ConnectionId_t aConnectionId, const RequestCampaignReady& acRequest);
+    void HandleCampaignSeed(ConnectionId_t aConnectionId, const RequestCampaignSeed& acRequest);
+    void CampaignDisconnected(ConnectionId_t aConnectionId);
+    void ExpireCampaignSync();
 
     // Implement TiltedPhoques::Server
     void OnUpdate() override;
@@ -121,6 +130,21 @@ private:
     bool m_requestStop;
     std::optional<Mods> m_contentContract;
     String m_sessionRuntime;
+    struct PendingCampaign
+    {
+        GameId WorldSpace{};
+        GameId Cell{};
+        TimeModel Time{};
+        uint64_t Nonce{};
+        uint64_t Revision{};
+        bool SeedOwner{};
+        Vector<QuestJournal> Seed;
+        std::chrono::steady_clock::time_point Deadline{std::chrono::steady_clock::now() + std::chrono::seconds(90)};
+    };
+    TiltedPhoques::Map<ConnectionId_t, PendingCampaign> m_pendingCampaigns;
+    TiltedPhoques::Map<ConnectionId_t, bool> m_rejectedCampaigns;
+    std::optional<ConnectionId_t> m_seedOwner;
+    uint64_t m_campaignNonce{};
 
     static inline GameServer* s_pInstance = nullptr;
 };

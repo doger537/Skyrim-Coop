@@ -1,5 +1,9 @@
 ﻿#include <Components.h>
 #include <GameServer.h>
+#include <BuildInfo.h>
+#include <Messages/RequestCampaignReady.h>
+#include <Messages/RequestCampaignSeed.h>
+#include <fstream>
 #include <Packet.hpp>
 
 #include <Events/CharacterRemoveEvent.h>
@@ -51,8 +55,9 @@ Console::Setting bAllowConsoleCommands{
     true};
 // ModPolicy Stuff
 Console::Setting bEnableModCheck{"ModPolicy:bEnableModCheck", "Refuse clients whose mods do not match Data/loadorder.txt", false, Console::SettingsFlags::kLocked};
-Console::Setting bEnableContentCheck{
-    "ModPolicy:bEnableContentCheck", "Require matching active plugin fingerprints and order for the lifetime of this server session", true, Console::SettingsFlags::kLocked};
+Console::Setting bEnableContentCheck{"ModPolicy:bEnableContentCheck", "Legacy setting; strict content compatibility is always enforced", true, Console::SettingsFlags::kLocked};
+Console::StringSetting sQuestAdaptersPath{"Persistence:sQuestAdaptersPath", "Pinned quest adapter JSON; absent means no automatic script replay", "config/TrueCoopQuestAdapters.json"};
+Console::StringSetting sWorldPath{"Persistence:sWorldPath", "Persistent campaign database path; use a separate file for each world", "Data/TrueCoop/world.sqlite3"};
 Console::Setting bAllowSKSE{"ModPolicy:bAllowSKSE", "Allow players using SKSE to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 Console::Setting bAllowMO2{"ModPolicy:bAllowMO2", "Allow players using Mod Organizer 2 to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 
@@ -204,6 +209,37 @@ GameServer::GameServer(Console::ConsoleRegistry& aConsole) noexcept
     UpdateTitle();
 
     m_pWorld = MakeUnique<World>();
+    auto& campaign = m_pWorld->GetCampaign();
+    String adapters = Campaign::QuestAdapters::kEmpty;
+    std::error_code adapterError;
+    const std::filesystem::path adapterPath(reinterpret_cast<const char8_t*>(sQuestAdaptersPath.value()));
+    if (std::filesystem::exists(adapterPath, adapterError))
+    {
+        const uintmax_t size = std::filesystem::file_size(adapterPath, adapterError);
+        if (adapterError || size > 256 * 1024)
+            adapters = "invalid adapter file";
+        else
+        {
+            std::ifstream file(adapterPath, std::ios::binary);
+            adapters.resize(static_cast<size_t>(size));
+            if (!file.read(adapters.data(), size))
+                adapters = "unreadable adapter file";
+        }
+    }
+    else if (adapterError)
+        adapters = "unreadable adapter path";
+    if (!campaign.Open(std::filesystem::path(reinterpret_cast<const char8_t*>(sWorldPath.value())), adapters))
+    {
+        spdlog::critical("Cannot open persistent campaign: {}", campaign.Error());
+        Kill();
+    }
+    else if (campaign.GetContract())
+    {
+        m_contentContract = campaign.GetContract()->Content;
+        m_sessionRuntime = campaign.GetContract()->Runtime;
+        m_pWorld->ctx().at<ModsComponent>().BindContract(*m_contentContract);
+        spdlog::info("Restored campaign {} at revision {}", campaign.WorldId(), campaign.Revision());
+    }
 
     BindMessageHandlers();
     UpdateTimeScale();
@@ -233,6 +269,8 @@ bool GameServer::AllowsAutoPartyJoin() const noexcept
 
 void GameServer::Initialize()
 {
+    if (m_requestStop)
+        return;
     if (!CheckMoPo())
         return;
 
@@ -247,6 +285,21 @@ void GameServer::Kill()
 {
     spdlog::info("Server shutdown requested");
     m_requestStop = true;
+}
+
+void GameServer::StopForWorldError(const String& acReason)
+{
+    spdlog::critical("Persistent world stopped: {}", acReason);
+    AuthenticationResponse response;
+    response.Type = AuthenticationResponse::ResponseType::kContentMismatch;
+    response.Version = BUILD_COMMIT;
+    response.ContentError = "Cannot save or restore the server world: " + acReason + ". Preserve the database and check the server log before reconnecting";
+    for (Player* pPlayer : m_pWorld->GetPlayerManager())
+    {
+        pPlayer->Send(response);
+        Kick(pPlayer->GetConnectionId());
+    }
+    Kill();
 }
 
 bool GameServer::CheckMoPo()
@@ -278,6 +331,8 @@ void GameServer::BindMessageHandlers()
         {
             auto* pPlayer = m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId);
 
+            if (m_requestStop)
+                return;
             if (!pPlayer)
             {
                 spdlog::error("Connection {:x} is not associated with a player.", aConnectionId);
@@ -285,6 +340,8 @@ void GameServer::BindMessageHandlers()
                 return;
             }
 
+            if (!pPlayer->IsCampaignReady() || m_rejectedCampaigns.contains(aConnectionId))
+                return;
             const auto pRealMessage = CastUnique<T>(std::move(apMessage));
 
             m_pWorld->GetDispatcher().trigger(PacketEvent<T>(pRealMessage.get(), pPlayer));
@@ -294,6 +351,17 @@ void GameServer::BindMessageHandlers()
     };
 
     ClientMessageFactory::Visit(handlerGenerator);
+
+    m_messageHandlers[RequestCampaignReady::Opcode] = [this](UniquePtr<ClientMessage>& apMessage, ConnectionId_t aConnectionId)
+    {
+        const auto message = CastUnique<RequestCampaignReady>(std::move(apMessage));
+        HandleCampaignReady(aConnectionId, *message);
+    };
+    m_messageHandlers[RequestCampaignSeed::Opcode] = [this](UniquePtr<ClientMessage>& apMessage, ConnectionId_t aConnectionId)
+    {
+        const auto message = CastUnique<RequestCampaignSeed>(std::move(apMessage));
+        HandleCampaignSeed(aConnectionId, *message);
+    };
 
     // Override authentication request
     m_messageHandlers[AuthenticationRequest::Opcode] = [this](UniquePtr<ClientMessage>& apMessage, ConnectionId_t aConnectionId)
@@ -565,6 +633,7 @@ void GameServer::OnUpdate()
 
     auto& dispatcher = m_pWorld->GetDispatcher();
 
+    ExpireCampaignSync();
     dispatcher.trigger(UpdateEvent{cDeltaSeconds});
 
     if (m_requestStop)
@@ -596,6 +665,7 @@ void GameServer::OnConnection(const ConnectionId_t aHandle)
 void GameServer::OnDisconnection(const ConnectionId_t aConnectionId, EDisconnectReason aReason)
 {
     m_adminSessions.erase(aConnectionId);
+    m_rejectedCampaigns.erase(aConnectionId);
 
     auto* pPlayer = m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId);
 
@@ -612,12 +682,14 @@ void GameServer::OnDisconnection(const ConnectionId_t aConnectionId, EDisconnect
             m_pWorld->GetDispatcher().trigger(PlayerLeaveCellEvent(oldCell));
         }
 
-        m_pWorld->GetDispatcher().trigger(PlayerLeaveEvent(pPlayer));
+        if (pPlayer->IsCampaignReady())
+            m_pWorld->GetDispatcher().trigger(PlayerLeaveEvent(pPlayer));
 
         NotifyPlayerLeft notify{};
         notify.PlayerId = pPlayer->GetId();
         notify.Username = pPlayer->GetUsername();
-        SendToPlayers(notify);
+        if (pPlayer->IsCampaignReady())
+            SendToPlayers(notify);
 
         entt::entity playerCharacter = pPlayer->GetCharacter().value_or(static_cast<entt::entity>(0));
 
@@ -642,12 +714,19 @@ void GameServer::OnDisconnection(const ConnectionId_t aConnectionId, EDisconnect
 
         m_pWorld->GetPlayerManager().Remove(pPlayer);
     }
+    CampaignDisconnected(aConnectionId);
 
     UpdateTitle();
 }
 
 void GameServer::Send(const ConnectionId_t aConnectionId, const ServerMessage& acServerMessage, const TiltedPhoques::EPacketFlags aPacketFlags) const
 {
+    const auto* player = m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId);
+    const auto opcode = acServerMessage.GetOpcode();
+    if (opcode != kAuthenticationResponse && (m_rejectedCampaigns.contains(aConnectionId) ||
+        (player && !player->IsCampaignReady() && opcode != kNotifyCampaignCheckpoint && opcode != kNotifyQuestJournal && opcode != kStringCacheUpdate)))
+        return;
+
     static thread_local TiltedPhoques::ScratchAllocator s_allocator{1 << 18};
 
     Buffer buffer(1 << 20);
@@ -675,7 +754,7 @@ void GameServer::SendToPlayers(const ServerMessage& acServerMessage, const Playe
 {
     for (Player* pPlayer : m_pWorld->GetPlayerManager())
     {
-        if (pPlayer != apExcludedPlayer)
+        if (pPlayer->IsCampaignReady() && pPlayer != apExcludedPlayer)
             pPlayer->Send(acServerMessage);
     }
 }
@@ -788,6 +867,8 @@ bool GameServer::ValidateAuthParams(ConnectionId_t aConnectionId, const UniquePt
 
 void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId, const UniquePtr<AuthenticationRequest>& acRequest)
 {
+    if (m_requestStop)
+        return;
     if (m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId))
     {
         spdlog::warn("Ignored repeated authentication on an already authenticated connection");
@@ -809,15 +890,18 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         // the previous message is a lingering kick, it still gets delivered.
         Kick(aConnectionId);
     };
-#if 1
-    // to make our testing life a bit easier.
+    if (acRequest->ProtocolVersion != kTrueCoopProtocolVersion)
+    {
+        serverResponse.ContentError = "Network protocol differs. Install the same Skyrim True Coop client and server build";
+        sendKick(RT::kContentMismatch);
+        return;
+    }
     if (acRequest->Version != BUILD_COMMIT)
     {
         spdlog::info("New player {:x} '{}' tried to connect with client {} - Version mismatch", aConnectionId, remoteAddress, acRequest->Version.c_str());
         sendKick(RT::kWrongVersion);
         return;
     }
-#endif
 
     if (m_pWorld->GetPlayerManager().Count() >= uMaxPlayerCount.value_as<uint32_t>())
     {
@@ -851,16 +935,28 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
     if (acRequest->Token == sPassword.value() || adminPasswordUsed)
     {
         String contentError;
-        if (acRequest->RuntimeVersion.empty() || acRequest->RuntimeVersion.size() > 32)
-            contentError = "Cannot determine the Skyrim runtime version";
+        if (!m_pWorld->GetCampaign().IsReady())
+            contentError = "Server world storage is unavailable. Check the server log and restore a verified database backup";
+        else if (acRequest->RuntimeVersion != "1.7.104.0" && acRequest->RuntimeVersion != "1.6.1170.0" && acRequest->RuntimeVersion != "1.6.1179.0")
+            contentError = "Unsupported Skyrim runtime. Use a supported SkyrimSE.exe and its matching True Coop build and Address Library";
         else if (!m_sessionRuntime.empty() && m_sessionRuntime != acRequest->RuntimeVersion)
-            contentError = "Skyrim runtime differs from this session: expected " + m_sessionRuntime;
-        else if (bEnableContentCheck)
+            contentError = "Skyrim runtime differs. Match the host runtime: " + m_sessionRuntime;
+        else
         {
             const auto result = m_contentContract ? ContentCompatibility::Compare(*m_contentContract, acRequest->UserMods) : ContentCompatibility::Validate(acRequest->UserMods);
             if (!result)
                 contentError = ContentCompatibility::Describe(result);
         }
+        const bool cHasSKSE = std::any_of(
+            acRequest->UserMods.Resources.begin(), acRequest->UserMods.Resources.end(),
+            [](const auto& resource) { return ContentCompatibility::NormalizeName(resource.Filename) == "runtime/skse"; });
+        if (contentError.empty() && cHasSKSE != acRequest->SKSEActive)
+            contentError = "SKSE state and library manifest disagree. Restart with a supported SKSE installation or remove SKSE from this profile";
+        GameId checkedLocation;
+        if (contentError.empty() &&
+            (!ContentCompatibility::ResolveInitialForm(acRequest->WorldSpaceId, acRequest->UserMods, acRequest->UserMods, checkedLocation) ||
+             !ContentCompatibility::ResolveInitialForm(acRequest->CellId, acRequest->UserMods, acRequest->UserMods, checkedLocation) || acRequest->CellId.ModId == 0))
+            contentError = "Cannot resolve the initial location. Load a save in a supported installed cell and reconnect";
         if (!contentError.empty())
         {
             serverResponse.ContentError = contentError;
@@ -901,7 +997,8 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
             // mods that may exist on the server, but not on the client
             for (const auto& entry : modsComponent.GetServerMods())
             {
-                const auto it = std::find_if(userMods.begin(), userMods.end(), [&](const Mods::Entry& it) { return it.Filename == entry.first; });
+                const auto it =
+                    std::find_if(userMods.begin(), userMods.end(), [&](const Mods::Entry& it) { return ContentCompatibility::NormalizeName(it.Filename) == entry.first; });
 
                 if (it == userMods.end())
                 {
@@ -929,6 +1026,9 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         // null form id anyway
         Vector<String> playerMods;
         Vector<uint16_t> playerModsIds;
+
+        if (!m_contentContract)
+            modsComponent.BindContract(acRequest->UserMods);
 
         size_t i = 0;
         for (auto& mod : acRequest->UserMods.ModList)
@@ -976,6 +1076,13 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         serverResponse.PlayerId = pPlayer->GetId();
         if (!m_contentContract)
         {
+            if (!m_pWorld->GetCampaign().Bind(acRequest->RuntimeVersion, acRequest->UserMods))
+            {
+                serverResponse.ContentError = "Cannot create the persistent world contract: " + m_pWorld->GetCampaign().Error();
+                sendKick(RT::kContentMismatch);
+                m_pWorld->GetPlayerManager().Remove(pPlayer);
+                return;
+            }
             m_contentContract = acRequest->UserMods;
             m_sessionRuntime = acRequest->RuntimeVersion;
         }
@@ -985,6 +1092,7 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
 
         serverResponse.Settings = GetSettings();
 
+        serverResponse.WorldId = m_pWorld->GetCampaign().WorldId();
         serverResponse.Type = AuthenticationResponse::ResponseType::kAccepted;
         Send(aConnectionId, serverResponse);
 
@@ -995,27 +1103,11 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
 
         Send(aConnectionId, initStringCache);
 
-        for (auto* pOtherPlayer : m_pWorld->GetPlayerManager())
-        {
-            if (pOtherPlayer == pPlayer)
-                continue;
-
-            NotifyPlayerJoined notify{};
-            notify.PlayerId = pOtherPlayer->GetId();
-            notify.Username = pOtherPlayer->GetUsername();
-
-            auto& cellComponent = pOtherPlayer->GetCellComponent();
-            notify.WorldSpaceId = cellComponent.WorldSpaceId;
-            notify.CellId = cellComponent.Cell;
-
-            notify.Level = pOtherPlayer->GetLevel();
-
-            spdlog::debug("[GameServer] New notify player {:x} {}", notify.PlayerId, notify.Username.c_str());
-
-            Send(pPlayer->GetConnectionId(), notify);
-        }
-
-        m_pWorld->GetDispatcher().trigger(PlayerJoinEvent(pPlayer, initialWorldSpace, initialCell, acRequest->PlayerTime));
+        auto& pending = m_pendingCampaigns[aConnectionId];
+        pending.WorldSpace = initialWorldSpace;
+        pending.Cell = initialCell;
+        pending.Time = acRequest->PlayerTime;
+        BeginCampaignSync(pPlayer);
     }
     else
     {

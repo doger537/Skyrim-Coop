@@ -1,17 +1,14 @@
 #include <GameServer.h>
 #include <Components.h>
-
 #include <World.h>
 #include <Services/QuestService.h>
-
 #include <Messages/RequestQuestUpdate.h>
 #include <Messages/NotifyQuestUpdate.h>
-
 #include <Setting.h>
+
 namespace
 {
 Console::Setting bEnableMiscQuestSync{"Gameplay:bEnableMiscQuestSync", "(Experimental) Syncs miscellaneous quests when possible", false};
-
 }
 
 QuestService::QuestService(World& aWorld, entt::dispatcher& aDispatcher)
@@ -20,95 +17,64 @@ QuestService::QuestService(World& aWorld, entt::dispatcher& aDispatcher)
     m_questUpdateConnection = aDispatcher.sink<PacketEvent<RequestQuestUpdate>>().connect<&QuestService::OnQuestChanges>(this);
 }
 
+bool QuestService::AllowsMisc() const noexcept
+{
+    return bEnableMiscQuestSync;
+}
+
+void QuestService::FillPlayerJournal(Player& aPlayer) const noexcept
+{
+    auto& entries = aPlayer.GetQuestLogComponent().QuestContent.Entries;
+    entries.clear();
+    for (const auto& saved : m_world.GetCampaign().Quests())
+    {
+        if (saved.Data.Stopped)
+            continue;
+        uint16_t last = 0;
+        for (const auto& event : saved.Data.Events)
+            if (event.Status != RequestQuestUpdate::Stopped)
+                last = event.Stage;
+        entries.push_back({saved.Data.Id, last});
+    }
+}
+
 void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acMessage) noexcept
 {
     const auto& message = acMessage.Packet;
-
-    auto* pPlayer = acMessage.pPlayer;
-
-    auto& questComponent = pPlayer->GetQuestLogComponent();
-    auto& entries = questComponent.QuestContent.Entries;
-
-    auto questIt = std::find_if(entries.begin(), entries.end(), [&message](const auto& e) { return e.Id == message.Id; });
-
-    NotifyQuestUpdate notify{};
+    auto& campaign = m_world.GetCampaign();
+    const auto result = campaign.UpdateQuest(message.Id, message.Epoch, message.Status, message.Stage, message.ClientQuestType, AllowsMisc());
+    using Result = Campaign::State::QuestResult;
+    if (result == Result::Ignored)
+        return;
+    if (result == Result::StorageError)
+    {
+        GameServer::Get()->StopForWorldError(campaign.Error());
+        return;
+    }
+    if (result == Result::Invalid || result == Result::Conflict)
+    {
+        GameServer::Get()->RejectCampaign(acMessage.pPlayer->GetConnectionId(), campaign.Error() + ". Load a matching campaign save before reconnecting");
+        return;
+    }
+    const auto* saved = campaign.FindQuest(message.Id);
+    if (!saved)
+        return;
+    NotifyQuestUpdate notify;
     notify.Id = message.Id;
     notify.Stage = message.Stage;
     notify.Status = message.Status;
     notify.ClientQuestType = message.ClientQuestType;
-
-    if (notify.ClientQuestType == 0 ||  notify.ClientQuestType == 6) // Types None or Miscellaneous. Hard-coded to avoid client header file.
+    notify.Epoch = saved->Data.Epoch;
+    notify.Revision = saved->Revision;
+    notify.RunStopped = saved->Data.Stopped;
+    if (result == Result::Applied)
     {
-        if (!bEnableMiscQuestSync)
-            return;
-        spdlog::debug("{}: syncing type none/misc quest to party, gameId {:X} questStage {} questStatus {} questType {}",
-                     __FUNCTION__, notify.Id.LogFormat(), notify.Stage, notify.Status, notify.ClientQuestType);
+        for (Player* pPlayer : m_world.GetPlayerManager())
+            if (pPlayer->IsCampaignReady())
+                FillPlayerJournal(*pPlayer);
+        GameServer::Get()->SendToPlayers(notify, acMessage.pPlayer);
     }
-
-    if (message.Status == RequestQuestUpdate::Started || message.Status == RequestQuestUpdate::StageUpdate)
-    {
-        // in order to prevent bugs when a quest is in progress
-        // and being updated we add it as a new quest record to
-        // maintain a proper remote questlog state.
-        if (questIt == entries.end())
-        {
-            auto& newQuest = entries.emplace_back();
-            newQuest.Id = message.Id;
-            newQuest.Stage = message.Stage;
-
-            if (message.Status == RequestQuestUpdate::Started)
-            {
-                spdlog::debug("Started quest: {:X} stage: {}", message.Id.LogFormat(), message.Stage);
-
-                notify.Status = NotifyQuestUpdate::Started;
-            }
-            else
-            {
-                notify.Status = NotifyQuestUpdate::StageUpdate;
-            }
-        }
-        else
-        {
-            spdlog::debug("Updated quest: {:X}, stage: {}", message.Id.LogFormat(), message.Stage);
-
-            auto& record = *questIt;
-            record.Id = message.Id;
-            record.Stage = message.Stage;
-
-            notify.Status = NotifyQuestUpdate::StageUpdate;
-        }
-    }
-    else if (message.Status == RequestQuestUpdate::Stopped)
-    {
-        spdlog::debug("Stopped quest: {:X}, stage: {}", message.Id.LogFormat(), message.Stage);
-
-        if (questIt != entries.end())
-            entries.erase(questIt);
-        else
-            spdlog::warn("Unable to delete quest object {:X}", message.Id.LogFormat());
-
-        notify.Status = NotifyQuestUpdate::Stopped;
-    }
-
-    const auto& partyComponent = acMessage.pPlayer->GetParty();
-    PartyService::Party* pParty = m_world.GetPartyService().GetPlayerParty(pPlayer);
-    if (!pParty)
-        return;
-
-    // Party members' scripts often reach the same stage on their own, only relay it once
-    if (message.Status == RequestQuestUpdate::StageUpdate)
-    {
-        if (!pParty->QuestStages[message.Id].insert(message.Stage).second)
-        {
-            spdlog::debug("Dropped duplicate quest stage from player {}, quest: {:X}, stage: {}", pPlayer->GetId(), message.Id.LogFormat(), message.Stage);
-            return;
-        }
-    }
-    else
-    {
-        // A started quest has run none of its stages yet, a stopped one may run them again when restarted
-        pParty->QuestStages.erase(message.Id);
-    }
-
-    GameServer::Get()->SendToParty(notify, partyComponent, acMessage.GetSender());
+    // The sender already applied its local event. Acknowledging must not rerun its fragment.
+    notify.AcknowledgementOnly = true;
+    acMessage.pPlayer->Send(notify);
 }

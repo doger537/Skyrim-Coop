@@ -4,6 +4,8 @@
 #error Include Components.h instead
 #endif
 
+struct Mods;
+
 namespace ESLoader
 {
 struct PluginData;
@@ -19,6 +21,7 @@ struct ModsComponent
 
     uint32_t AddStandard(const String& acpFilename) noexcept;
     uint32_t AddLite(const String& acpFilename) noexcept;
+    void BindContract(const Mods& acContract) noexcept;
 
     void AddServerMod(const ESLoader::PluginData& acData);
 

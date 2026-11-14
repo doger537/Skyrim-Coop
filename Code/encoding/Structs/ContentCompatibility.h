@@ -17,7 +17,11 @@ enum class Issue : uint8_t
     ExtraPlugin,
     DifferentPlugin,
     DifferentOrder,
-    MissingDependency
+    MissingDependency,
+    UnreadableResource,
+    MissingResource,
+    ExtraResource,
+    DifferentResource
 };
 
 struct Result

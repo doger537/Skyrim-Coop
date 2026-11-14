@@ -1,0 +1,26 @@
+{
+  "protocol": 1413677058,
+  "runtime": "1.7.104.0",
+  "manifestValid": true,
+  "diagnostic": "Compatible active plugins",
+  "gameStatus": "not-game-tested",
+  "plugins": [
+    {
+      "filename": "Skyrim.esm",
+      "slot": 0,
+      "lite": false,
+      "sha256": "dbcceafb84d2a9be6065e1253a067d188b7e2bd1346972b4e30694de6519fd36",
+      "masters": []
+    }
+  ],
+  "resources": [
+    {
+      "filename": "data/loose-files",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "filename": "runtime/address-library",
+      "sha256": "b6a25c0cf44458d4de50083c59cf33868dd707c7a08aea52d200cac49026905e"
+    }
+  ]
+}

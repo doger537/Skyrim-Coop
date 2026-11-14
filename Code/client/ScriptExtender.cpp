@@ -2,6 +2,7 @@
 #include <ScriptExtender.h>
 #include <TiltedOnlinePCH.h>
 #include <VersionDb.h>
+#include <array>
 
 namespace
 {
@@ -72,6 +73,17 @@ std::string GetSKSEStyleExeVersion()
 bool IsScriptExtenderLoaded()
 {
     return g_SKSEModuleHandle;
+}
+
+std::filesystem::path GetScriptExtenderPath() noexcept
+{
+    if (!g_SKSEModuleHandle)
+        return {};
+    std::array<wchar_t, 32768> path{};
+    const DWORD length = GetModuleFileNameW(g_SKSEModuleHandle, path.data(), static_cast<DWORD>(path.size()));
+    if (length == 0 || length >= path.size())
+        return {};
+    return std::filesystem::path(path.data());
 }
 
 void LoadScriptExtender()

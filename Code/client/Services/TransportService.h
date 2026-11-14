@@ -6,6 +6,7 @@
 #include <atomic>
 #include <future>
 #include <Messages/AuthenticationRequest.h>
+#include <Messages/AuthenticationResponse.h>
 #include <Client.hpp>
 
 struct ImguiService;
@@ -13,6 +14,7 @@ struct UpdateEvent;
 struct ClientMessage;
 struct AuthenticationResponse;
 struct NotifySettingsChange;
+struct NotifyCampaignCheckpoint;
 
 struct World;
 
@@ -40,6 +42,8 @@ struct TransportService : Client
     [[nodiscard]] bool IsConnected() const noexcept { return m_connected && Client::IsConnected(); }
     void SetServerPassword(const std::string& acPassword) noexcept { m_serverPassword = acPassword; }
     const uint32_t& GetLocalPlayerId() const noexcept { return m_localPlayerId; }
+    uint64_t GetConnectionGeneration() const noexcept { return m_connectionGeneration; }
+    void FailCampaign(const String& acReason) noexcept;
 
     // Times below are in ms on the networking library's local clock, which keeps running while the game thread is stalled
 
@@ -58,6 +62,7 @@ protected:
     // Packet handlers
     void HandleAuthenticationResponse(const AuthenticationResponse& acMessage) noexcept;
     void HandleNotifySettingsChange(const NotifySettingsChange& acMessage) noexcept;
+    void HandleCampaignCheckpoint(const NotifyCampaignCheckpoint& acMessage) noexcept;
 
 private:
     World& m_world;
@@ -68,8 +73,10 @@ private:
     double m_lastPollTime{};
     std::optional<AuthenticationRequest> m_queuedAuthentication;
     std::future<AuthenticationRequest> m_manifestTask;
-    uint64_t m_connectionGeneration{};
+    std::atomic<uint64_t> m_connectionGeneration{};
     uint64_t m_manifestGeneration{};
+    std::optional<AuthenticationResponse> m_pendingAuthentication;
+    uint64_t m_campaignNonce{};
 
     entt::scoped_connection m_updateConnection;
     entt::scoped_connection m_sendServerMessageConnection;

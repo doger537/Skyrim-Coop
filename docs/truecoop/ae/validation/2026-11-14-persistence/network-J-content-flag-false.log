@@ -1,0 +1,20 @@
+PASS: stale movement/action generations and reordered movement are rejected
+PASS: inventory replay and stale ownership do not duplicate items
+PASS: CC object shares inventory/lock snapshot across a reconnect while its cell remains active
+PASS: clients without a party advance one durable synthetic CC quest without relaying duplicate starts/stages
+PASS: matching active content
+PASS: unknown protocol schema
+PASS: wrong password
+PASS: runtime mismatch
+PASS: same filename with different bytes
+PASS: missing Anniversary ESL
+PASS: same plugins with different BSA
+PASS: missing loose-resource fingerprint
+PASS: missing plugin master
+PASS: unsupported extra Creation
+PASS: different load order
+PASS: missing fingerprint
+PASS: invalid initial location
+PASS: old protocol version
+PASS: session contract remains after disconnect
+PASS: reconnect to the unchanged session

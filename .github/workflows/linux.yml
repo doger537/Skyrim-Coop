@@ -66,9 +66,15 @@ jobs:
       - name: Configure xmake and install dependencies
         run: xmake config --mode="$BUILD_MODE" --yes -vD
 
+      - name: Check Anniversary reference catalogue
+        run: python3 Tools/TrueCoop/check_ae_catalog.py
+
       # Build the server
       - name: Build
         run: xmake -y
+
+      - name: Run protocol and content unit tests
+        run: xmake run TPTests
 
       - name: Stage Linux server
         run: |

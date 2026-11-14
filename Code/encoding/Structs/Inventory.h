@@ -1,6 +1,8 @@
 #pragma once
 
 #include "MagicEquipment.h"
+#include <optional>
+#include <functional>
 
 using TiltedPhoques::Buffer;
 using TiltedPhoques::String;
@@ -15,6 +17,7 @@ struct Inventory
         int32_t Duration{};
         float RawCost{};
         GameId EffectId{};
+        bool operator==(const EffectItem&) const noexcept = default;
 
         void Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept;
         void Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept;
@@ -24,6 +27,7 @@ struct Inventory
     {
         bool IsWeapon{};
         Vector<EffectItem> Effects{};
+        bool operator==(const EnchantmentData&) const noexcept = default;
     };
 
     struct Entry
@@ -65,7 +69,7 @@ struct Inventory
             // since many of these things can and will change, like poison id or charge
             // or the fact that the enchant id can be temp
             return ExtraCharge == acRhs.ExtraCharge && ExtraEnchantId == acRhs.ExtraEnchantId && ExtraEnchantCharge == acRhs.ExtraEnchantCharge && ExtraEnchantRemoveUnequip == acRhs.ExtraEnchantRemoveUnequip && ExtraHealth == acRhs.ExtraHealth && ExtraPoisonId == acRhs.ExtraPoisonId &&
-                   ExtraPoisonCount == acRhs.ExtraPoisonCount && ExtraSoulLevel == acRhs.ExtraSoulLevel && ExtraWorn == acRhs.ExtraWorn && ExtraWornLeft == acRhs.ExtraWornLeft && IsQuestItem == acRhs.IsQuestItem;
+                   ExtraPoisonCount == acRhs.ExtraPoisonCount && ExtraSoulLevel == acRhs.ExtraSoulLevel && ExtraWorn == acRhs.ExtraWorn && ExtraWornLeft == acRhs.ExtraWornLeft && IsQuestItem == acRhs.IsQuestItem && EnchantData == acRhs.EnchantData;
         }
 
         bool IsWorn() const noexcept { return ExtraWorn || ExtraWornLeft; }

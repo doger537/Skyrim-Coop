@@ -1,0 +1,4 @@
+PASS: campaign barrier blocks gameplay and ignores stale ready nonce
+PASS: baseline lease transfers after disconnect and discards the partial import
+PASS: pre-admission object uploads leave no persistent state
+PASS: committed initial quest baseline is shared on reconnect

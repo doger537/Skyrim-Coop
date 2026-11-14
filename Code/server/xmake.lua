@@ -23,6 +23,7 @@ local function build_server()
         "BaseLib",
         "TiltedConnect"
     )
+    add_deps("TrueCoopState")
     add_packages(
         "gamenetworkingsockets",
         "spdlog",
@@ -40,3 +41,5 @@ target("SkyrimTogetherServer")
     add_defines("TARGET_PREFIX=\"st\"")
     add_deps("SkyrimEncoding")
     build_server()
+
+    add_installfiles("../../GameFiles/Server/TrueCoopQuestAdapters.example.json", {prefixdir = "config"})
