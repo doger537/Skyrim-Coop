@@ -173,13 +173,15 @@ template <class A, class T> bool Manifest(A& aArchive, T& aContract) noexcept
 template <class A, class T> bool QuestFields(A& aArchive, T& aQuest) noexcept
 {
     return Form(aArchive, aQuest.Id) && aArchive.Number(aQuest.Epoch) && aArchive.Number(aQuest.Type) && aArchive.Number(aQuest.Started) && aArchive.Number(aQuest.Stopped) &&
-           aArchive.List(aQuest.Events, 65536, [](auto& archive, auto& event) { return archive.Number(event.Status) && archive.Number(event.Stage) && event.Status <= 2; }) &&
+           aArchive.List(
+               aQuest.Events, QuestJournal::kMaxEvents,
+               [](auto& archive, auto& event) { return archive.Number(event.Status) && archive.Number(event.Stage) && archive.Number(event.Bootstrap) && event.Status <= 2; }) &&
            aArchive.List(aQuest.Decisions, 256, [](auto& archive, auto& decision) { return archive.Text(decision.Group, 64) && archive.Number(decision.Stage); });
 }
 
 bool Header(Writer& aWriter, uint8_t aKind) noexcept
 {
-    return aWriter.Number(uint32_t{0x53574354}) && aWriter.Number(uint16_t{1}) && aWriter.Number(aKind);
+    return aWriter.Number(uint32_t{0x53574354}) && aWriter.Number(static_cast<uint16_t>(aKind == 3 ? 2 : 1)) && aWriter.Number(aKind);
 }
 
 bool Header(Reader& aReader, uint8_t aKind) noexcept
@@ -187,7 +189,7 @@ bool Header(Reader& aReader, uint8_t aKind) noexcept
     uint32_t magic = 0;
     uint16_t schema = 0;
     uint8_t kind = 0;
-    return aReader.Number(magic) && aReader.Number(schema) && aReader.Number(kind) && magic == 0x53574354 && schema == 1 && kind == aKind;
+    return aReader.Number(magic) && aReader.Number(schema) && aReader.Number(kind) && magic == 0x53574354 && schema == (aKind == 3 ? 2 : 1) && kind == aKind;
 }
 } // namespace
 

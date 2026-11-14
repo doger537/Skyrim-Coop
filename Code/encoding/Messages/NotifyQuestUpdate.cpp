@@ -8,6 +8,10 @@ void NotifyQuestUpdate::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) con
     aWriter.WriteBits(Stage, 16);
     aWriter.WriteBits(Status, 8);
     aWriter.WriteBits(ClientQuestType, 8);
+    aWriter.WriteBits(Epoch, 32);
+    Serialization::WriteVarInt(aWriter, Revision);
+    Serialization::WriteBool(aWriter, RunStopped);
+    Serialization::WriteBool(aWriter, AcknowledgementOnly);
 }
 
 void NotifyQuestUpdate::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept
@@ -24,4 +28,9 @@ void NotifyQuestUpdate::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) n
 
     aReader.ReadBits(tmp, 8);
     ClientQuestType = tmp & 0xFF;
+    aReader.ReadBits(tmp, 32);
+    Epoch = static_cast<uint32_t>(tmp);
+    Revision = Serialization::ReadVarInt(aReader);
+    RunStopped = Serialization::ReadBool(aReader);
+    AcknowledgementOnly = Serialization::ReadBool(aReader);
 }

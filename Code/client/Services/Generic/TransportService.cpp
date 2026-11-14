@@ -28,6 +28,10 @@
 #include <Systems/ContentFingerprint.h>
 #include "../../../immersive_launcher/utils/FileVersion.inl"
 #include <Services/DiscordService.h>
+#include <Services/QuestService.h>
+#include <Messages/NotifyCampaignCheckpoint.h>
+#include <Messages/RequestCampaignReady.h>
+#include <Messages/RequestCampaignSeed.h>
 
 // #include <imgui_internal.h>
 
@@ -67,6 +71,11 @@ TransportService::TransportService(World& aWorld, entt::dispatcher& aDispatcher)
         const auto pRealMessage = TiltedPhoques::CastUnique<AuthenticationResponse>(std::move(apMessage));
         HandleAuthenticationResponse(*pRealMessage);
     };
+    m_messageHandlers[NotifyCampaignCheckpoint::Opcode] = [this](UniquePtr<ServerMessage>& apMessage)
+    {
+        const auto message = TiltedPhoques::CastUnique<NotifyCampaignCheckpoint>(std::move(apMessage));
+        HandleCampaignCheckpoint(*message);
+    };
 }
 
 bool TransportService::Send(const ClientMessage& acMessage, const TiltedPhoques::EPacketFlags aPacketFlags) const noexcept
@@ -78,7 +87,8 @@ bool TransportService::Send(const ClientMessage& acMessage, const TiltedPhoques:
         ~ScopedReset() { s_allocator.Reset(); }
     } allocatorGuard;
 
-    if (Client::IsConnected() && (m_connected || acMessage.GetOpcode() == AuthenticationRequest::Opcode))
+    if (Client::IsConnected() && (m_connected || acMessage.GetOpcode() == AuthenticationRequest::Opcode ||
+                                  (m_pendingAuthentication && (acMessage.GetOpcode() == RequestCampaignReady::Opcode || acMessage.GetOpcode() == RequestCampaignSeed::Opcode))))
     {
         ScopedAllocator _{s_allocator};
 
@@ -116,6 +126,8 @@ void TransportService::OnConsume(const void* apData, uint32_t aSize)
 void TransportService::OnConnected()
 {
     m_connected = false;
+    m_pendingAuthentication.reset();
+    m_campaignNonce = 0;
     ++m_connectionGeneration;
     AuthenticationRequest request{};
     request.Version = BUILD_COMMIT;
@@ -179,6 +191,8 @@ void TransportService::OnConnected()
 void TransportService::OnDisconnected(EDisconnectReason aReason)
 {
     m_connected = false;
+    m_pendingAuthentication.reset();
+    m_campaignNonce = 0;
     ++m_connectionGeneration;
     m_queuedAuthentication.reset();
 
@@ -269,13 +283,17 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
             Close();
             return;
         }
-        m_connected = true;
-
+        if (m_pendingAuthentication || m_connected || acMessage.WorldId.size() != 32)
+        {
+            FailCampaign("Invalid or duplicate campaign authentication response");
+            return;
+        }
+        m_pendingAuthentication = acMessage;
         m_world.SetServerSettings(acMessage.Settings);
 
         m_dispatcher.trigger(acMessage.UserMods);
         m_dispatcher.trigger(acMessage.Settings);
-        m_dispatcher.trigger(ConnectedEvent(acMessage.PlayerId));
+        // Gameplay begins only after the saved common journal has been checked.
         return; // quit the function here.
     }
 
@@ -350,4 +368,50 @@ void TransportService::HandleNotifySettingsChange(const NotifySettingsChange& ac
 {
     m_world.SetServerSettings(acMessage.Settings);
     m_dispatcher.trigger(acMessage.Settings);
+}
+
+void TransportService::FailCampaign(const String& acReason) noexcept
+{
+    ConnectionErrorEvent event;
+    event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acReason) + "\"}}";
+    m_dispatcher.trigger(event);
+    Close();
+}
+
+void TransportService::HandleCampaignCheckpoint(const NotifyCampaignCheckpoint& acMessage) noexcept
+{
+    if (!m_pendingAuthentication || !acMessage.Decoded || acMessage.WorldId != m_pendingAuthentication->WorldId || !acMessage.Nonce || m_connected)
+    {
+        FailCampaign("Unexpected shared campaign checkpoint");
+        return;
+    }
+    if (acMessage.State == NotifyCampaignCheckpoint::Begin)
+    {
+        if (acMessage.Nonce <= m_campaignNonce)
+        {
+            FailCampaign("Stale shared campaign checkpoint");
+            return;
+        }
+        m_campaignNonce = acMessage.Nonce;
+    }
+    else if (acMessage.Nonce != m_campaignNonce)
+    {
+        FailCampaign("Shared campaign checkpoint nonce differs");
+        return;
+    }
+    if (acMessage.State == NotifyCampaignCheckpoint::Accepted)
+    {
+        String error;
+        if (!m_world.ctx().at<QuestService>().ConfirmCampaign(error, &acMessage))
+        {
+            FailCampaign(error);
+            return;
+        }
+        const uint32_t player = m_pendingAuthentication->PlayerId;
+        m_pendingAuthentication.reset();
+        m_connected = true;
+        m_dispatcher.trigger(ConnectedEvent(player));
+        return;
+    }
+    m_dispatcher.trigger(acMessage);
 }

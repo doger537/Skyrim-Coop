@@ -56,6 +56,7 @@ add_requires(
     "zlib v1.3.1"
 )
 add_requires("sqlite3 3.46.0+0")
+add_requires("nlohmann_json v3.11.3")
 if is_plat("windows") then
     add_requires(
         "discord 3.2.1", 

@@ -30,7 +30,7 @@ struct AuthenticationResponse final : ServerMessage
     bool operator==(const AuthenticationResponse& achRhs) const noexcept
     {
         return GetOpcode() == achRhs.GetOpcode() && Type == achRhs.Type && UserMods == achRhs.UserMods && Settings == achRhs.Settings && PlayerId == achRhs.PlayerId &&
-               ContentError == achRhs.ContentError;
+               ContentError == achRhs.ContentError && WorldId == achRhs.WorldId;
     }
 
     ResponseType Type;
@@ -38,6 +38,7 @@ struct AuthenticationResponse final : ServerMessage
     bool MO2Active{false};
     String Version;
     String ContentError;
+    String WorldId;
     Mods UserMods{};
     ServerSettings Settings{};
     uint32_t PlayerId{};

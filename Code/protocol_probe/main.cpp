@@ -28,6 +28,10 @@
 #include <Messages/RequestQuestUpdate.h>
 #include <Messages/NotifyQuestUpdate.h>
 #include <BuildInfo.h>
+#include <Messages/NotifyCampaignCheckpoint.h>
+#include <Messages/NotifyQuestJournal.h>
+#include <Messages/RequestCampaignReady.h>
+#include <Messages/RequestCampaignSeed.h>
 #include <chrono>
 #include <iostream>
 #include <optional>
@@ -50,9 +54,16 @@ struct Probe final : Client
     uint32_t QuestNotifications{};
     uint16_t LastQuestStage{};
     bool InParty{};
+    bool Ready{};
+    bool AutoReady{true};
+    uint64_t Nonce{};
+    uint64_t CampaignRevision{};
+    bool SeedOwner{};
+    Vector<NotifyQuestJournal> Journals;
+    Vector<QuestJournal> Seed;
     float LastPositionX{};
     void OnUpdate() override {}
-    void OnDisconnected(EDisconnectReason) override {}
+    void OnDisconnected(EDisconnectReason) override { Ready = false; }
     void OnConnected() override { SendMessage(Request); }
     void SendMessage(const ClientMessage& acMessage)
     {
@@ -71,6 +82,39 @@ struct Probe final : Client
         const auto message = factory.Extract(reader);
         if (message && message->GetOpcode() == AuthenticationResponse::Opcode)
             Reply = *static_cast<AuthenticationResponse*>(message.get());
+        else if (message && message->GetOpcode() == NotifyCampaignCheckpoint::Opcode)
+        {
+            const auto& checkpoint = *static_cast<NotifyCampaignCheckpoint*>(message.get());
+            if (!checkpoint.Decoded)
+                return;
+            if (checkpoint.State == NotifyCampaignCheckpoint::Begin)
+            {
+                Nonce = checkpoint.Nonce;
+                CampaignRevision = checkpoint.Revision;
+                SeedOwner = checkpoint.SeedOwner;
+                Journals.clear();
+            }
+            else if (checkpoint.State == NotifyCampaignCheckpoint::End && AutoReady && (!checkpoint.BaselinePending || SeedOwner))
+            {
+                if (SeedOwner)
+                    for (const auto& quest : Seed)
+                    {
+                        RequestCampaignSeed seed;
+                        seed.Nonce = Nonce;
+                        seed.Data = quest;
+                        SendMessage(seed);
+                    }
+                RequestCampaignReady ready;
+                ready.Nonce = Nonce;
+                ready.Revision = CampaignRevision;
+                ready.SeedCount = SeedOwner ? static_cast<uint32_t>(Seed.size()) : 0;
+                SendMessage(ready);
+            }
+            else if (checkpoint.State == NotifyCampaignCheckpoint::Accepted && checkpoint.Nonce == Nonce)
+                Ready = true;
+        }
+        else if (message && message->GetOpcode() == NotifyQuestJournal::Opcode)
+            Journals.push_back(*static_cast<NotifyQuestJournal*>(message.get()));
         else if (message && message->GetOpcode() == AssignCharacterResponse::Opcode)
             Assignment = *static_cast<AssignCharacterResponse*>(message.get());
         else if (message && message->GetOpcode() == NotifyInventoryChanges::Opcode)
@@ -83,7 +127,8 @@ struct Probe final : Client
             InParty = true;
         else if (message && message->GetOpcode() == NotifyQuestUpdate::Opcode)
         {
-            ++QuestNotifications;
+            if (!static_cast<NotifyQuestUpdate*>(message.get())->AcknowledgementOnly)
+                ++QuestNotifications;
             LastQuestStage = static_cast<NotifyQuestUpdate*>(message.get())->Stage;
         }
         else if (message && message->GetOpcode() == ServerReferencesMoveRequest::Opcode)
@@ -137,17 +182,18 @@ AuthenticationRequest MakeRequest()
     return request;
 }
 
-bool ConnectProbe(Probe& aProbe, const std::string& acAddress, ResponseType aExpected)
+bool ConnectProbe(Probe& aProbe, const std::string& acAddress, ResponseType aExpected, bool aRequireReady = true)
 {
     if (!aProbe.Connect(acAddress))
         return false;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (!aProbe.Reply && std::chrono::steady_clock::now() < deadline)
+    while ((!aProbe.Reply || (aRequireReady && aExpected == ResponseType::kAccepted && aProbe.Reply->Type == aExpected && !aProbe.Ready)) &&
+           std::chrono::steady_clock::now() < deadline)
     {
         aProbe.Update();
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    return aProbe.Reply && aProbe.Reply->Type == aExpected;
+    return aProbe.Reply && aProbe.Reply->Type == aExpected && (!aRequireReady || aExpected != ResponseType::kAccepted || aProbe.Ready);
 }
 
 bool CheckInventoryReplay(Probe& aOwner, const std::string& acAddress)
@@ -338,16 +384,6 @@ bool CheckObjectState(Probe& aOwner, const std::string& acAddress)
 
 bool CheckQuestRelay(Probe& aOwner, const std::string& acAddress)
 {
-    PartyCreateRequest party;
-    aOwner.SendMessage(party);
-    const auto partyDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (!aOwner.InParty && std::chrono::steady_clock::now() < partyDeadline)
-    {
-        aOwner.Update();
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
-    if (!aOwner.InParty)
-        return false;
     Probe member;
     member.Request = MakeRequest();
     if (!ConnectProbe(member, acAddress, ResponseType::kAccepted))
@@ -363,8 +399,6 @@ bool CheckQuestRelay(Probe& aOwner, const std::string& acAddress)
         }
         return acDone();
     };
-    if (!pump([&] { return aOwner.InParty && member.InParty; }))
-        return false;
     RequestQuestUpdate quest;
     quest.Id = GameId(aOwner.Reply->UserMods.ModList.back().Id, 0x804);
     quest.Stage = 0;
@@ -388,13 +422,173 @@ bool CheckQuestRelay(Probe& aOwner, const std::string& acAddress)
     pump([&] { return std::chrono::steady_clock::now() >= settle; });
     const bool cPassed = aOwner.QuestNotifications == 1 && aOwner.LastQuestStage == 20 && member.QuestNotifications == 2;
     member.Close();
-    std::cout << (cPassed ? "PASS: " : "FAIL: ") << "two members advance a synthetic CC quest without relaying duplicate starts/stages\n";
+    std::cout << (cPassed ? "PASS: " : "FAIL: ") << "clients without a party advance one durable synthetic CC quest without relaying duplicate starts/stages\n";
     return cPassed;
+}
+
+bool CheckPersistentWorld(const std::string& acAddress, bool aTouch = false)
+{
+    Probe client;
+    client.Request = MakeRequest();
+    if (!ConnectProbe(client, acAddress, ResponseType::kAccepted))
+        return false;
+    const uint32_t mod = client.Reply->UserMods.ModList.back().Id;
+    EnterInteriorCellRequest enter;
+    enter.CellId = GameId(mod, 0x801);
+    client.SendMessage(enter);
+    AssignObjectsRequest assign;
+    auto& object = assign.Objects.emplace_back();
+    object.Id = GameId(mod, 0x802);
+    object.CellId = enter.CellId;
+    Inventory::Entry item;
+    item.BaseId = GameId(mod, 0x803);
+    item.Count = 999; // deliberately stale, must not replace the committed snapshot
+    object.CurrentInventory.Entries.push_back(item);
+    client.SendMessage(assign);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!client.Objects && std::chrono::steady_clock::now() < deadline)
+    {
+        client.Update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    bool passed = false;
+    if (client.Objects && client.Objects->Objects.size() == 1)
+    {
+        const auto& restored = client.Objects->Objects.front();
+        passed = !restored.IsSenderFirst && restored.Id == object.Id && restored.CurrentInventory.GetEntryCountById(item.BaseId) == 8 && restored.CurrentLockData.IsLocked &&
+                 restored.CurrentLockData.LockLevel == 49;
+    }
+    std::cout << (passed ? "PASS: " : "FAIL: ") << "CC container survives empty cells and server restart without stale-upload replacement\n";
+    if (passed && aTouch)
+    {
+        const uint32_t serverId = client.Objects->Objects.front().ServerId;
+        LockChangeRequest lock;
+        lock.Id = object.Id;
+        lock.CellId = enter.CellId;
+        lock.IsLocked = false;
+        lock.LockLevel = 0;
+        client.SendMessage(lock);
+        lock.IsLocked = true;
+        lock.LockLevel = 49;
+        client.SendMessage(lock);
+        RequestInventoryChanges change;
+        change.ServerId = serverId;
+        change.OperationId = 300;
+        change.Item.BaseId = item.BaseId;
+        change.Item.Count = 1;
+        client.SendMessage(change);
+        change.OperationId = 301;
+        change.Item.Count = -1;
+        client.SendMessage(change);
+        client.Objects.reset();
+        client.SendMessage(assign);
+        const auto touched = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!client.Objects && std::chrono::steady_clock::now() < touched)
+        {
+            client.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        passed = client.Objects && client.Objects->Objects.size() == 1 && client.Objects->Objects.front().CurrentInventory.GetEntryCountById(item.BaseId) == 8 &&
+                 client.Objects->Objects.front().CurrentLockData.IsLocked;
+        std::cout << (passed ? "PASS: " : "FAIL: ") << "fresh lock and inventory commits are visible before crash recovery\n";
+    }
+    const auto savedQuest = std::find_if(client.Journals.begin(), client.Journals.end(), [&](const auto& entry) { return entry.Data.Id == GameId(mod, 0x804); });
+    const bool questPassed = savedQuest != client.Journals.end() && savedQuest->Data.Events.size() == 3 && savedQuest->Data.Events.back().Stage == 20;
+    std::cout << (questPassed ? "PASS: " : "FAIL: ") << "shared quest stages survive reconnect and server restart\n";
+    client.Close();
+    return passed && questPassed;
+}
+
+bool CheckCampaignAdmission(const std::string& address)
+{
+    Probe owner, waiting;
+    owner.Request = MakeRequest();
+    owner.AutoReady = false;
+    waiting.Request = MakeRequest();
+    const uint32_t mod = static_cast<uint32_t>(waiting.Request.UserMods.ModList.size() - 1);
+    QuestJournal baseline;
+    baseline.Id = GameId(mod, 0x805);
+    baseline.Type = 8;
+    baseline.Started = true;
+    baseline.Events = {{1, 0, true}, {0, 5, true}};
+    waiting.Seed.push_back(baseline);
+    if (!ConnectProbe(owner, address, ResponseType::kAccepted, false) || !ConnectProbe(waiting, address, ResponseType::kAccepted, false))
+        return false;
+    const auto pump = [&](const auto& done)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!done() && std::chrono::steady_clock::now() < deadline)
+        {
+            owner.Update();
+            waiting.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return done();
+    };
+    if (!pump([&] { return owner.Nonce && waiting.Nonce; }) || !owner.SeedOwner || waiting.SeedOwner || owner.Ready || waiting.Ready)
+        return false;
+    RequestCampaignReady stale;
+    stale.Nonce = owner.Nonce + 100;
+    owner.SendMessage(stale);
+    RequestCampaignSeed partial;
+    partial.Nonce = owner.Nonce;
+    partial.Data = baseline;
+    partial.Data.Id.BaseId = 0x806;
+    owner.SendMessage(partial); // no Ready: this partial import must never reach disk
+    RequestQuestUpdate premature;
+    premature.Id = GameId(mod, 0x808);
+    premature.ClientQuestType = 8;
+    premature.Status = RequestQuestUpdate::StageUpdate;
+    premature.Stage = 77;
+    owner.SendMessage(premature);
+    AssignObjectsRequest assign;
+    auto& object = assign.Objects.emplace_back();
+    object.Id = GameId(mod, 0x807);
+    object.CellId = GameId(mod, 0x801);
+    Inventory::Entry item;
+    item.BaseId = GameId(mod, 0x803);
+    item.Count = 99;
+    object.CurrentInventory.Entries.push_back(item);
+    owner.SendMessage(assign);
+    auto settle = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+    pump([&] { return std::chrono::steady_clock::now() >= settle; });
+    bool passed = !owner.Ready && !waiting.Ready && !owner.Objects;
+    std::cout << (passed ? "PASS: " : "FAIL: ") << "campaign barrier blocks gameplay and ignores stale ready nonce\n";
+    owner.Close();
+    passed &= pump([&] { return waiting.Ready; });
+    const bool seedPassed =
+        waiting.Ready && waiting.Journals.size() == 1 && waiting.Journals.front().Data.Id == baseline.Id && waiting.Journals.front().Data.Events == baseline.Events;
+    std::cout << (seedPassed ? "PASS: " : "FAIL: ") << "baseline lease transfers after disconnect and discards the partial import\n";
+    EnterInteriorCellRequest enter;
+    enter.CellId = object.CellId;
+    waiting.SendMessage(enter);
+    object.CurrentInventory.Entries.front().Count = 3;
+    waiting.SendMessage(assign);
+    passed &= pump([&] { return waiting.Objects.has_value(); });
+    const bool objectPassed = waiting.Objects && waiting.Objects->Objects.size() == 1 && waiting.Objects->Objects.front().IsSenderFirst &&
+                              waiting.Objects->Objects.front().CurrentInventory.GetEntryCountById(item.BaseId) == 3;
+    std::cout << (objectPassed ? "PASS: " : "FAIL: ") << "pre-admission object uploads leave no persistent state\n";
+    Probe reconnect;
+    reconnect.Request = MakeRequest();
+    const bool restored = ConnectProbe(reconnect, address, ResponseType::kAccepted) && reconnect.Journals.size() == 1 && reconnect.Journals.front().Data.Events == baseline.Events;
+    std::cout << (restored ? "PASS: " : "FAIL: ") << "committed initial quest baseline is shared on reconnect\n";
+    RequestCampaignSeed reseed;
+    reseed.Nonce = reconnect.Nonce;
+    reseed.Data = baseline;
+    reconnect.SendMessage(reseed); // ready players cannot import another baseline
+    // Admission seed packets outside a pending handshake cannot change the journal.
+    reconnect.Close();
+    waiting.Close();
+    return passed && seedPassed && objectPassed && restored;
 }
 
 int main(int argc, char** argv)
 {
     const std::string address = argc > 1 ? argv[1] : "127.0.0.1:10582";
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-campaign-admission")
+        return CheckCampaignAdmission(address) ? 0 : 1;
+    if (argc > 2 && (std::string_view(argv[2]) == "--verify-world" || std::string_view(argv[2]) == "--touch-world"))
+        return CheckPersistentWorld(address, std::string_view(argv[2]) == "--touch-world") ? 0 : 1;
     Probe rejected;
     rejected.Request = MakeRequest();
     rejected.Request.CellId = GameId(1000, 1);

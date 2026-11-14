@@ -1,6 +1,9 @@
 ﻿#include <Components.h>
 #include <GameServer.h>
 #include <BuildInfo.h>
+#include <Messages/RequestCampaignReady.h>
+#include <Messages/RequestCampaignSeed.h>
+#include <fstream>
 #include <Packet.hpp>
 
 #include <Events/CharacterRemoveEvent.h>
@@ -53,6 +56,7 @@ Console::Setting bAllowConsoleCommands{
 // ModPolicy Stuff
 Console::Setting bEnableModCheck{"ModPolicy:bEnableModCheck", "Refuse clients whose mods do not match Data/loadorder.txt", false, Console::SettingsFlags::kLocked};
 Console::Setting bEnableContentCheck{"ModPolicy:bEnableContentCheck", "Legacy setting; strict content compatibility is always enforced", true, Console::SettingsFlags::kLocked};
+Console::StringSetting sQuestAdaptersPath{"Persistence:sQuestAdaptersPath", "Pinned quest adapter JSON; absent means no automatic script replay", "config/TrueCoopQuestAdapters.json"};
 Console::StringSetting sWorldPath{"Persistence:sWorldPath", "Persistent campaign database path; use a separate file for each world", "Data/TrueCoop/world.sqlite3"};
 Console::Setting bAllowSKSE{"ModPolicy:bAllowSKSE", "Allow players using SKSE to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 Console::Setting bAllowMO2{"ModPolicy:bAllowMO2", "Allow players using Mod Organizer 2 to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
@@ -206,7 +210,25 @@ GameServer::GameServer(Console::ConsoleRegistry& aConsole) noexcept
 
     m_pWorld = MakeUnique<World>();
     auto& campaign = m_pWorld->GetCampaign();
-    if (!campaign.Open(std::filesystem::path(reinterpret_cast<const char8_t*>(sWorldPath.value()))))
+    String adapters = Campaign::QuestAdapters::kEmpty;
+    std::error_code adapterError;
+    const std::filesystem::path adapterPath(reinterpret_cast<const char8_t*>(sQuestAdaptersPath.value()));
+    if (std::filesystem::exists(adapterPath, adapterError))
+    {
+        const uintmax_t size = std::filesystem::file_size(adapterPath, adapterError);
+        if (adapterError || size > 256 * 1024)
+            adapters = "invalid adapter file";
+        else
+        {
+            std::ifstream file(adapterPath, std::ios::binary);
+            adapters.resize(static_cast<size_t>(size));
+            if (!file.read(adapters.data(), size))
+                adapters = "unreadable adapter file";
+        }
+    }
+    else if (adapterError)
+        adapters = "unreadable adapter path";
+    if (!campaign.Open(std::filesystem::path(reinterpret_cast<const char8_t*>(sWorldPath.value())), adapters))
     {
         spdlog::critical("Cannot open persistent campaign: {}", campaign.Error());
         Kill();
@@ -247,6 +269,8 @@ bool GameServer::AllowsAutoPartyJoin() const noexcept
 
 void GameServer::Initialize()
 {
+    if (m_requestStop)
+        return;
     if (!CheckMoPo())
         return;
 
@@ -307,6 +331,8 @@ void GameServer::BindMessageHandlers()
         {
             auto* pPlayer = m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId);
 
+            if (m_requestStop)
+                return;
             if (!pPlayer)
             {
                 spdlog::error("Connection {:x} is not associated with a player.", aConnectionId);
@@ -314,6 +340,8 @@ void GameServer::BindMessageHandlers()
                 return;
             }
 
+            if (!pPlayer->IsCampaignReady() || m_rejectedCampaigns.contains(aConnectionId))
+                return;
             const auto pRealMessage = CastUnique<T>(std::move(apMessage));
 
             m_pWorld->GetDispatcher().trigger(PacketEvent<T>(pRealMessage.get(), pPlayer));
@@ -323,6 +351,17 @@ void GameServer::BindMessageHandlers()
     };
 
     ClientMessageFactory::Visit(handlerGenerator);
+
+    m_messageHandlers[RequestCampaignReady::Opcode] = [this](UniquePtr<ClientMessage>& apMessage, ConnectionId_t aConnectionId)
+    {
+        const auto message = CastUnique<RequestCampaignReady>(std::move(apMessage));
+        HandleCampaignReady(aConnectionId, *message);
+    };
+    m_messageHandlers[RequestCampaignSeed::Opcode] = [this](UniquePtr<ClientMessage>& apMessage, ConnectionId_t aConnectionId)
+    {
+        const auto message = CastUnique<RequestCampaignSeed>(std::move(apMessage));
+        HandleCampaignSeed(aConnectionId, *message);
+    };
 
     // Override authentication request
     m_messageHandlers[AuthenticationRequest::Opcode] = [this](UniquePtr<ClientMessage>& apMessage, ConnectionId_t aConnectionId)
@@ -594,6 +633,7 @@ void GameServer::OnUpdate()
 
     auto& dispatcher = m_pWorld->GetDispatcher();
 
+    ExpireCampaignSync();
     dispatcher.trigger(UpdateEvent{cDeltaSeconds});
 
     if (m_requestStop)
@@ -625,6 +665,7 @@ void GameServer::OnConnection(const ConnectionId_t aHandle)
 void GameServer::OnDisconnection(const ConnectionId_t aConnectionId, EDisconnectReason aReason)
 {
     m_adminSessions.erase(aConnectionId);
+    m_rejectedCampaigns.erase(aConnectionId);
 
     auto* pPlayer = m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId);
 
@@ -641,12 +682,14 @@ void GameServer::OnDisconnection(const ConnectionId_t aConnectionId, EDisconnect
             m_pWorld->GetDispatcher().trigger(PlayerLeaveCellEvent(oldCell));
         }
 
-        m_pWorld->GetDispatcher().trigger(PlayerLeaveEvent(pPlayer));
+        if (pPlayer->IsCampaignReady())
+            m_pWorld->GetDispatcher().trigger(PlayerLeaveEvent(pPlayer));
 
         NotifyPlayerLeft notify{};
         notify.PlayerId = pPlayer->GetId();
         notify.Username = pPlayer->GetUsername();
-        SendToPlayers(notify);
+        if (pPlayer->IsCampaignReady())
+            SendToPlayers(notify);
 
         entt::entity playerCharacter = pPlayer->GetCharacter().value_or(static_cast<entt::entity>(0));
 
@@ -671,12 +714,19 @@ void GameServer::OnDisconnection(const ConnectionId_t aConnectionId, EDisconnect
 
         m_pWorld->GetPlayerManager().Remove(pPlayer);
     }
+    CampaignDisconnected(aConnectionId);
 
     UpdateTitle();
 }
 
 void GameServer::Send(const ConnectionId_t aConnectionId, const ServerMessage& acServerMessage, const TiltedPhoques::EPacketFlags aPacketFlags) const
 {
+    const auto* player = m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId);
+    const auto opcode = acServerMessage.GetOpcode();
+    if (opcode != kAuthenticationResponse && (m_rejectedCampaigns.contains(aConnectionId) ||
+        (player && !player->IsCampaignReady() && opcode != kNotifyCampaignCheckpoint && opcode != kNotifyQuestJournal && opcode != kStringCacheUpdate)))
+        return;
+
     static thread_local TiltedPhoques::ScratchAllocator s_allocator{1 << 18};
 
     Buffer buffer(1 << 20);
@@ -704,7 +754,7 @@ void GameServer::SendToPlayers(const ServerMessage& acServerMessage, const Playe
 {
     for (Player* pPlayer : m_pWorld->GetPlayerManager())
     {
-        if (pPlayer != apExcludedPlayer)
+        if (pPlayer->IsCampaignReady() && pPlayer != apExcludedPlayer)
             pPlayer->Send(acServerMessage);
     }
 }
@@ -817,6 +867,8 @@ bool GameServer::ValidateAuthParams(ConnectionId_t aConnectionId, const UniquePt
 
 void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId, const UniquePtr<AuthenticationRequest>& acRequest)
 {
+    if (m_requestStop)
+        return;
     if (m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId))
     {
         spdlog::warn("Ignored repeated authentication on an already authenticated connection");
@@ -1040,6 +1092,7 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
 
         serverResponse.Settings = GetSettings();
 
+        serverResponse.WorldId = m_pWorld->GetCampaign().WorldId();
         serverResponse.Type = AuthenticationResponse::ResponseType::kAccepted;
         Send(aConnectionId, serverResponse);
 
@@ -1050,27 +1103,11 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
 
         Send(aConnectionId, initStringCache);
 
-        for (auto* pOtherPlayer : m_pWorld->GetPlayerManager())
-        {
-            if (pOtherPlayer == pPlayer)
-                continue;
-
-            NotifyPlayerJoined notify{};
-            notify.PlayerId = pOtherPlayer->GetId();
-            notify.Username = pOtherPlayer->GetUsername();
-
-            auto& cellComponent = pOtherPlayer->GetCellComponent();
-            notify.WorldSpaceId = cellComponent.WorldSpaceId;
-            notify.CellId = cellComponent.Cell;
-
-            notify.Level = pOtherPlayer->GetLevel();
-
-            spdlog::debug("[GameServer] New notify player {:x} {}", notify.PlayerId, notify.Username.c_str());
-
-            Send(pPlayer->GetConnectionId(), notify);
-        }
-
-        m_pWorld->GetDispatcher().trigger(PlayerJoinEvent(pPlayer, initialWorldSpace, initialCell, acRequest->PlayerTime));
+        auto& pending = m_pendingCampaigns[aConnectionId];
+        pending.WorldSpace = initialWorldSpace;
+        pending.Cell = initialCell;
+        pending.Time = acRequest->PlayerTime;
+        BeginCampaignSync(pPlayer);
     }
     else
     {

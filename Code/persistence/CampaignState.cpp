@@ -8,7 +8,7 @@ using TiltedPhoques::Vector;
 
 namespace Campaign
 {
-bool State::Open(const std::filesystem::path& acPath) noexcept
+bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) noexcept
 {
     m_ready = false;
     m_contract.reset();
@@ -40,6 +40,8 @@ bool State::Open(const std::filesystem::path& acPath) noexcept
         m_error = "World has records but its content contract is missing; restore a verified backup";
         return false;
     }
+    if (!LoadQuestState(acAdapters))
+        return false;
     m_ready = true;
     return true;
 }
@@ -61,6 +63,11 @@ bool State::Bind(const String& acRuntime, const Mods& acContent) noexcept
         return static_cast<bool>(compatible);
     }
     Contract contract{acRuntime, acContent};
+    if (!m_adapters.Validate(acContent))
+    {
+        m_error = m_adapters.Error();
+        return false;
+    }
     WorldStore::Record record;
     record.Key = "$contract";
     if ((acRuntime != "1.7.104.0" && acRuntime != "1.6.1170.0" && acRuntime != "1.6.1179.0") || !Encode(contract, record.Value))
@@ -69,7 +76,11 @@ bool State::Bind(const String& acRuntime, const Mods& acContent) noexcept
         return false;
     }
     uint64_t revision = 0;
-    if (m_store.Commit({record}, revision) != WorldStore::WriteResult::Committed)
+    WorldStore::Record adapters;
+    adapters.Key = "$adapters";
+    const auto& canonical = m_adapters.Canonical();
+    adapters.Value.assign(canonical.begin(), canonical.end());
+    if (m_store.Commit({record, adapters}, revision) != WorldStore::WriteResult::Committed)
     {
         m_error = m_store.Error();
         return false;

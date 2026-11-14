@@ -5,6 +5,7 @@
 #include <glm/vec3.hpp>
 #include <Structs/Mods.h>
 #include <Structs/ObjectData.h>
+#include <Structs/QuestJournal.h>
 
 namespace Campaign
 {
@@ -14,30 +15,9 @@ struct Contract
     Mods Content;
 };
 
-struct QuestEvent
-{
-    uint8_t Status{};
-    uint16_t Stage{};
-    bool operator==(const QuestEvent&) const noexcept = default;
-};
-
-struct Decision
-{
-    TiltedPhoques::String Group;
-    uint16_t Stage{};
-    bool operator==(const Decision&) const noexcept = default;
-};
-
-struct Quest
-{
-    GameId Id{};
-    uint32_t Epoch{1};
-    uint8_t Type{};
-    bool Started{};
-    bool Stopped{};
-    TiltedPhoques::Vector<QuestEvent> Events;
-    TiltedPhoques::Vector<Decision> Decisions;
-};
+using QuestEvent = QuestJournal::Event;
+using Decision = QuestJournal::Decision;
+using Quest = QuestJournal;
 
 // Separate from the network serializer: corrupted counts and truncated records must
 // fail before allocation or applying anything to the world.
