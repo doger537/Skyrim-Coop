@@ -55,6 +55,7 @@ add_requires(
     "glm 0.9.9+8", 
     "zlib v1.3.1"
 )
+add_requires("sqlite3 3.46.0+0")
 if is_plat("windows") then
     add_requires(
         "discord 3.2.1", 
