@@ -25,8 +25,6 @@ WeatherService::WeatherService(World& aWorld, TransportService& aTransport, entt
     m_disconnectConnection = aDispatcher.sink<DisconnectedEvent>().connect<&WeatherService::OnDisconnected>(this);
     m_partyJoinedConnection = aDispatcher.sink<PartyJoinedEvent>().connect<&WeatherService::OnPartyJoinedEvent>(this);
     m_partyLeftConnection = aDispatcher.sink<PartyLeftEvent>().connect<&WeatherService::OnPartyLeftEvent>(this);
-    m_playerAddedConnection = m_world.on_destroy<WaitingFor3D>().connect<&WeatherService::OnWaitingFor3DRemoved>(this);
-    m_playerRemovedConnection = m_world.on_destroy<PlayerComponent>().connect<&WeatherService::OnPlayerComponentRemoved>(this);
     m_weatherChangeConnection = aDispatcher.sink<NotifyWeatherChange>().connect<&WeatherService::OnWeatherChange>(this);
 }
 
@@ -62,17 +60,7 @@ void WeatherService::OnPartyJoinedEvent(const PartyJoinedEvent& acEvent) noexcep
 
     if (!acEvent.IsLeader)
     {
-        // TODO: why is this loop here? Party should always have a leader.
-        auto view = m_world.view<PlayerComponent>();
-        for (auto entity : view)
-        {
-            const auto& playerComponent = view.get<PlayerComponent>(entity);
-            if (playerComponent.Id == partyService.GetLeaderPlayerId())
-            {
-                ToggleGameWeatherSystem(false);
-                break;
-            }
-        }
+        ToggleGameWeatherSystem(false);
     }
     else
     {
@@ -84,33 +72,6 @@ void WeatherService::OnPartyLeftEvent(const PartyLeftEvent& acEvent) noexcept
 {
     ToggleGameWeatherSystem(true);
     m_partyLeaderPlayerId = 0;
-}
-
-// TODO: OnPlayerComponentAdded() instead? Does PlayerComponent exist already by then?
-void WeatherService::OnWaitingFor3DRemoved(entt::registry& aRegistry, entt::entity aEntity) noexcept
-{
-    const auto* pPlayerComponent = m_world.try_get<PlayerComponent>(aEntity);
-    if (!pPlayerComponent)
-        return;
-
-    const auto& partyService = m_world.GetPartyService();
-    if (!partyService.IsInParty() || partyService.IsLeader())
-        return;
-
-    if (partyService.GetLeaderPlayerId() == pPlayerComponent->Id)
-        ToggleGameWeatherSystem(false);
-}
-
-void WeatherService::OnPlayerComponentRemoved(entt::registry& aRegistry, entt::entity aEntity) noexcept
-{
-    const auto& playerComponent = m_world.get<PlayerComponent>(aEntity);
-
-    const auto& partyService = m_world.GetPartyService();
-    if (!partyService.IsInParty() || partyService.IsLeader())
-        return;
-
-    if (partyService.GetLeaderPlayerId() == playerComponent.Id)
-        ToggleGameWeatherSystem(true);
 }
 
 void WeatherService::OnWeatherChange(const NotifyWeatherChange& acMessage) noexcept

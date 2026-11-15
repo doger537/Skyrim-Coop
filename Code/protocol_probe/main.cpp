@@ -30,6 +30,7 @@
 #include <Messages/RequestCurrentWeather.h>
 #include <Messages/NotifyWeatherChange.h>
 #include <Messages/ServerTimeSettings.h>
+#include <Messages/NotifyPlayerCellChanged.h>
 #include <Messages/RequestQuestUpdate.h>
 #include <Messages/NotifyQuestUpdate.h>
 #include <BuildInfo.h>
@@ -64,6 +65,7 @@ struct Probe final : Client
     GameId LastWeather{};
     uint32_t TimeNotifications{};
     std::optional<ServerTimeSettings> Time;
+    std::optional<NotifyPlayerCellChanged> PlayerCell;
     bool Ready{};
     bool AutoReady{true};
     uint64_t Nonce{};
@@ -148,6 +150,8 @@ struct Probe final : Client
             ++TimeNotifications;
             Time = *static_cast<ServerTimeSettings*>(message.get());
         }
+        else if (message && message->GetOpcode() == NotifyPlayerCellChanged::Opcode)
+            PlayerCell = *static_cast<NotifyPlayerCellChanged*>(message.get());
         else if (message && message->GetOpcode() == NotifyQuestUpdate::Opcode)
         {
             if (!static_cast<NotifyQuestUpdate*>(message.get())->AcknowledgementOnly)
@@ -646,10 +650,16 @@ bool CheckEnvironment(const std::string& acAddress)
                "private default auto-party joins member under the leader"))
         return false;
 
+    enter.CellId = GameId(1, 0x124);
+    member.SendMessage(enter);
+    if (!check(pump([&] { return leader.PlayerCell && leader.PlayerCell->PlayerId == member.Reply->PlayerId && leader.PlayerCell->CellId == enter.CellId; }),
+               "member enters a different cell before weather replication"))
+        return false;
+
     RequestWeatherChange weather;
     weather.Id = GameId(0, 0x10a230);
     leader.SendMessage(weather);
-    if (!check(pump([&] { return member.WeatherNotifications > 0; }) && member.LastWeather == weather.Id, "leader weather reaches party member"))
+    if (!check(pump([&] { return member.WeatherNotifications > 0; }) && member.LastWeather == weather.Id, "leader weather reaches party member in a different cell"))
         return false;
     uint32_t before = member.WeatherNotifications;
     RequestWeatherChange forged;

@@ -33,7 +33,7 @@ void WeatherService::OnWeatherChange(const PacketEvent<RequestWeatherChange>& ac
     notify.Id = acMessage.Packet.Id;
     pParty->CachedWeather = notify.Id;
 
-    GameServer::Get()->SendToPartyInRange(notify, acMessage.pPlayer->GetParty(), *character, acMessage.pPlayer);
+    GameServer::Get()->SendToParty(notify, acMessage.pPlayer->GetParty(), acMessage.pPlayer);
 }
 
 void WeatherService::OnRequestCurrentWeather(const PacketEvent<RequestCurrentWeather>& acMessage) const noexcept
