@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Events/PacketEvent.h>
+#include <Structs/QuestEventHistory.h>
 
 struct World;
 struct UpdateEvent;
@@ -25,7 +26,7 @@ struct PartyService
         Vector<Player*> Members;
         GameId CachedWeather{};
         // Stages each quest reached since it started, as relayed to the party
-        Map<GameId, TiltedPhoques::Set<uint16_t>> QuestStages{};
+        Map<GameId, QuestEventHistory> QuestHistory{};
     };
 
     PartyService(World& aWorld, entt::dispatcher& aDispatcher) noexcept;

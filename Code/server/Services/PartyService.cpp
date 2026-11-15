@@ -120,7 +120,7 @@ void PartyService::OnPartyCreate(const PacketEvent<PartyCreateRequest>& acPacket
         {
             for (Player* otherPlayer : m_world.GetPlayerManager())
             {
-                if (otherPlayer->GetId() != player->GetId())
+                if (otherPlayer->IsCampaignReady() && otherPlayer->GetId() != player->GetId())
                 {
                     party.Members.push_back(otherPlayer);
                     otherPlayer->GetParty().JoinedPartyId = partyId;
@@ -244,7 +244,7 @@ void PartyService::OnPartyInvite(const PacketEvent<PartyInviteRequest>& acPacket
     Player* const pInviter = acPacket.pPlayer;
 
     // If both players are available and they are different
-    if (pInvitee && pInvitee != pInviter)
+    if (pInvitee && pInvitee->IsCampaignReady() && pInvitee != pInviter)
     {
         auto& inviterPartyComponent = pInviter->GetParty();
         auto& inviteePartyComponent = pInvitee->GetParty();
@@ -292,7 +292,7 @@ void PartyService::OnPartyAcceptInvite(const PacketEvent<PartyAcceptInviteReques
     spdlog::debug("[PartyService]: Got party accept request from {}", pSelf->GetId());
 
     // If both players are available and they are different
-    if (pInviter && pInviter != pSelf)
+    if (pInviter && pInviter->IsCampaignReady() && pInviter != pSelf)
     {
         auto& inviterPartyComponent = pInviter->GetParty();
         auto& selfPartyComponent = pSelf->GetParty();
@@ -386,13 +386,13 @@ void PartyService::BroadcastPlayerList(Player* apPlayer) const noexcept
     auto pIgnoredPlayer = apPlayer;
     for (auto pSelf : m_world.GetPlayerManager())
     {
-        if (pIgnoredPlayer == pSelf)
+        if (!pSelf->IsCampaignReady() || pIgnoredPlayer == pSelf)
             continue;
 
         NotifyPlayerList playerList;
         for (auto pPlayer : m_world.GetPlayerManager())
         {
-            if (pSelf == pPlayer)
+            if (!pPlayer->IsCampaignReady() || pSelf == pPlayer)
                 continue;
 
             if (pIgnoredPlayer == pPlayer)

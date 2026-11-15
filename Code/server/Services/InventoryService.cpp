@@ -3,6 +3,7 @@
 #include <Components.h>
 #include <World.h>
 #include <GameServer.h>
+#include <Services/PersistentObjects.h>
 
 #include <Messages/NotifyObjectInventoryChanges.h>
 #include <Messages/RequestInventoryChanges.h>
@@ -88,7 +89,25 @@ void InventoryService::OnInventoryChanges(const PacketEvent<RequestInventoryChan
     }
 
     auto& inventoryComponent = view.get<InventoryComponent>(*it);
-    inventoryComponent.Content.AddOrRemoveEntry(message.Item);
+    if (m_world.all_of<ObjectComponent>(*it))
+    {
+        ObjectData snapshot;
+        if (!GetPersistentObject(m_world, *it, snapshot))
+            return;
+        if (!Campaign::ApplyInventoryDelta(snapshot.CurrentInventory, message.Item))
+        {
+            GameServer::Get()->StopForWorldError("Conflicting or overflowing object inventory operation; no authoritative change was committed");
+            return;
+        }
+        if (!m_world.GetCampaign().SaveObject(snapshot))
+        {
+            GameServer::Get()->StopForWorldError(m_world.GetCampaign().Error());
+            return;
+        }
+        inventoryComponent.Content = std::move(snapshot.CurrentInventory);
+    }
+    else
+        inventoryComponent.Content.AddOrRemoveEntry(message.Item);
 
     if (!message.UpdateClients && !isRemoteNpcInteraction)
         return;

@@ -14,13 +14,25 @@ struct Mods
         uint16_t Id;
         bool IsLite{};
         std::array<uint8_t, 32> Digest{};
+        Vector<String> Masters;
 
-        bool operator==(const Entry& acRhs) const noexcept { return Filename == acRhs.Filename && Id == acRhs.Id && IsLite == acRhs.IsLite && Digest == acRhs.Digest; }
+        bool operator==(const Entry& acRhs) const noexcept
+        {
+            return Filename == acRhs.Filename && Id == acRhs.Id && IsLite == acRhs.IsLite && Digest == acRhs.Digest && Masters == acRhs.Masters;
+        }
 
         bool operator!=(const Entry& acRhs) const noexcept { return !this->operator==(acRhs); }
     };
 
+    struct Resource
+    {
+        String Filename;
+        std::array<uint8_t, 32> Digest{};
+        bool operator==(const Resource&) const noexcept = default;
+    };
+
     Vector<Entry> ModList{};
+    Vector<Resource> Resources{};
 
     Mods() = default;
     ~Mods() = default;

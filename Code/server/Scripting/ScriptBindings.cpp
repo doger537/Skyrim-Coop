@@ -4,6 +4,7 @@
 #include "Game/PlayerManager.h"
 
 #include <World.h>
+#include <BuildInfo.h>
 
 #include "Components/ActorValuesComponent.h"
 #include "Components/AnimationComponent.h"

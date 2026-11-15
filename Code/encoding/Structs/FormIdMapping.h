@@ -4,6 +4,15 @@
 #include <cstdint>
 #include <limits>
 
+// Never turn an invalid network BaseId into a different valid form by masking its high bits.
+inline bool ComposeRuntimeForm(uint32_t aSlot, bool aLite, uint32_t aBaseId, uint32_t& aRuntimeForm) noexcept
+{
+    if ((aLite && (aSlot > 0xFFF || aBaseId > 0xFFF)) || (!aLite && (aSlot >= 0xFE || aBaseId > 0xFFFFFF)))
+        return false;
+    aRuntimeForm = aLite ? (0xFE000000u | (aSlot << 12) | aBaseId) : ((aSlot << 24) | aBaseId);
+    return true;
+}
+
 // Standard-plugin lookup is explicitly partial. An unknown slot is never Skyrim.esm (server id 0).
 struct StandardModMapping
 {

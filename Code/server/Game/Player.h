@@ -43,6 +43,8 @@ struct Player
 
     void Send(const ServerMessage& acServerMessage, TiltedPhoques::EPacketFlags aPacketFlags = TiltedPhoques::kReliable) const;
     bool AcceptInventoryOperation(uint64_t aId) noexcept { return m_inventoryOperations.Accept(aId); }
+    bool IsCampaignReady() const noexcept { return m_campaignReady; }
+    void SetCampaignReady() noexcept { m_campaignReady = true; }
 
 private:
     uint32_t m_id{0};
@@ -59,4 +61,5 @@ private:
     uint32_t m_stringCacheId{0};
     uint16_t m_level{0};
     OperationWindow m_inventoryOperations;
+    bool m_campaignReady{};
 };

@@ -6,6 +6,7 @@
 struct World;
 struct UpdateEvent;
 struct RequestQuestUpdate;
+struct Player;
 
 /**
  * @brief Dispatch quest sync messages.
@@ -16,6 +17,8 @@ class QuestService
 {
 public:
     QuestService(World& aWorld, entt::dispatcher& aDispatcher);
+    bool AllowsMisc() const noexcept;
+    void FillPlayerJournal(Player& aPlayer) const noexcept;
 
 private:
     void OnQuestChanges(const PacketEvent<RequestQuestUpdate>& aChanges) noexcept;

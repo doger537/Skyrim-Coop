@@ -28,6 +28,10 @@
 #include <Systems/ContentFingerprint.h>
 #include "../../../immersive_launcher/utils/FileVersion.inl"
 #include <Services/DiscordService.h>
+#include <Services/QuestService.h>
+#include <Messages/NotifyCampaignCheckpoint.h>
+#include <Messages/RequestCampaignReady.h>
+#include <Messages/RequestCampaignSeed.h>
 
 // #include <imgui_internal.h>
 
@@ -67,6 +71,11 @@ TransportService::TransportService(World& aWorld, entt::dispatcher& aDispatcher)
         const auto pRealMessage = TiltedPhoques::CastUnique<AuthenticationResponse>(std::move(apMessage));
         HandleAuthenticationResponse(*pRealMessage);
     };
+    m_messageHandlers[NotifyCampaignCheckpoint::Opcode] = [this](UniquePtr<ServerMessage>& apMessage)
+    {
+        const auto message = TiltedPhoques::CastUnique<NotifyCampaignCheckpoint>(std::move(apMessage));
+        HandleCampaignCheckpoint(*message);
+    };
 }
 
 bool TransportService::Send(const ClientMessage& acMessage, const TiltedPhoques::EPacketFlags aPacketFlags) const noexcept
@@ -78,7 +87,8 @@ bool TransportService::Send(const ClientMessage& acMessage, const TiltedPhoques:
         ~ScopedReset() { s_allocator.Reset(); }
     } allocatorGuard;
 
-    if (Client::IsConnected() && (m_connected || acMessage.GetOpcode() == AuthenticationRequest::Opcode))
+    if (Client::IsConnected() && (m_connected || acMessage.GetOpcode() == AuthenticationRequest::Opcode ||
+                                  (m_pendingAuthentication && (acMessage.GetOpcode() == RequestCampaignReady::Opcode || acMessage.GetOpcode() == RequestCampaignSeed::Opcode))))
     {
         ScopedAllocator _{s_allocator};
 
@@ -116,6 +126,8 @@ void TransportService::OnConsume(const void* apData, uint32_t aSize)
 void TransportService::OnConnected()
 {
     m_connected = false;
+    m_pendingAuthentication.reset();
+    m_campaignNonce = 0;
     ++m_connectionGeneration;
     AuthenticationRequest request{};
     request.Version = BUILD_COMMIT;
@@ -154,10 +166,15 @@ void TransportService::OnConnected()
         entry.Filename = pMod->filename;
     }
 
-    if (pPlayer->GetWorldSpace())
-        ContentCompatibility::EncodeInitialForm(pPlayer->GetWorldSpace()->formID, request.UserMods, request.WorldSpaceId);
-
-    ContentCompatibility::EncodeInitialForm(pPlayer->parentCell->formID, request.UserMods, request.CellId);
+    const bool cWorldMapped = !pPlayer->GetWorldSpace() || ContentCompatibility::EncodeInitialForm(pPlayer->GetWorldSpace()->formID, request.UserMods, request.WorldSpaceId);
+    if (!cWorldMapped || !pPlayer->parentCell || !ContentCompatibility::EncodeInitialForm(pPlayer->parentCell->formID, request.UserMods, request.CellId))
+    {
+        ConnectionErrorEvent event;
+        event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"Cannot map the current location. Load a save in a supported installed cell and reconnect\"}}";
+        m_dispatcher.trigger(event);
+        Close();
+        return;
+    }
 
     request.Level = pPlayer->GetLevel();
 
@@ -174,6 +191,8 @@ void TransportService::OnConnected()
 void TransportService::OnDisconnected(EDisconnectReason aReason)
 {
     m_connected = false;
+    m_pendingAuthentication.reset();
+    m_campaignNonce = 0;
     ++m_connectionGeneration;
     m_queuedAuthentication.reset();
 
@@ -207,16 +226,20 @@ void TransportService::OnUpdate()
         m_queuedAuthentication.reset();
         m_manifestGeneration = m_connectionGeneration;
         const auto dataPath = std::filesystem::current_path() / L"Data";
+        auto runtime = request.RuntimeVersion;
+        std::replace(runtime.begin(), runtime.end(), '.', '-');
+        const auto addressLibrary = dataPath / L"SKSE" / L"Plugins" / (std::string("versionlib-") + runtime.c_str() + ".bin");
+        const auto scriptExtender = GetScriptExtenderPath();
         // Only file IO and copies of the manifest cross threads; no engine objects do.
         m_manifestTask = std::async(
             std::launch::async,
-            [request = std::move(request), dataPath]() mutable
+            [request = std::move(request), dataPath, addressLibrary, scriptExtender]() mutable
             {
-                for (auto& entry : request.UserMods.ModList)
+                FingerprintContent(dataPath, addressLibrary, scriptExtender, request.UserMods);
+                if (request.SKSEActive && scriptExtender.empty())
                 {
-                    const std::u8string filename(reinterpret_cast<const char8_t*>(entry.Filename.data()), entry.Filename.size());
-                    const auto path = dataPath / filename;
-                    FingerprintPluginFile(path, entry.Digest);
+                    auto& missing = request.UserMods.Resources.emplace_back();
+                    missing.Filename = "runtime/skse";
                 }
                 return request;
             });
@@ -251,13 +274,26 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
     using AR = AuthenticationResponse::ResponseType;
     if (acMessage.Type == AR::kAccepted)
     {
-        m_connected = true;
-
+        if (acMessage.Version != BUILD_COMMIT)
+        {
+            ConnectionErrorEvent event;
+            event.ErrorDetail =
+                "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"Server build differs. Install the same Skyrim True Coop build on all clients and the server\"}}";
+            m_dispatcher.trigger(event);
+            Close();
+            return;
+        }
+        if (m_pendingAuthentication || m_connected || acMessage.WorldId.size() != 32)
+        {
+            FailCampaign("Invalid or duplicate campaign authentication response");
+            return;
+        }
+        m_pendingAuthentication = acMessage;
         m_world.SetServerSettings(acMessage.Settings);
 
         m_dispatcher.trigger(acMessage.UserMods);
         m_dispatcher.trigger(acMessage.Settings);
-        m_dispatcher.trigger(ConnectedEvent(acMessage.PlayerId));
+        // Gameplay begins only after the saved common journal has been checked.
         return; // quit the function here.
     }
 
@@ -295,9 +331,11 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
         if (acMessage.SKSEActive)
             ErrorInfo += "\"SKSE\"";
         if (acMessage.MO2Active)
+        {
             if (acMessage.SKSEActive)
                 ErrorInfo += ",";
-        ErrorInfo += "\"MO2\"";
+            ErrorInfo += "\"MO2\"";
+        }
         ErrorInfo += "]}";
         break;
     }
@@ -330,4 +368,50 @@ void TransportService::HandleNotifySettingsChange(const NotifySettingsChange& ac
 {
     m_world.SetServerSettings(acMessage.Settings);
     m_dispatcher.trigger(acMessage.Settings);
+}
+
+void TransportService::FailCampaign(const String& acReason) noexcept
+{
+    ConnectionErrorEvent event;
+    event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acReason) + "\"}}";
+    m_dispatcher.trigger(event);
+    Close();
+}
+
+void TransportService::HandleCampaignCheckpoint(const NotifyCampaignCheckpoint& acMessage) noexcept
+{
+    if (!m_pendingAuthentication || !acMessage.Decoded || acMessage.WorldId != m_pendingAuthentication->WorldId || !acMessage.Nonce || m_connected)
+    {
+        FailCampaign("Unexpected shared campaign checkpoint");
+        return;
+    }
+    if (acMessage.State == NotifyCampaignCheckpoint::Begin)
+    {
+        if (acMessage.Nonce <= m_campaignNonce)
+        {
+            FailCampaign("Stale shared campaign checkpoint");
+            return;
+        }
+        m_campaignNonce = acMessage.Nonce;
+    }
+    else if (acMessage.Nonce != m_campaignNonce)
+    {
+        FailCampaign("Shared campaign checkpoint nonce differs");
+        return;
+    }
+    if (acMessage.State == NotifyCampaignCheckpoint::Accepted)
+    {
+        String error;
+        if (!m_world.ctx().at<QuestService>().ConfirmCampaign(error, &acMessage))
+        {
+            FailCampaign(error);
+            return;
+        }
+        const uint32_t player = m_pendingAuthentication->PlayerId;
+        m_pendingAuthentication.reset();
+        m_connected = true;
+        m_dispatcher.trigger(ConnectedEvent(player));
+        return;
+    }
+    m_dispatcher.trigger(acMessage);
 }

@@ -5,6 +5,7 @@
 #include <TiltedCore/Buffer.hpp>
 #include <Structs/GameId.h>
 #include <Structs/TimeModel.h>
+#include <Structs/ProtocolVersion.h>
 
 struct AuthenticationRequest final : ClientMessage
 {
@@ -22,11 +23,13 @@ struct AuthenticationRequest final : ClientMessage
 
     bool operator==(const AuthenticationRequest& achRhs) const noexcept
     {
-        return GetOpcode() == achRhs.GetOpcode() && DiscordId == achRhs.DiscordId && SKSEActive == achRhs.SKSEActive && MO2Active == achRhs.MO2Active && Token == achRhs.Token &&
-               Version == achRhs.Version && UserMods == achRhs.UserMods && Username == achRhs.Username && RuntimeVersion == achRhs.RuntimeVersion &&
-               WorldSpaceId == achRhs.WorldSpaceId && CellId == achRhs.CellId && Level == achRhs.Level && PlayerTime == achRhs.PlayerTime;
+        return GetOpcode() == achRhs.GetOpcode() && ProtocolVersion == achRhs.ProtocolVersion && DiscordId == achRhs.DiscordId && SKSEActive == achRhs.SKSEActive &&
+               MO2Active == achRhs.MO2Active && Token == achRhs.Token && Version == achRhs.Version && UserMods == achRhs.UserMods && Username == achRhs.Username &&
+               RuntimeVersion == achRhs.RuntimeVersion && WorldSpaceId == achRhs.WorldSpaceId && CellId == achRhs.CellId && Level == achRhs.Level &&
+               PlayerTime == achRhs.PlayerTime;
     }
 
+    uint32_t ProtocolVersion{kTrueCoopProtocolVersion};
     uint64_t DiscordId{};
     bool SKSEActive{};
     bool MO2Active{};

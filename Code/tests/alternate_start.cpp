@@ -12,6 +12,12 @@ TEST_CASE("Alternate Start requires its dependency before accepting a profile", 
     mods.ModList.push_back({"Alternate Start - Live Another Life.esp", 3, false});
     for (auto& entry : mods.ModList)
         entry.Digest.fill(42);
+    for (const char* name : {"runtime/address-library", "data/loose-files"})
+    {
+        auto& resource = mods.Resources.emplace_back();
+        resource.Filename = name;
+        resource.Digest.fill(42);
+    }
     REQUIRE(ContentCompatibility::Validate(mods).Reason == ContentCompatibility::Issue::MissingDependency);
     mods.ModList.push_back({"Unofficial Skyrim Special Edition Patch.esp", 4, false});
     mods.ModList.back().Digest.fill(43);

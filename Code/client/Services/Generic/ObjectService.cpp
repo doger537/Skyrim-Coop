@@ -2,6 +2,7 @@
 
 #include <World.h>
 #include <Events/DisconnectedEvent.h>
+#include <Events/ConnectedEvent.h>
 #include <Events/UpdateEvent.h>
 #include <Events/CellChangeEvent.h>
 #include <Events/ActivateEvent.h>
@@ -31,6 +32,7 @@ ObjectService::ObjectService(World& aWorld, entt::dispatcher& aDispatcher, Trans
     , m_transport(aTransport)
 {
     m_disconnectedConnection = aDispatcher.sink<DisconnectedEvent>().connect<&ObjectService::OnDisconnected>(this);
+    m_connectedConnection = aDispatcher.sink<ConnectedEvent>().connect<&ObjectService::OnConnected>(this);
     m_cellChangeConnection = aDispatcher.sink<CellChangeEvent>().connect<&ObjectService::OnCellChange>(this);
     m_onActivateConnection = aDispatcher.sink<ActivateEvent>().connect<&ObjectService::OnActivate>(this);
     m_activateConnection = aDispatcher.sink<NotifyActivate>().connect<&ObjectService::OnActivateNotify>(this);
@@ -103,14 +105,22 @@ bool ShouldSyncObject(const TESObjectREFR* apObject, const Set<const TESObjectRE
         return false;
     case 0x3EF03: // ...as well as in the "No One Escapes Cidhna Mine" quest
         return false;
-    default:
-        return true;
+    default: return true;
     }
 }
 
 void ObjectService::OnDisconnected(const DisconnectedEvent&) noexcept
 {
-    // TODO(cosideci): clear object components
+    Vector<entt::entity> stale;
+    for (const auto entity : m_world.view<ObjectComponent>())
+        stale.push_back(entity);
+    for (const auto entity : stale)
+        m_world.destroy(entity);
+}
+
+void ObjectService::OnConnected(const ConnectedEvent&) noexcept
+{
+    OnCellChange(CellChangeEvent{});
 }
 
 void ObjectService::OnCellChange(const CellChangeEvent& acEvent) noexcept
@@ -119,6 +129,8 @@ void ObjectService::OnCellChange(const CellChangeEvent& acEvent) noexcept
         return;
 
     PlayerCharacter* pPlayer = PlayerCharacter::Get();
+    if (!pPlayer || !pPlayer->parentCell)
+        return;
     TESObjectCELL* pCell = pPlayer->parentCell;
 
     // Player homes should not be synced, so that chest contents,
@@ -202,10 +214,9 @@ void ObjectService::OnAssignObjectsResponse(const AssignObjectsResponse& acMessa
         if (objectData.IsSenderFirst)
             continue;
 
-        if (objectData.CurrentLockData != LockData{})
+        Lock* pLock = pObject->GetLock();
+        if (pLock || objectData.CurrentLockData != LockData{})
         {
-            Lock* pLock = pObject->GetLock();
-
             if (!pLock)
             {
                 pLock = pObject->CreateLock();
@@ -286,7 +297,8 @@ void ObjectService::OnActivate(const ActivateEvent& acEvent) noexcept
     }
 
     auto view = m_world.view<FormIdComponent>();
-    const auto pEntity = std::find_if(std::begin(view), std::end(view), [id = acEvent.pActivator->formID, view](entt::entity entity) { return view.get<FormIdComponent>(entity).Id == id; });
+    const auto pEntity =
+        std::find_if(std::begin(view), std::end(view), [id = acEvent.pActivator->formID, view](entt::entity entity) { return view.get<FormIdComponent>(entity).Id == id; });
 
     if (pEntity == std::end(view))
     {
@@ -391,7 +403,7 @@ void ObjectService::OnLockChangeNotify(const NotifyLockChange& acMessage) noexce
 
     auto* pLock = pObject->GetLock();
 
-    if(!acMessage.IsLocked)
+    if (!acMessage.IsLocked)
     {
         if (!pLock || !pLock->IsLocked())
             return;
@@ -453,7 +465,8 @@ BSTEventResult ObjectService::OnEvent(const TESActivateEvent* acEvent, const Eve
 #if ENVIRONMENT_DEBUG
     auto view = m_world.view<ObjectComponent>();
 
-    const auto itor = std::find_if(std::begin(view), std::end(view), [id = acEvent->object->formID, view](entt::entity entity) { return view.get<ObjectComponent>(entity).Id == id; });
+    const auto itor =
+        std::find_if(std::begin(view), std::end(view), [id = acEvent->object->formID, view](entt::entity entity) { return view.get<ObjectComponent>(entity).Id == id; });
 
     if (itor == std::end(view))
     {

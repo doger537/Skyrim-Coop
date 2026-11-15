@@ -1,0 +1,46 @@
+{
+  "created_at": "2026-11-14T12:23:13+03:00",
+  "tested_source_commit": "5cf53c5f96b2020ff9264994e22b8247fcc47043",
+  "build_commit": "5cf53c5f",
+  "protocol": "0x54430002",
+  "environment": "Debian 13 x86_64; GCC 14.2.0; xmake 3.1.0; releasedbg",
+  "game_engine_running": false,
+  "game_files_used": false,
+  "advertised_runtime": "1.7.104.0 (synthetic request field; not an observed Skyrim executable)",
+  "manifest": "5 synthetic base plugin entries plus all 74 reference Creation filenames; synthetic masters/digests",
+  "unit_tests": {
+    "cases": 27,
+    "assertions": 606,
+    "exit_code": 0
+  },
+  "network_runs": [
+    {
+      "port": 10582,
+      "legacy_flag": true,
+      "named_scenarios": 20,
+      "exit_code": 0,
+      "shutdown": "/quit, exit 0"
+    },
+    {
+      "port": 10583,
+      "legacy_flag": false,
+      "named_scenarios": 20,
+      "exit_code": 0,
+      "shutdown": "/quit, exit 0"
+    }
+  ],
+  "content_audit_cli": {
+    "json_valid": true,
+    "unsafe_path_exit_code": 2,
+    "synthetic_TES4_only": true
+  },
+  "gameplay_status": "not-game-tested",
+  "windows_ci": "pending; no local Windows compilation or gameplay claimed",
+  "binary_sha256": {
+    "SkyrimTogetherServer": "52abdfe76f5df2c9ffd8ea24bcf708b16e93d24afbf57a61641e2d038b8e587e",
+    "libSTServer.so": "0aebd446a864e92bc9c466b6fda6f2d29bed94cad7f08b0f16beb4d93b33e6a9",
+    "TrueCoopProtocolProbe": "136a8fbd8f2587bcafe40daabdd51924c9fe1e569f6289ce5f3e2cda18264cfd",
+    "TPTests": "ec3fabf320873db325c6e6d9880512e376333e3553f651ae55b8756dcaaec1bd",
+    "TrueCoopContentAudit": "8a56431b2ed3ab970055c27284a31e676a70dfa866d1c70b17ddbf44c4c57c12"
+  }
+}

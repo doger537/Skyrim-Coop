@@ -1,0 +1,2 @@
+PASS: CC container survives empty cells and server restart without stale-upload replacement
+PASS: shared quest stages survive reconnect and server restart

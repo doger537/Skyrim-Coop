@@ -1,0 +1,8 @@
+target("TrueCoopContentAudit")
+    set_kind("binary")
+    set_group("Tools")
+    set_default(false)
+    add_files("main.cpp", "../client/Systems/ContentFingerprint.cpp")
+    add_deps("SkyrimEncoding")
+    add_packages("tiltedcore", "hopscotch-map", "glm", "cryptopp")
+    add_includedirs("../encoding")

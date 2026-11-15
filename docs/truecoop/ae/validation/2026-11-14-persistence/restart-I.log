@@ -1,0 +1,3 @@
+PASS: CC container survives empty cells and server restart without stale-upload replacement
+PASS: fresh lock and inventory commits are visible before crash recovery
+PASS: shared quest stages survive reconnect and server restart

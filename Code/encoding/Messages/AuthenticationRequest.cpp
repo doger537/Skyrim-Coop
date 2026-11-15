@@ -2,6 +2,7 @@
 
 void AuthenticationRequest::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
 {
+    aWriter.WriteBits(ProtocolVersion, 32);
     Serialization::WriteVarInt(aWriter, DiscordId);
     Serialization::WriteBool(aWriter, SKSEActive);
     Serialization::WriteBool(aWriter, MO2Active);
@@ -19,6 +20,12 @@ void AuthenticationRequest::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter)
 void AuthenticationRequest::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept
 {
     ClientMessage::DeserializeRaw(aReader);
+
+    uint64_t protocol = 0;
+    aReader.ReadBits(protocol, 32);
+    ProtocolVersion = static_cast<uint32_t>(protocol);
+    if (ProtocolVersion != kTrueCoopProtocolVersion)
+        return;
 
     DiscordId = Serialization::ReadVarInt(aReader);
     SKSEActive = Serialization::ReadBool(aReader);

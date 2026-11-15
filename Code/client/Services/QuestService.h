@@ -3,6 +3,8 @@
 #include <World.h>
 #include <Events/EventDispatcher.h>
 #include <Games/Events.h>
+#include <Messages/NotifyQuestJournal.h>
+#include <Messages/NotifyCampaignCheckpoint.h>
 
 struct NotifyQuestUpdate;
 struct DisconnectedEvent;
@@ -12,24 +14,10 @@ struct UpdateEvent;
 struct TESQuest;
 
 /**
- * @brief Syncs quest starts, stops and stages across the party
- *
- * Every client runs the party's quests itself (scripts, scenes, dialogue), and only starts, stops and stages are
- * shared. Anything else a quest holds (aliases, script properties) only matches when the stage fragments produce it.
- *
- * Sending: TESQuestStartStopEvent and TESQuestStageEvent go out as RequestQuestUpdate, only in a party (outside one, an
- * update may prompt the overlay to suggest one). Failed starts, quests without stages and those in
- * kNonSyncableQuestIds are never sent, and the server drops None/Miscellaneous ones unless bEnableMiscQuestSync is set.
- *
- * Relaying: the server sends updates to the rest of the party as NotifyQuestUpdate. Members' scripts often reach the
- * same stage on their own, so it relays each once, from whoever reaches it first, until the quest next starts or stops.
- *
- * Applying: stages go through ScriptSetStage so their fragments run (and a stopped quest restarts), skipping those
- * already reached. Stops skip scripts. ScopedQuestOverride keeps the events this fires from being sent back.
- *
- * Scenes: setting a stage a playing scene waits on can end its phase early, skipping its lines and scripts and leaving
- * the quest stuck. So the leader, whose world the party follows, holds member stages that an upcoming phase checks and
- * queues later ones behind them. Members apply every stage right away.
+ * Syncs one world-wide quest event journal. Socket authentication is followed by
+ * baseline validation before gameplay starts. Replay requires a pinned adapter;
+ * this journal does not serialize Papyrus VM state, aliases or rewards.
+ * Existing scene guards defer live stages checked by the party leader's scenes.
  */
 class QuestService final : public BSTEventSink<TESQuestStartStopEvent>,
                            BSTEventSink<TESQuestStageEvent>,
@@ -46,6 +34,7 @@ public:
     static bool IsNonSyncableQuest(TESQuest* apQuest);
     static void DebugDumpQuests();
     static bool StopQuest(uint32_t aformId);
+    bool ConfirmCampaign(String& aError, const NotifyCampaignCheckpoint* apAccepted = nullptr) noexcept;
 
     struct HeldStages
     {
@@ -70,6 +59,12 @@ private:
     BSTEventResult OnEvent(const TESTopicInfoEvent*, const EventDispatcher<TESTopicInfoEvent>*) override;
 
     void OnQuestUpdate(const NotifyQuestUpdate&) noexcept;
+    void OnCampaignCheckpoint(const NotifyCampaignCheckpoint&) noexcept;
+    void OnQuestJournal(const NotifyQuestJournal&) noexcept;
+    bool CheckCampaign(bool aApply, String& aError) noexcept;
+    bool SeedCampaign(uint32_t& aCount, String& aError) noexcept;
+    bool IsSharedQuest(TESQuest* apQuest) const noexcept;
+    void SendQuestUpdate(uint32_t aFormId, uint16_t aStage, uint8_t aStatus, uint8_t aType) noexcept;
     void HoldStage(TESQuest* apQuest, uint16_t aStage) noexcept;
     // The quest's held stages, while it has stages to apply or fragments to wait for. Drops the stages that can't be
     // applied anymore.
@@ -79,10 +74,22 @@ private:
     World& m_world;
     // Keyed by quest form ID
     Map<uint32_t, HeldStages> m_heldStages{};
+    struct Cursor
+    {
+        uint32_t Epoch{1};
+        uint64_t Revision{};
+        bool Stopped{};
+    };
+    Map<uint32_t, Cursor> m_cursors;
+    NotifyCampaignCheckpoint m_checkpoint;
+    Vector<NotifyQuestJournal> m_journals;
+    bool m_checkpointComplete{};
 
     entt::scoped_connection m_joinedConnection;
     entt::scoped_connection m_updateConnection;
     entt::scoped_connection m_disconnectedConnection;
     entt::scoped_connection m_leftConnection;
     entt::scoped_connection m_questUpdateConnection;
+    entt::scoped_connection m_checkpointConnection;
+    entt::scoped_connection m_journalConnection;
 };

@@ -9,7 +9,7 @@ target("TPTests")
     -- Has no game dependencies, so the client's remote playback timing can be tested here
     add_files("../client/Systems/PlaybackClock.cpp")
     add_files("../client/Systems/ContentFingerprint.cpp")
-    add_deps("SkyrimEncoding")
+    add_deps("SkyrimEncoding", "TrueCoopState")
     add_packages(
         "tiltedcore",
         "hopscotch-map",

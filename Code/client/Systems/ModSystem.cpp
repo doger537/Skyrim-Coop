@@ -50,19 +50,10 @@ uint32_t ModSystem::GetGameId(uint32_t aServerId, uint32_t aFormId) const noexce
     auto itor = m_serverToGame.find(aServerId);
     if (itor != std::end(m_serverToGame))
     {
-        if (itor->second.isLite)
-        {
-            aFormId &= 0xFFFu;
-            aFormId |= 0xFE000000u;
-            aFormId |= uint32_t(itor->second.id) << 12;
-        }
-        else
-        {
-            aFormId &= 0x00FFFFFFu;
-            aFormId |= uint32_t(itor->second.id) << 24;
-        }
-
-        return aFormId;
+        uint32_t runtimeForm = 0;
+        if (ComposeRuntimeForm(itor->second.id, itor->second.isLite, aFormId, runtimeForm))
+            return runtimeForm;
+        spdlog::warn("Refused invalid network form: mod {:X}, base {:X}", aServerId, aFormId);
     }
 
     return 0;

@@ -5,6 +5,7 @@
 
 struct ServerTimeSettings;
 struct DisconnectedEvent;
+struct ConnectedEvent;
 struct World;
 struct ActivateEvent;
 struct TransportService;
@@ -26,6 +27,7 @@ public:
 
 private:
     void OnDisconnected(const DisconnectedEvent&) noexcept;
+    void OnConnected(const ConnectedEvent&) noexcept;
     void OnCellChange(const CellChangeEvent&) noexcept;
     void OnAssignObjectsResponse(const AssignObjectsResponse&) noexcept;
     void OnActivate(const ActivateEvent&) noexcept;
@@ -43,6 +45,7 @@ private:
     TransportService& m_transport;
 
     entt::scoped_connection m_disconnectedConnection;
+    entt::scoped_connection m_connectedConnection;
     entt::scoped_connection m_cellChangeConnection;
     entt::scoped_connection m_onActivateConnection;
     entt::scoped_connection m_activateConnection;

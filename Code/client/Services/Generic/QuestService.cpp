@@ -43,11 +43,13 @@ QuestService::QuestService(World& aWorld, entt::dispatcher& aDispatcher)
     m_updateConnection = aDispatcher.sink<UpdateEvent>().connect<&QuestService::OnUpdate>(this);
     m_disconnectedConnection = aDispatcher.sink<DisconnectedEvent>().connect<&QuestService::OnDisconnected>(this);
     m_leftConnection = aDispatcher.sink<PartyLeftEvent>().connect<&QuestService::OnPartyLeft>(this);
+    m_checkpointConnection = aDispatcher.sink<NotifyCampaignCheckpoint>().connect<&QuestService::OnCampaignCheckpoint>(this);
+    m_journalConnection = aDispatcher.sink<NotifyQuestJournal>().connect<&QuestService::OnQuestJournal>(this);
     m_questUpdateConnection = aDispatcher.sink<NotifyQuestUpdate>().connect<&QuestService::OnQuestUpdate>(this);
 
     // Game events:
     // Starts, stops and stages are sent from TESQuestStartStopEvent and TESQuestStageEvent, which fire while the quest
-    // changes. Outside a party they only prompt the overlay.
+    // changes. They are sent only after campaign admission.
     // TESQuestStageItemDoneEvent fires once for each of a stage's log entries, after its fragment has run. That's too
     // late to send on, but it tells when an applied held stage is done.
     // The scene, scene action, phase and dialogue line events are only logged, to follow scenes when debugging held
@@ -102,11 +104,15 @@ void QuestService::OnUpdate(const UpdateEvent&) noexcept
 void QuestService::OnDisconnected(const DisconnectedEvent&) noexcept
 {
     m_heldStages.clear();
+    m_cursors.clear();
+    m_journals.clear();
+    m_checkpointComplete = false;
+    m_checkpoint = {};
 }
 
 void QuestService::OnPartyLeft(const PartyLeftEvent&) noexcept
 {
-    m_heldStages.clear();
+    // The campaign continues when a player leaves a party.
 }
 
 BSTEventResult QuestService::OnEvent(const TESQuestStartStopEvent* apEvent, const EventDispatcher<TESQuestStartStopEvent>*)
@@ -118,7 +124,7 @@ BSTEventResult QuestService::OnEvent(const TESQuestStartStopEvent* apEvent, cons
     if (apEvent->started && apEvent->failed)
         return BSTEventResult::kOk;
 
-    if (!m_world.Get().GetPartyService().IsInParty())
+    if (!m_world.GetTransport().IsConnected())
     {
         if (apEvent->started)
             NotifyOverlayOfQuestUpdate(apEvent->formId);
@@ -148,20 +154,11 @@ BSTEventResult QuestService::OnEvent(const TESQuestStartStopEvent* apEvent, cons
         }
 
         m_world.GetRunner().Queue(
-            [&, formId = pQuest->formID, stageId = pQuest->currentStage, stopped = pQuest->IsStopped(), type = pQuest->type]()
+            [this, generation = m_world.GetTransport().GetConnectionGeneration(), formId = pQuest->formID, stageId = pQuest->currentStage, stopped = pQuest->IsStopped(),
+             type = pQuest->type]()
             {
-                GameId Id;
-                auto& modSys = m_world.GetModSystem();
-                if (modSys.GetServerModId(formId, Id))
-                {
-                    RequestQuestUpdate update;
-                    update.Id = Id;
-                    update.Stage = stageId;
-                    update.Status = stopped ? RequestQuestUpdate::Stopped : RequestQuestUpdate::Started;
-                    update.ClientQuestType = static_cast<std::underlying_type_t<TESQuest::Type>>(type);
-
-                    m_world.GetTransport().Send(update);
-                }
+                if (generation == m_world.GetTransport().GetConnectionGeneration())
+                    SendQuestUpdate(formId, stageId, stopped ? RequestQuestUpdate::Stopped : RequestQuestUpdate::Started, static_cast<uint8_t>(type));
             });
     }
 
@@ -173,7 +170,7 @@ BSTEventResult QuestService::OnEvent(const TESQuestStageEvent* apEvent, const Ev
     if (ScopedQuestOverride::IsOverriden())
         return BSTEventResult::kOk;
 
-    if (!m_world.Get().GetPartyService().IsInParty())
+    if (!m_world.GetTransport().IsConnected())
     {
         NotifyOverlayOfQuestUpdate(apEvent->formId);
         return BSTEventResult::kOk;
@@ -202,20 +199,10 @@ BSTEventResult QuestService::OnEvent(const TESQuestStageEvent* apEvent, const Ev
         }
 
         m_world.GetRunner().Queue(
-            [&, formId = apEvent->formId, stageId = apEvent->stageId, type = pQuest->type]()
+            [this, generation = m_world.GetTransport().GetConnectionGeneration(), formId = apEvent->formId, stageId = apEvent->stageId, type = pQuest->type]()
             {
-                GameId Id;
-                auto& modSys = m_world.GetModSystem();
-                if (modSys.GetServerModId(formId, Id))
-                {
-                    RequestQuestUpdate update;
-                    update.Id = Id;
-                    update.Stage = stageId;
-                    update.Status = RequestQuestUpdate::StageUpdate;
-                    update.ClientQuestType = static_cast<std::underlying_type_t<TESQuest::Type>>(type);
-
-                    m_world.GetTransport().Send(update);
-                }
+                if (generation == m_world.GetTransport().GetConnectionGeneration())
+                    SendQuestUpdate(formId, stageId, RequestQuestUpdate::StageUpdate, static_cast<uint8_t>(type));
             });
     }
 
@@ -506,6 +493,15 @@ void QuestService::OnQuestUpdate(const NotifyQuestUpdate& aUpdate) noexcept
 {
     ModSystem& modSystem = World::Get().GetModSystem();
     uint32_t formId = modSystem.GetGameId(aUpdate.Id);
+    if (aUpdate.Revision)
+    {
+        auto& cursor = m_cursors[formId];
+        if (aUpdate.Epoch < cursor.Epoch || aUpdate.Revision < cursor.Revision)
+            return;
+        cursor = {aUpdate.Epoch, aUpdate.Revision, aUpdate.RunStopped};
+    }
+    if (aUpdate.AcknowledgementOnly)
+        return;
     TESQuest* pQuest = Cast<TESQuest>(TESForm::GetById(formId));
     if (AlternateStart::IsPersonalQuest(formId))
         return;
@@ -553,7 +549,8 @@ void QuestService::OnQuestUpdate(const NotifyQuestUpdate& aUpdate) noexcept
     {
     case NotifyQuestUpdate::Started:
     {
-        pQuest->ScriptSetStage(aUpdate.Stage);
+        if (pQuest->IsStopped() || (aUpdate.Stage != 0 && !pQuest->IsStageReached(aUpdate.Stage)))
+            pQuest->ScriptSetStage(aUpdate.Stage);
         pQuest->SetActive(true);
         bResult = true;
         spdlog::info("Remote quest started: {:X}, stage: {}", formId, aUpdate.Stage);

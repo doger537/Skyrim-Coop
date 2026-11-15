@@ -725,7 +725,7 @@ void CharacterService::CreateCharacter(const PacketEvent<AssignCharacterRequest>
         const auto pPlayer = acMessage.pPlayer;
 
         pPlayer->SetCharacter(cEntity);
-        pPlayer->GetQuestLogComponent().QuestContent = message.QuestContent;
+        m_world.GetQuestService().FillPlayerJournal(*pPlayer);
         characterComponent.PlayerId = pPlayer->GetId();
 
         auto& dispatcher = m_world.GetDispatcher();
