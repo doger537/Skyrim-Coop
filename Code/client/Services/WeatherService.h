@@ -42,6 +42,10 @@ private:
     * For non-leaders, it is used to reapply the server weather if it changes.
     */
     uint32_t m_cachedWeatherId{};
+    uint32_t m_forcedWeatherId{};
+    uint32_t m_partyLeaderPlayerId{};
+    double m_weatherSyncElapsed{};
+    bool m_weatherOverrideActive{};
 
     entt::scoped_connection m_updateConnection;
     entt::scoped_connection m_disconnectConnection;

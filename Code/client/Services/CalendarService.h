@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DateTime.h>
+#include <ReplicationClock.h>
 #include <Events/EventDispatcher.h>
 #include <Games/Events.h>
 
@@ -37,8 +38,7 @@ private:
     float m_fadeTimer = 0.f;
     static bool s_gameClockLocked;
 
-    uint64_t m_lastTick = 0;
-    uint64_t m_lastLogTick = 0;
+    ReplicationClock::TickBaseline m_tickBaseline;
     World& m_world;
     TransportService& m_transport;
 };

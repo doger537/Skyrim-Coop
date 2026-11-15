@@ -290,6 +290,8 @@ void CharacterService::OnOwnershipTransferRequest(const PacketEvent<RequestOwner
         if (pFormIdComponent)
         {
             NotifyActorTeleport notify{};
+            notify.ServerId = message.ServerId;
+            notify.OwnershipEpoch = message.OwnershipEpoch;
             notify.FormId = pFormIdComponent->Id;
             notify.WorldSpaceId = message.WorldSpaceId;
             notify.CellId = message.CellId;

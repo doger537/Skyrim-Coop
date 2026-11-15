@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <EncodingPch.h>
 #include <TiltedCore/Stl.hpp>
@@ -25,6 +26,10 @@
 #include <Structs/AnniversaryContent.h>
 #include <Messages/PartyCreateRequest.h>
 #include <Messages/NotifyPartyJoined.h>
+#include <Messages/RequestWeatherChange.h>
+#include <Messages/RequestCurrentWeather.h>
+#include <Messages/NotifyWeatherChange.h>
+#include <Messages/ServerTimeSettings.h>
 #include <Messages/RequestQuestUpdate.h>
 #include <Messages/NotifyQuestUpdate.h>
 #include <BuildInfo.h>
@@ -54,6 +59,11 @@ struct Probe final : Client
     uint32_t QuestNotifications{};
     uint16_t LastQuestStage{};
     bool InParty{};
+    bool PartyLeader{};
+    uint32_t WeatherNotifications{};
+    GameId LastWeather{};
+    uint32_t TimeNotifications{};
+    std::optional<ServerTimeSettings> Time;
     bool Ready{};
     bool AutoReady{true};
     uint64_t Nonce{};
@@ -124,7 +134,20 @@ struct Probe final : Client
         else if (message && message->GetOpcode() == NotifyLockChange::Opcode)
             ++LockNotifications;
         else if (message && message->GetOpcode() == NotifyPartyJoined::Opcode)
+        {
             InParty = true;
+            PartyLeader = static_cast<NotifyPartyJoined*>(message.get())->IsLeader;
+        }
+        else if (message && message->GetOpcode() == NotifyWeatherChange::Opcode)
+        {
+            ++WeatherNotifications;
+            LastWeather = static_cast<NotifyWeatherChange*>(message.get())->Id;
+        }
+        else if (message && message->GetOpcode() == ServerTimeSettings::Opcode)
+        {
+            ++TimeNotifications;
+            Time = *static_cast<ServerTimeSettings*>(message.get());
+        }
         else if (message && message->GetOpcode() == NotifyQuestUpdate::Opcode)
         {
             if (!static_cast<NotifyQuestUpdate*>(message.get())->AcknowledgementOnly)
@@ -582,9 +605,91 @@ bool CheckCampaignAdmission(const std::string& address)
     return passed && seedPassed && objectPassed && restored;
 }
 
+bool CheckEnvironment(const std::string& acAddress)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(90);
+    Probe leader, member;
+    leader.Request = MakeRequest();
+    member.Request = MakeRequest();
+    const auto check = [](bool aPassed, const char* apName)
+    {
+        std::cout << (aPassed ? "PASS: " : "FAIL: ") << apName << std::endl;
+        return aPassed;
+    };
+    if (!check(ConnectProbe(leader, acAddress, ResponseType::kAccepted) && ConnectProbe(member, acAddress, ResponseType::kAccepted), "environment probes authenticate"))
+        return false;
+    const auto pump = [&](const auto& acDone, int aSeconds = 5)
+    {
+        const auto until = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::seconds(aSeconds));
+        while (!acDone() && std::chrono::steady_clock::now() < until)
+        {
+            leader.Update();
+            member.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return acDone();
+    };
+    AssignCharacterRequest assign;
+    assign.ReferenceId = GameId(0, 0x14);
+    assign.CellId = leader.Request.CellId;
+    leader.SendMessage(assign);
+    member.SendMessage(assign);
+    if (!check(pump([&] { return leader.Assignment && member.Assignment; }), "both synthetic player characters are loaded"))
+        return false;
+    leader.SendMessage(PartyCreateRequest());
+    if (!check(pump([&] { return leader.InParty && member.InParty; }) && leader.PartyLeader && !member.PartyLeader,
+               "private default auto-party joins member under the leader"))
+        return false;
+
+    RequestWeatherChange weather;
+    weather.Id = GameId(0, 0x10a230);
+    leader.SendMessage(weather);
+    if (!check(pump([&] { return member.WeatherNotifications > 0; }) && member.LastWeather == weather.Id, "leader weather reaches party member"))
+        return false;
+    uint32_t before = member.WeatherNotifications;
+    RequestWeatherChange forged;
+    forged.Id = GameId(0, 0x10a231);
+    member.SendMessage(forged);
+    member.SendMessage(RequestCurrentWeather()); // Same reliable stream fences the attempted overwrite.
+    if (!check(pump([&] { return member.WeatherNotifications > before; }) && member.LastWeather == weather.Id, "guest cannot overwrite party weather cache"))
+        return false;
+    before = leader.WeatherNotifications;
+    RequestWeatherChange empty;
+    empty.Id = GameId{};
+    leader.SendMessage(empty);
+    leader.SendMessage(RequestCurrentWeather());
+    if (!check(pump([&] { return leader.WeatherNotifications > before; }) && leader.LastWeather == weather.Id, "empty leader weather cannot erase cache"))
+        return false;
+    before = member.WeatherNotifications;
+    weather.Id = GameId(0, 0x10a232);
+    leader.SendMessage(weather);
+    if (!pump([&] { return member.WeatherNotifications > before; }))
+        return check(false, "leader replacement weather arrives");
+    before = member.WeatherNotifications;
+    member.SendMessage(RequestCurrentWeather());
+    if (!check(pump([&] { return member.WeatherNotifications > before; }) && member.LastWeather == weather.Id, "member cache request returns updated leader weather"))
+        return false;
+
+    if (!leader.Time || !member.Time)
+        return check(false, "initial server clock snapshot arrives");
+    const uint32_t leaderTimeBefore = leader.TimeNotifications;
+    const uint32_t memberTimeBefore = member.TimeNotifications;
+    const float previousHour = leader.Time->timeModel.Time;
+    std::cout << "Waiting for the normal 60-second server calendar refresh (90-second total deadline)" << std::endl;
+    const bool refreshed = pump([&] { return leader.TimeNotifications > leaderTimeBefore && member.TimeNotifications > memberTimeBefore; }, 90);
+    const bool passed = check(refreshed && leader.TimeNotifications == leaderTimeBefore + 1 && member.TimeNotifications == memberTimeBefore + 1 &&
+                              *leader.Time == *member.Time && leader.Time->timeModel.TimeScale > 0.f && leader.Time->timeModel.Time != previousHour,
+                              "one automatic calendar refresh reaches both loaded players and time advances");
+    leader.Close();
+    member.Close();
+    return passed;
+}
+
 int main(int argc, char** argv)
 {
     const std::string address = argc > 1 ? argv[1] : "127.0.0.1:10582";
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-environment")
+        return CheckEnvironment(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-campaign-admission")
         return CheckCampaignAdmission(address) ? 0 : 1;
     if (argc > 2 && (std::string_view(argv[2]) == "--verify-world" || std::string_view(argv[2]) == "--touch-world"))

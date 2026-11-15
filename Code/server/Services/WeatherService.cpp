@@ -17,27 +17,29 @@ WeatherService::WeatherService(World& aWorld, entt::dispatcher& aDispatcher) noe
 
 void WeatherService::OnWeatherChange(const PacketEvent<RequestWeatherChange>& acMessage) const noexcept
 {
-    NotifyWeatherChange notify{};
-    notify.Id = acMessage.Packet.Id;
+    auto& partyService = m_world.GetPartyService();
+    if (!partyService.IsPlayerLeader(acMessage.pPlayer) || !acMessage.Packet.Id)
+        return;
 
-    auto* pParty = m_world.GetPartyService().GetPlayerParty(acMessage.pPlayer);
+    const auto character = acMessage.pPlayer->GetCharacter();
+    if (!character || !m_world.valid(*character) || !m_world.all_of<CharacterComponent, CellIdComponent>(*character))
+        return;
+
+    auto* pParty = partyService.GetPlayerParty(acMessage.pPlayer);
     if (!pParty)
         return;
 
+    NotifyWeatherChange notify{};
+    notify.Id = acMessage.Packet.Id;
     pParty->CachedWeather = notify.Id;
 
-    if (!acMessage.pPlayer->GetCharacter())
-        return;
-
-    const auto origin = *acMessage.pPlayer->GetCharacter();
-
-    GameServer::Get()->SendToPartyInRange(notify, acMessage.pPlayer->GetParty(), origin, acMessage.pPlayer);
+    GameServer::Get()->SendToPartyInRange(notify, acMessage.pPlayer->GetParty(), *character, acMessage.pPlayer);
 }
 
 void WeatherService::OnRequestCurrentWeather(const PacketEvent<RequestCurrentWeather>& acMessage) const noexcept
 {
     auto* pParty = m_world.GetPartyService().GetPlayerParty(acMessage.pPlayer);
-    if (!pParty)
+    if (!pParty || !pParty->CachedWeather)
         return;
 
     NotifyWeatherChange notify{};

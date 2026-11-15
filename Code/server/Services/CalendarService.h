@@ -2,6 +2,7 @@
 
 #include <Events/PacketEvent.h>
 #include <DateTime.h>
+#include <ReplicationClock.h>
 #include <Structs/GameId.h>
 
 struct World;
@@ -41,7 +42,8 @@ private:
     void SendTimeResync() noexcept;
 
     DateTime m_dateTime;
-    uint64_t m_lastTick = 0;
+    ReplicationClock::TickBaseline m_tickBaseline;
+    ReplicationClock::Cadence m_resyncCadence{60000};
     bool m_timeSetFromFirstPlayer = false;
 
     World& m_world;
