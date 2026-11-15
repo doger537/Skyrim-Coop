@@ -19,18 +19,10 @@ CalendarService::CalendarService(World& aWorld, entt::dispatcher& aDispatcher)
 
 void CalendarService::OnUpdate(const UpdateEvent&) noexcept
 {
-    if (!m_lastTick)
-        m_lastTick = GameServer::Get()->GetTick();
-
-    auto now = GameServer::Get()->GetTick();
-
-    // client got ahead, we wait
-    if (now < m_lastTick)
-        return;
-
-    auto delta = now - m_lastTick;
-    m_lastTick = now;
+    const uint64_t delta = m_tickBaseline.Sample(GameServer::Get()->GetTick());
     m_dateTime.Update(delta);
+    if (m_resyncCadence.Advance(delta))
+        SendTimeResync();
 }
 
 void CalendarService::OnPlayerJoin(const PlayerJoinEvent& acEvent) noexcept

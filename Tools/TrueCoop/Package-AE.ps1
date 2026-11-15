@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$NativeRevision = '', [string]$Distribution = '', [string]$Destination = '')
+param([string]$NativeRevision = '', [string]$Distribution = '', [string]$Destination = '', [string]$InstallGuide = '')
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $workspace = (Resolve-Path (Join-Path $repo '../..')).Path
@@ -45,13 +45,23 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'SharedContent.ps1') -Destinatio
 if (Test-Path -LiteralPath (Join-Path $runtime 'Play-CommonSE.cmd')) { throw 'AE package must not ship the CommonSE launcher' }
 $info = Join-Path $stage 'TrueCoop-AE-Info'
 New-Item -ItemType Directory -Path $info -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $repo 'AE_INSTALL_RU.md') -Destination $info
-Copy-Item -LiteralPath (Join-Path $repo 'AE_INSTALL_RU.md') -Destination (Join-Path (Split-Path $Destination -Parent) 'SkyrimTrueCoop-AE-INSTALL-RU.md')
+if (!$InstallGuide) { $InstallGuide = Join-Path $repo 'AE_INSTALL_RU.md' }
+Copy-Item -LiteralPath $InstallGuide -Destination (Join-Path $info 'AE_INSTALL_RU.md')
+$guideOutput = Join-Path (Split-Path $Destination -Parent) ([IO.Path]::GetFileNameWithoutExtension($Destination) + '-INSTALL-RU.md')
+Copy-Item -LiteralPath $InstallGuide -Destination $guideOutput
 Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination $info
 Copy-Item -LiteralPath (Join-Path $repo 'build/BuildInfo.h') -Destination $info
 foreach ($name in @('TiltedConnect','TiltedHooks','TiltedReverse','TiltedUI')) { Copy-Item -LiteralPath (Join-Path $repo "Libraries/$name/LICENSE") -Destination (Join-Path $info "$name-LICENSE.txt") }
 foreach ($name in @('CONNECTION.md','PERSISTENCE.md','QUESTS.md','OBJECTS.md')) { Copy-Item -LiteralPath (Join-Path $repo "docs/truecoop/ae/$name") -Destination $info }
 Copy-Item -LiteralPath (Join-Path $repo 'GameFiles/Server/TrueCoopQuestAdapters.example.json') -Destination $info
+foreach ($name in @('COOP_RESYNC.md','docs/truecoop/HOST_AUTHORITY_DESIGN.md','docs/truecoop/PHYSICS_NPC_AUDIT.md')) {
+    $source = Join-Path $repo $name
+    if (Test-Path -LiteralPath $source) {
+        $target = Join-Path $info $name
+        New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+        Copy-Item -LiteralPath $source -Destination $target
+    }
+}
 [ordered]@{NativeRevision=$revision;Build=$version;Runtime='1.7.104.0';Profile='Identical active AE content';GameTested=$false;CommonSELauncherIncluded=$false} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $info 'BUILD.json') -Encoding utf8
 $records = @(foreach ($file in Get-ChildItem -LiteralPath $stage -File -Recurse) {
     [pscustomobject]@{Path=[IO.Path]::GetRelativePath($stage,$file.FullName).Replace('\','/');Bytes=$file.Length;SHA256=(Get-FileHash -LiteralPath $file.FullName).Hash}

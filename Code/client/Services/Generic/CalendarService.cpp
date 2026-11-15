@@ -30,6 +30,8 @@ void CalendarService::OnTimeUpdate(const ServerTimeSettings& acMessage) noexcept
 {
     // disable the game clock
     ToggleGameClock(false);
+    m_tickBaseline.Rebase(m_world.GetTick());
+    m_fadeTimer = 0.f;
     m_onlineTime.m_timeModel.TimeScale = acMessage.timeModel.TimeScale;
     m_onlineTime.m_timeModel.Time = acMessage.timeModel.Time;
 
@@ -51,22 +53,13 @@ void CalendarService::OnDisconnected(const DisconnectedEvent&) noexcept
 {
     // signal a time transition
     m_fadeTimer = 0.f;
+    m_tickBaseline.Reset();
     ToggleGameClock(true);
 }
 
 float CalendarService::TimeInterpolate(const TimeModel& aFrom, TimeModel& aTo) const
 {
-    const auto t = aTo.Time - aFrom.Time;
-    if (t < 0.f)
-    {
-        const auto v = t + 24.f;
-        // interpolate on the time difference, not the time
-        const auto x = TiltedPhoques::Lerp(0.f, v, m_fadeTimer / kTransitionSpeed) + aFrom.Time;
-
-        return TiltedPhoques::Mod(x, 24.f);
-    }
-
-    return TiltedPhoques::Lerp(aFrom.Time, aTo.Time, m_fadeTimer / kTransitionSpeed);
+    return ReplicationClock::BlendHour(aFrom.Time, aTo.Time, m_fadeTimer / kTransitionSpeed);
 }
 
 void CalendarService::ToggleGameClock(bool aEnable)
@@ -88,17 +81,8 @@ void CalendarService::HandleUpdate(const UpdateEvent& aEvent) noexcept
         const auto updateDelta = static_cast<float>(aEvent.Delta);
         auto* pGameTime = TimeData::Get();
 
-        if (!m_lastTick)
-            m_lastTick = m_world.GetTick();
-
         const auto now = m_world.GetTick();
-
-        // we got disconnected or the client got ahead of us
-        if (now < m_lastTick)
-            return;
-
-        const auto delta = now - m_lastTick;
-        m_lastTick = now;
+        const uint64_t delta = m_tickBaseline.Sample(now);
 
         m_onlineTime.Update(delta);
         pGameTime->TimeScale->f = m_onlineTime.m_timeModel.TimeScale;

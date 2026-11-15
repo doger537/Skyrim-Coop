@@ -68,6 +68,7 @@
 #include <Messages/SubtitleRequest.h>
 #include <Messages/NotifySubtitle.h>
 #include <Messages/NotifyActorTeleport.h>
+#include <Structs/ActorTeleportAuthority.h>
 
 #include <World.h>
 #include <Games/TES.h>
@@ -1340,13 +1341,61 @@ void CharacterService::OnNotifyActorTeleport(const NotifyActorTeleport& acMessag
 {
     auto& modSystem = m_world.GetModSystem();
 
-    const uint32_t cActorId = World::Get().GetModSystem().GetGameId(acMessage.FormId);
+    const uint32_t cActorId = modSystem.GetGameId(acMessage.FormId);
+    const auto entity = Utils::FindEntityByServerId(acMessage.ServerId);
+    if (!entity)
+    {
+        // A static game reference can outlive its server entity. Its final cell
+        // placement must survive even when no eligible network owner remains.
+        const auto forms = m_world.view<FormIdComponent>();
+        const bool hasTrackedAuthority = std::any_of(forms.begin(), forms.end(), [&](const entt::entity aEntity)
+        {
+            return forms.get<FormIdComponent>(aEntity).Id == cActorId && m_world.any_of<LocalComponent, RemoteComponent>(aEntity);
+        });
+        // WaitingFor3D can retain remote authority before discovery installs a FormIdComponent.
+        const auto remotes = m_world.view<RemoteComponent>();
+        const bool hasTrackedRemote = std::any_of(remotes.begin(), remotes.end(), [&](const entt::entity aEntity)
+        {
+            return remotes.get<RemoteComponent>(aEntity).CachedRefId == cActorId;
+        });
+        if (!ActorTeleportAuthority::CanApplyUntracked(acMessage, hasTrackedAuthority || hasTrackedRemote))
+        {
+            spdlog::debug("Ignored untracked teleport for actor {:X} at epoch {}; form is invalid or already has authority", acMessage.ServerId, acMessage.OwnershipEpoch);
+            return;
+        }
+    }
+    else
+    {
+        const auto* pRemote = m_world.try_get<RemoteComponent>(*entity);
+        const auto* pFormId = m_world.try_get<FormIdComponent>(*entity);
+        if (!pRemote)
+            return;
+
+        // Spawn can be followed by release before discovery installs the form component.
+        const uint32_t trackedFormId = pFormId ? pFormId->Id : pRemote->CachedRefId;
+        GameId formId{};
+        if (!modSystem.GetServerModId(trackedFormId, formId))
+            return;
+
+        const ActorTeleportAuthority::Target target{pRemote->Id, pRemote->OwnershipEpoch, formId, m_world.any_of<LocalComponent>(*entity)};
+        if (!ActorTeleportAuthority::CanApply(acMessage, target))
+        {
+            spdlog::debug("Ignored teleport for actor {:X} at epoch {}; current epoch is {} or actor identity/owner differs", acMessage.ServerId, acMessage.OwnershipEpoch,
+                         pRemote->OwnershipEpoch);
+            return;
+        }
+    }
+
     Actor* pActor = Cast<Actor>(TESForm::GetById(cActorId));
     if (!pActor)
     {
         spdlog::error(__FUNCTION__ ": failed to retrieve actor to teleport.");
         return;
     }
+
+    // A newer accepted delta also resets playback state from the previous owner.
+    if (entity && !OwnershipSystem::AcceptRemoteUpdate(m_world, acMessage.ServerId, acMessage.OwnershipEpoch))
+        return;
 
     MoveActor(pActor, acMessage.WorldSpaceId, acMessage.CellId, acMessage.Position);
 
