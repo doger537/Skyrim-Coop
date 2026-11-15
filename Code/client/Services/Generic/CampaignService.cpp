@@ -1,6 +1,7 @@
 #include <TiltedOnlinePCH.h>
 #include <Services/QuestService.h>
 #include <Services/TransportService.h>
+#include <Games/TES.h>
 #include <Forms/TESQuest.h>
 #include <ModCompat/AlternateStart.h>
 #include <Messages/RequestCampaignReady.h>
