@@ -629,6 +629,11 @@ bool CheckEnvironment(const std::string& acAddress)
         }
         return acDone();
     };
+    // Admission/assignment do not enter a cell for Player.GetCellComponent().
+    EnterInteriorCellRequest enter;
+    enter.CellId = leader.Request.CellId;
+    leader.SendMessage(enter);
+    member.SendMessage(enter);
     AssignCharacterRequest assign;
     assign.ReferenceId = GameId(0, 0x14);
     assign.CellId = leader.Request.CellId;
