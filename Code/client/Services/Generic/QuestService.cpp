@@ -153,7 +153,7 @@ BSTEventResult QuestService::OnEvent(const TESQuestStartStopEvent* apEvent, cons
             }
         }
 
-        m_world.GetRunner().Queue(
+        m_world.GetRunner().QueueGameplay(
             [this, generation = m_world.GetTransport().GetConnectionGeneration(), formId = pQuest->formID, stageId = pQuest->currentStage, stopped = pQuest->IsStopped(),
              type = pQuest->type]()
             {
@@ -198,7 +198,7 @@ BSTEventResult QuestService::OnEvent(const TESQuestStageEvent* apEvent, const Ev
             }
         }
 
-        m_world.GetRunner().Queue(
+        m_world.GetRunner().QueueGameplay(
             [this, generation = m_world.GetTransport().GetConnectionGeneration(), formId = apEvent->formId, stageId = apEvent->stageId, type = pQuest->type]()
             {
                 if (generation == m_world.GetTransport().GetConnectionGeneration())
@@ -212,7 +212,7 @@ BSTEventResult QuestService::OnEvent(const TESQuestStageEvent* apEvent, const Ev
 BSTEventResult QuestService::OnEvent(const TESQuestStageItemDoneEvent* apEvent, const EventDispatcher<TESQuestStageItemDoneEvent>*)
 {
     // Sent once the fragment of one of the stage's log entries has run, usually from a script thread
-    m_world.GetRunner().Queue(
+    m_world.GetRunner().QueueGameplay(
         [this, questFormId = apEvent->formId, stage = apEvent->stageId]()
         {
             auto it = m_heldStages.find(questFormId);

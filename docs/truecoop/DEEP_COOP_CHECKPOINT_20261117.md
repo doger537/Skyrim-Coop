@@ -1,12 +1,16 @@
 # Deep co-op implementation checkpoint
 
-Branch `fix/deep-host-coop-20261116`, based on `2a1ca7ca`. This remains an intermediate implementation of the user's five modules. There is no new installable ZIP, and game/Vortex/saves have not been overwritten.
+Branch `fix/deep-host-coop-20261116`, based on `2a1ca7ca`; initial implementation committed as `f59bf388`. This remains an intermediate implementation of the user's five modules. There is no new installable ZIP, and game/Vortex/saves have not been overwritten.
 
 ## Implemented
 
+- Guest dialogue leases now run end-to-end: live menu heartbeat, server sequence/epoch/range checks, renewal, bounded local movement intent, cleanup on closure/expiry/cell/ownership/party/disconnect. Uses verified native StopMoving without changing persisted life state. **NPC motion and animation still require two-client gameplay verification.** Details: [DIALOGUE_LEASE.md](DIALOGUE_LEASE.md).
+- Pickup hooks corrected to their verified void/bool ABI, preserve partial-stack count after ExtraCount extraction, and avoid replay echo on player pickups. A pickup is still not a host-confirmed item transaction.
+- Runner gameplay events now carry a local generation barrier; connection start, disconnect and successful campaign admission invalidate older work. Inventory/equipment batches and quest callbacks use it. Spell-cast queued events carry copied IDs and flags instead of an ActorMagicCaster pointer. A live rollback must also advance this barrier once implemented.
+
 - Shared hour/date/elapsed-day counter, guest's future date no longer overrides the host timeline. Double elapsed days and a float-hour remainder prevent frame-rate-dependent accumulation. Minute conversion corrected; checked finite/date codec added.
 - Cooperative rest: two votes within 30 seconds, then two live-menu acknowledgements. Uses the lesser duration. Timeout, menu closure, membership change or disconnect cancels. Native SleepWait callback integration and RU/EN popups are present. Actual game menus/bonuses still need two-client testing.
-- Every gameplay message carries a uint64 world epoch; factories reject another epoch before decoding a payload. Epoch is durable and monotonic. Authentication bootstraps it; protocol is now `0x54430005`. Live checkpoint/rollback is not yet implemented.
+- Every gameplay message carries a uint64 world epoch; factories reject another epoch before decoding a payload. Epoch is durable and monotonic. Authentication bootstraps it; protocol is now `0x54430006`. Live checkpoint/rollback is not yet implemented.
 - Drop hook captures the returned reference handle after the native drop. ExtraCount extraction no longer overwrites the negative inventory delta. A scoped batch preserves inventory-before-equipment ordering. ScopedReference retains a resolved reference for one operation. Generic native reference factory wrapper added.
 - Bounded world-item lifecycle and small motion codecs, independent of inventory vectors at motion cadence. Epoch/revision/sequence guards, tombstones, 16-sample interpolation and 100 ms maximum extrapolation.
 - Durable item codec and campaign methods LoadWorldItems/SaveWorldItem. IDs come from monotonic DB revision; CAS rejects stale writes and ordinary resurrection; pose, velocities and custom enchantments survive reopening. **Not yet an atomic inventory/item transfer or a Skyrim save rollback.**
@@ -14,12 +18,13 @@ Branch `fix/deep-host-coop-20261116`, based on `2a1ca7ca`. This remains an inter
 
 ## Verified
 
-- TPTests: **85 cases / 2024 assertions passed**. Includes every truncated envelope, bounded item codecs, stable item/tombstone persistence across reopening, stale CAS updates, date boundaries and frame-rate-independent prediction.
-- Native launcher/client, STServer.dll, server runner and protocol probe all built. Latest native build log `work/deep-coop-native-build.log`: 57.594 s. They are not deployed to the game.
+- TPTests: **87 cases / 2124 assertions passed**. Includes every truncated envelope/lease body, bounded item codecs, stable item/tombstone persistence across reopening, stale CAS updates, date boundaries, frame-rate-independent prediction and deadline wrap/expiry/capacity.
+- Native launcher/client, STServer.dll, server runner and protocol probe all built. Latest dialogue build logs: `work/deep-coop-dialogue-client-build.log` (113.281 s), `deep-coop-dialogue-server-build.log` (59.031 s), `deep-coop-dialogue-probe-build.log` (5.109 s). They are not deployed to the game. BuildInfo must be refreshed after committing before distribution.
 - UI TypeScript and production build passed; log `work/deep-coop-ui-build.log`, hash `6cc28e1e44759ea9`. Direct pinned node_modules CLI used; globally bundled pnpm tried an incompatible migration and was not used to upgrade dependencies.
 - Isolated `work/deep-coop-sleep-20261116`, port 38633: cooperative-rest probe **10 PASS**, default protocol probe **20 PASS**, environment probe **9 PASS**, including an actual 60-second calendar resend. These validate the wire/server path, not native gameplay. Fixture's copied DLL predates the latest item-persistence, physics adapter and hour-remainder changes. Recopy latest runner/DLL into a fresh fixture for subsequent validation.
 - Fixture server PID was 22468. Verify exact executable path before stopping this test process; never stop a user's game/server by name.
-- Latest working tree has no whitespace errors. No new commits/push/package yet at this checkpoint.
+- Fresh fixture `work/deep-coop-dialogue-20261117-6ed747c1`, port 38634, PID25400, includes the latest item persistence/physics/calendar/dialogue code. Cooperative-rest probe **10 PASS**, dialogue probe **13 PASS**, default probe **20 PASS**, environment probe **9 PASS** including a normal 60-second refresh. Verify exact executable path before stopping it.
+- No push/package yet. `f59bf388` is a local commit; subsequent dialogue/pickup/queue changes need their own commit and a refreshed BuildInfo before packaging.
 
 ## Ghidra recovery and evidence
 
@@ -29,7 +34,7 @@ User reopened Ghidra after it was closed. Project tool association was missing. 
 
 Sky (@oai/sky through node_repl) was used for UI. The tool window was partially off-screen; coordinate clicks in its cropped screenshot did not target the intended file. Keyboard navigation worked. After user input/interruption, refresh window selection and state. Current tool handle/title must be rediscovered, not reconstructed.
 
-Ghidra 12.0.4 / 13bm GhidraMCP 0.2.2, localhost:8765. Direct ghidra tools remain absent from this chat catalog. Actual MCP stdio bridge calls succeed using `D:\CodexTools\SkyrimCoop-RE\probe_mcp.py`; it checks PE/hash before and after and whitelists read-only tools. Search-bytes/data listing were added to that whitelist. MCP text may be JSON encoded twice; normalize before reading xref objects. Never publish executable/database.
+Ghidra 12.0.4 / 13bm GhidraMCP 0.2.2, localhost:8765. Direct `mcp__ghidra` tools became available in the resumed chat and work with the correct program. The earlier MCP stdio bridge `D:\CodexTools\SkyrimCoop-RE\probe_mcp.py` also works and checks PE/hash before and after. MCP text may be JSON encoded twice; normalize before reading xref objects. Never publish executable/database.
 
 Bundled Python: `C:\Program Files\WindowsApps\OpenAI.CodexPrimaryRuntime.v26-1112-737-0_26.1112.737.0_x64__3k8sg7r9htsxt\dependencies\python\python.exe`.
 
@@ -47,7 +52,7 @@ Other verified IDs: drop40454, retained handle lookup17201, generic reference fa
 ## Remaining work
 
 1. Host-confirmed drop/pickup service with stable binding, pre-pickup interception, replay guards and atomic inventory/item transaction. Do not merely enable old bEnableItemDrops relay. Connect native capture/kinematic playback, including missing 3D, cell transitions, expiry and disconnect cleanup.
-2. Verified full ragdoll graph, physical grab intents, NPC animation/furniture/navmesh and guest-dialogue leases. Current physics adapter deliberately rejects actors; it does not solve those bugs.
+2. Verified full ragdoll graph, physical grab intents, NPC animation/furniture/navmesh. Guest-dialogue lease transport/native intent is implemented but needs actual gameplay verification. Current physics adapter deliberately rejects actors; it does not solve ragdoll bugs.
 3. Player compass/map/world markers with persistent identity.
 4. Native paired save/load checkpoints, world/player snapshots and a live rollback/epoch barrier.
 5. Quest-run identity, initiator-only item custody, exactly-once rewards, complete shared journal, Alternate Start integration.

@@ -40,6 +40,8 @@
 #include <Messages/RequestCampaignSeed.h>
 #include <Messages/RequestCoopSleep.h>
 #include <Messages/NotifyCoopSleep.h>
+#include <Messages/RequestDialogueLease.h>
+#include <Messages/NotifyDialogueLease.h>
 #include <chrono>
 #include <iostream>
 #include <cmath>
@@ -81,6 +83,8 @@ struct Probe final : Client
     std::optional<NotifyCoopSleep> RestState;
     uint64_t RestSequence{};
     uint32_t RestCommits{};
+    std::optional<NotifyDialogueLease> DialogueLease;
+    uint32_t DialogueNotifications{};
     void Rest(CoopSleepVote::Action aAction, uint8_t aHours = 0, uint64_t aRound = 0)
     {
         RequestCoopSleep request;
@@ -148,6 +152,11 @@ struct Probe final : Client
         }
         else if (message && message->GetOpcode() == NotifyQuestJournal::Opcode)
             Journals.push_back(*static_cast<NotifyQuestJournal*>(message.get()));
+        else if (message && message->GetOpcode() == NotifyDialogueLease::Opcode)
+        {
+            DialogueLease = *static_cast<NotifyDialogueLease*>(message.get());
+            ++DialogueNotifications;
+        }
         else if (message && message->GetOpcode() == AssignCharacterResponse::Opcode)
             Assignment = *static_cast<AssignCharacterResponse*>(message.get());
         else if (message && message->GetOpcode() == NotifyInventoryChanges::Opcode)
@@ -823,9 +832,143 @@ bool CheckCoopSleep(const std::string& acAddress)
     return true;
 }
 
+bool CheckDialogueLease(const std::string& acAddress)
+{
+    Probe host, guest;
+    host.Request = MakeRequest();
+    guest.Request = MakeRequest();
+    const auto check = [](bool aPassed, const char* apName)
+    {
+        std::cout << (aPassed ? "PASS: " : "FAIL: ") << apName << std::endl;
+        return aPassed;
+    };
+    if (!check(ConnectProbe(host, acAddress, ResponseType::kAccepted) && ConnectProbe(guest, acAddress, ResponseType::kAccepted),
+               "dialogue participants authenticate"))
+        return false;
+    const auto pump = [&](const auto& acDone)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!acDone() && std::chrono::steady_clock::now() < until)
+        {
+            host.Update();
+            guest.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return acDone();
+    };
+    const auto settle = [&](uint32_t aMilliseconds = 350)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(aMilliseconds);
+        return pump([&] { return std::chrono::steady_clock::now() >= until; });
+    };
+    EnterInteriorCellRequest enter;
+    enter.CellId = host.Request.CellId;
+    host.SendMessage(enter);
+    guest.SendMessage(enter);
+    AssignCharacterRequest assign;
+    assign.ReferenceId = GameId(0, 0x14);
+    assign.CellId = enter.CellId;
+    host.SendMessage(assign);
+    guest.SendMessage(assign);
+    if (!check(pump([&] { return host.Assignment && guest.Assignment; }), "dialogue player characters load"))
+        return false;
+    host.SendMessage(PartyCreateRequest());
+    if (!check(pump([&] { return host.InParty && guest.InParty; }), "dialogue players form one party"))
+        return false;
+    host.Assignment.reset();
+    assign.ReferenceId = GameId(0, 0xabc123);
+    host.SendMessage(assign);
+    if (!check(pump([&] { return host.Assignment.has_value(); }), "host owns the synthetic NPC"))
+        return false;
+    RequestDialogueLease request;
+    request.ServerId = host.Assignment->ServerId;
+    request.OwnershipEpoch = host.Assignment->OwnershipEpoch;
+    request.Sequence = 1;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    request.Active = true;
+    guest.SendMessage(request);
+    if (!check(pump([&] { return host.DialogueLease && guest.DialogueLease; }) && host.DialogueLease->Active &&
+               host.DialogueLease->SpeakerPlayerId == guest.Reply->PlayerId && host.DialogueLease->OwnershipEpoch == request.OwnershipEpoch,
+               "guest conversation reaches the NPC owner with the current ownership epoch"))
+        return false;
+    const uint64_t firstRevision = host.DialogueLease->Revision;
+    guest.SendMessage(request);
+    request.Sequence = 2;
+    request.OwnershipEpoch += 1;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    guest.SendMessage(request);
+    request.OwnershipEpoch = host.Assignment->OwnershipEpoch;
+    host.SendMessage(request); // Another participant cannot steal a live lease.
+    settle();
+    if (!check(host.DialogueLease->Revision == firstRevision && host.DialogueLease->Active,
+               "replay, stale ownership and a competing speaker cannot replace a live conversation"))
+        return false;
+    request.Sequence = 3;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    guest.SendMessage(request);
+    if (!check(pump([&] { return host.DialogueLease->Revision > firstRevision; }) && host.DialogueLease->Active,
+               "a fresh heartbeat renews the finite conversation lease"))
+        return false;
+    request.Sequence = 4;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    request.Active = false;
+    guest.SendMessage(request);
+    if (!check(pump([&] { return !host.DialogueLease->Active; }), "closing the guest dialogue releases the NPC"))
+        return false;
+    settle();
+    request.Sequence = 5;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    request.Active = true;
+    guest.SendMessage(request);
+    if (!pump([&] { return host.DialogueLease->Active; }))
+        return check(false, "new conversation starts");
+    request.Sequence = 4;
+    request.Active = false;
+    guest.SendMessage(request);
+    settle();
+    if (!check(host.DialogueLease->Active, "an old release cannot end a newer conversation"))
+        return false;
+    if (!check(pump([&] { return !host.DialogueLease->Active; }), "missing heartbeats expire while both sockets remain connected"))
+        return false;
+    request.Sequence = 6;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    request.Active = true;
+    guest.SendMessage(request);
+    if (!pump([&] { return host.DialogueLease->Active; }))
+        return check(false, "cell change scenario starts");
+    enter.CellId = GameId(0, 0x124);
+    guest.SendMessage(enter);
+    if (!check(pump([&] { return !host.DialogueLease->Active; }), "leaving the NPC cell releases its conversation"))
+        return false;
+    const uint64_t releasedRevision = host.DialogueLease->Revision;
+    settle();
+    request.Sequence = 7;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    guest.SendMessage(request);
+    settle();
+    if (!check(host.DialogueLease->Revision == releasedRevision && !host.DialogueLease->Active,
+               "a participant in another interior cannot renew the NPC lease"))
+        return false;
+    enter.CellId = host.Request.CellId;
+    guest.SendMessage(enter);
+    settle();
+    request.Sequence = 8;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    guest.SendMessage(request);
+    if (!pump([&] { return host.DialogueLease->Active; }))
+        return check(false, "disconnect scenario starts");
+    guest.Close();
+    if (!check(pump([&] { return !host.DialogueLease->Active; }), "guest disconnect releases its NPC without a release packet"))
+        return false;
+    host.Close();
+    return true;
+}
+
 int main(int argc, char** argv)
 {
     const std::string address = argc > 1 ? argv[1] : "127.0.0.1:10582";
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-dialogue")
+        return CheckDialogueLease(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-coop-sleep")
         return CheckCoopSleep(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-environment")

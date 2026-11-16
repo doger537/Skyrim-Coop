@@ -19,6 +19,7 @@
 #include <Events/MountEvent.h>
 #include <Events/DialogueEvent.h>
 #include <Games/Misc/MenuTopicManager.h>
+#include <AI/DialogueMovement.h>
 #include <Events/HitEvent.h>
 #include <Events/RemoveSpellEvent.h>
 
@@ -121,7 +122,7 @@ TP_THIS_FUNCTION(TCharacterConstructor, Actor*, Actor);
 TP_THIS_FUNCTION(TCharacterConstructor2, Actor*, Actor, uint8_t aUnk);
 TP_THIS_FUNCTION(TCharacterDestructor, Actor*, Actor);
 TP_THIS_FUNCTION(TAddInventoryItem, void, Actor, TESBoundObject* apItem, ExtraDataList* apExtraData, int32_t aCount, TESObjectREFR* apOldOwner);
-TP_THIS_FUNCTION(TPickUpObject, void*, Actor, TESObjectREFR* apObject, int32_t aCount, bool aUnk1, float aUnk2);
+TP_THIS_FUNCTION(TPickUpObject, void, Actor, TESObjectREFR* apObject, int32_t aCount, bool aUnk1, bool aPlaySound);
 TP_THIS_FUNCTION(TDropObject, void*, Actor, void* apResult, TESBoundObject* apObject, ExtraDataList* apExtraData, int32_t aCount, NiPoint3* apLocation, NiPoint3* apRotation);
 TP_THIS_FUNCTION(TSetPosition, char, Actor, NiPoint3& acPosition);
 TP_THIS_FUNCTION(TActorProcess, char, Actor, float aValue);
@@ -1073,7 +1074,7 @@ void TP_MAKE_THISCALL(HookAddInventoryItem, Actor, TESBoundObject* apItem, Extra
     TiltedPhoques::ThisCall(RealAddInventoryItem, apThis, apItem, apExtraData, aCount, apOldOwner);
 }
 
-void* TP_MAKE_THISCALL(HookPickUpObject, Actor, TESObjectREFR* apObject, int32_t aCount, bool aUnk1, float aUnk2)
+void TP_MAKE_THISCALL(HookPickUpObject, Actor, TESObjectREFR* apObject, int32_t aCount, bool aUnk1, bool aPlaySound)
 {
     if (!ScopedInventoryOverride::IsOverriden())
     {
@@ -1086,6 +1087,10 @@ void* TP_MAKE_THISCALL(HookPickUpObject, Actor, TESObjectREFR* apObject, int32_t
         if (apObject->GetExtraDataList())
             apThis->GetItemFromExtraData(item, apObject->GetExtraDataList());
 
+        // ExtraCount describes the whole world stack. The native pickup uses
+        // aCount; partial pickup must not replicate the stack's full quantity.
+        item.Count = aCount;
+
         // This is here so that objects that are picked up on both clients, aka non temps, are synced through activation sync.
         // The inventory change event should always be sent to the server, otherwise the server inventory won't be updated.
         bool shouldUpdateClients = apObject->IsTemporary() && !ScopedActivateOverride::IsOverriden();
@@ -1093,12 +1098,12 @@ void* TP_MAKE_THISCALL(HookPickUpObject, Actor, TESObjectREFR* apObject, int32_t
         QueueActorInventoryChange(InventoryChangeEvent(apThis->formID, std::move(item), false, shouldUpdateClients));
     }
 
-    return TiltedPhoques::ThisCall(RealPickUpObject, apThis, apObject, aCount, aUnk1, aUnk2);
+    TiltedPhoques::ThisCall(RealPickUpObject, apThis, apObject, aCount, aUnk1, aPlaySound);
 }
 
-void Actor::PickUpObject(TESObjectREFR* apObject, int32_t aCount, bool aUnk1, float aUnk2) noexcept
+void Actor::PickUpObject(TESObjectREFR* apObject, int32_t aCount, bool aUnk1, bool aPlaySound) noexcept
 {
-    TiltedPhoques::ThisCall(RealPickUpObject, this, apObject, aCount, aUnk1, aUnk2);
+    TiltedPhoques::ThisCall(RealPickUpObject, this, apObject, aCount, aUnk1, aPlaySound);
 }
 
 void* TP_MAKE_THISCALL(HookDropObject, Actor, void* apResult, TESBoundObject* apObject, ExtraDataList* apExtraData, int32_t aCount, NiPoint3* apLocation, NiPoint3* apRotation)
@@ -1270,6 +1275,7 @@ char TP_MAKE_THISCALL(HookActorProcess, Actor, float aDeltaTime)
         return 0;
     }
 
+    DialogueMovement::StopIfHeld(apThis, aDeltaTime);
     return TiltedPhoques::ThisCall(RealActorProcess, apThis, aDeltaTime);
 }
 

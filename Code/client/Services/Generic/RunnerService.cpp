@@ -15,6 +15,16 @@ void RunnerService::Queue(std::function<void()> aFunctor) noexcept
     m_runner.Add(std::move(aFunctor));
 }
 
+void RunnerService::QueueGameplay(std::function<void()> aFunctor) noexcept
+{
+    const uint64_t generation = m_gameplayGeneration.load(std::memory_order_relaxed);
+    m_runner.Add([this, generation, functor = std::move(aFunctor)]()
+    {
+        if (m_gameplayGeneration.load(std::memory_order_relaxed) == generation)
+            functor();
+    });
+}
+
 void RunnerService::OnUpdate(const UpdateEvent& acUpdateEvent) noexcept
 {
     PhysicsReplication::BeginRunnerFrame();

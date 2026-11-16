@@ -1,6 +1,7 @@
 #pragma once
 
 #include <TiltedCore/TaskQueue.hpp>
+#include <atomic>
 
 struct UpdateEvent;
 
@@ -24,7 +25,7 @@ struct RunnerService
      */
     template <class T> void Trigger(T acEvent)
     {
-        m_runner.Add([event = std::move(acEvent), this]() { m_dispatcher.trigger(std::move(event)); });
+        QueueGameplay([event = std::move(acEvent), this]() { m_dispatcher.trigger(std::move(event)); });
     }
 
     /**
@@ -32,7 +33,13 @@ struct RunnerService
      */
     void Queue(std::function<void()> aFunctor) noexcept;
 
+    // Unlike UI/connect/cleanup work, a delayed gameplay event belongs to one
+    // playable world. Authentication, disconnect and future rollback invalidate it.
+    void QueueGameplay(std::function<void()> aFunctor) noexcept;
+    void InvalidateGameplay() noexcept { m_gameplayGeneration.fetch_add(1, std::memory_order_relaxed); }
+
 private:
     entt::dispatcher& m_dispatcher;
     TiltedPhoques::TaskQueue m_runner;
+    std::atomic<uint64_t> m_gameplayGeneration{1};
 };

@@ -34,7 +34,7 @@ void ScopedInventoryEventBatch::Publish(InventoryChangeEvent aEvent) noexcept
 {
     TP_ASSERT(!m_published, "An inventory event batch must be published once");
     m_published = true;
-    World::Get().GetRunner().Queue([event = std::move(aEvent), equipment = std::move(m_equipment)]() mutable
+    World::Get().GetRunner().QueueGameplay([event = std::move(aEvent), equipment = std::move(m_equipment)]() mutable
     {
         auto& dispatcher = World::Get().GetDispatcher();
         dispatcher.trigger(std::move(event));

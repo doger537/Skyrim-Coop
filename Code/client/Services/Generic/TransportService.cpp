@@ -13,6 +13,7 @@
 
 #include <TimeManager.h>
 #include <Havok/PhysicsReplication.h>
+#include <AI/DialogueMovement.h>
 
 #include <Forms/TESNPC.h>
 #include <TiltedOnlinePCH.h>
@@ -126,7 +127,9 @@ void TransportService::OnConsume(const void* apData, uint32_t aSize)
 
 void TransportService::OnConnected()
 {
+    m_world.GetRunner().InvalidateGameplay();
     PhysicsReplication::Reset();
+    DialogueMovement::Reset();
     m_worldEpoch = 0;
     m_connected = false;
     m_pendingAuthentication.reset();
@@ -194,6 +197,8 @@ void TransportService::OnConnected()
 
 void TransportService::OnDisconnected(EDisconnectReason aReason)
 {
+    m_world.GetRunner().InvalidateGameplay();
+    DialogueMovement::Reset();
     PhysicsReplication::Reset();
     m_worldEpoch = 0;
     m_connected = false;
@@ -417,6 +422,7 @@ void TransportService::HandleCampaignCheckpoint(const NotifyCampaignCheckpoint& 
         const uint32_t player = m_pendingAuthentication->PlayerId;
         m_pendingAuthentication.reset();
         m_connected = true;
+        m_world.GetRunner().InvalidateGameplay();
         m_dispatcher.trigger(ConnectedEvent(player));
         return;
     }
