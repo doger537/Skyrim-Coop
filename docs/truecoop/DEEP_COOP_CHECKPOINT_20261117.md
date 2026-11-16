@@ -1,6 +1,17 @@
 # Deep co-op implementation checkpoint
 
-Branch `fix/deep-host-coop-20261116`, based on `2a1ca7ca`; initial implementation committed as `f59bf388`. This remains an intermediate implementation of the user's five modules. There is no new installable ZIP, and game/Vortex/saves have not been overwritten.
+Branch `fix/deep-host-coop-20261116`, based on `2a1ca7ca`; commits `f59bf388` and native candidate `2d630a5a`. Packaging documentation is in later commits. This remains an intermediate implementation of the user's five modules. A verified test ZIP is available; game/Vortex/saves have not been overwritten. The user will test with their friend later.
+
+## Candidate handed off for later gameplay testing
+
+- Archive: `outputs/SkyrimTrueCoop-AE-deep-coop-test-1.7.104-2d630a5a.zip`, 176337419 bytes. SHA-256 `99A226FA5719216EDD22F71950CC0AEAFF1DE3123E166D99E5FAFC7260162090`.
+- Native revision `2d630a5ad7ab50efea5c277673906a44cafb39d3`, build `v1.8.4-53-g2d630a5a`, protocol `0x54430006`, Skyrim 1.7.104.0. Later documentation commits do not change Code/Libraries/modules/xmake.lua. Package-AE verifies that distinction explicitly; do not rebuild and silently reuse this archive's identity for another native revision.
+- Package-AE verified hashes of 527 payload files. BUILD.json, new DEEP_COOP_TEST_RU.md and UI/index.html are present. No CommonSE launcher, game executable, world database or diagnostic/test executable is in the archive. Both players and the server need this same package.
+- Source pushed; draft PR [#3](https://github.com/doger537/Skyrim-Coop/pull/3), stacked on #2. Neither PR was merged.
+- Final native identity rebuilt successfully: client/launcher 18.187 s, server/DLL/runner 22.406 s, protocol probe 5.265 s. TPTests directly rerun: 87 cases / 2124 assertions passed.
+- Fresh `work/deep-coop-release-2d630a5a` / port 38635 rechecked final server/probe pairing with 10 rest and 13 dialogue PASS. Earlier full wire validation of the same server feature code also passed 20 general and 9 environment scenarios, including the real 60-second calendar refresh.
+- All three owned isolated server processes (22468, 25400, 14048) were stopped after checking each exact fixture executable path. Leave Ghidra open; it is the user's requested RE surface.
+- User response to testing availability: **with friend later**. No two-game AI/Havok/frame-time result is available. Do not present this as completion of all five modules or resume asking for the same availability immediately.
 
 ## Implemented
 
@@ -19,12 +30,12 @@ Branch `fix/deep-host-coop-20261116`, based on `2a1ca7ca`; initial implementatio
 ## Verified
 
 - TPTests: **87 cases / 2124 assertions passed**. Includes every truncated envelope/lease body, bounded item codecs, stable item/tombstone persistence across reopening, stale CAS updates, date boundaries, frame-rate-independent prediction and deadline wrap/expiry/capacity.
-- Native launcher/client, STServer.dll, server runner and protocol probe all built. Latest dialogue build logs: `work/deep-coop-dialogue-client-build.log` (113.281 s), `deep-coop-dialogue-server-build.log` (59.031 s), `deep-coop-dialogue-probe-build.log` (5.109 s). They are not deployed to the game. BuildInfo must be refreshed after committing before distribution.
+- Native launcher/client, STServer.dll, server runner and protocol probe all built. Initial dialogue build logs: `work/deep-coop-dialogue-client-build.log` (113.281 s), `deep-coop-dialogue-server-build.log` (59.031 s), `deep-coop-dialogue-probe-build.log` (5.109 s). Final candidate logs use the `deep-coop-release-` prefix; see candidate block above. Not deployed to the game.
 - UI TypeScript and production build passed; log `work/deep-coop-ui-build.log`, hash `6cc28e1e44759ea9`. Direct pinned node_modules CLI used; globally bundled pnpm tried an incompatible migration and was not used to upgrade dependencies.
 - Isolated `work/deep-coop-sleep-20261116`, port 38633: cooperative-rest probe **10 PASS**, default protocol probe **20 PASS**, environment probe **9 PASS**, including an actual 60-second calendar resend. These validate the wire/server path, not native gameplay. Fixture's copied DLL predates the latest item-persistence, physics adapter and hour-remainder changes. Recopy latest runner/DLL into a fresh fixture for subsequent validation.
 - Fixture server PID was 22468. Verify exact executable path before stopping this test process; never stop a user's game/server by name.
 - Fresh fixture `work/deep-coop-dialogue-20261117-6ed747c1`, port 38634, PID25400, includes the latest item persistence/physics/calendar/dialogue code. Cooperative-rest probe **10 PASS**, dialogue probe **13 PASS**, default probe **20 PASS**, environment probe **9 PASS** including a normal 60-second refresh. Verify exact executable path before stopping it.
-- No push/package yet. `f59bf388` is a local commit; subsequent dialogue/pickup/queue changes need their own commit and a refreshed BuildInfo before packaging.
+- Source and checked test package are now published/available as described above. Packaging guide uses BUILD.json for the actual identity instead of hard-coding an obsolete archive version.
 
 ## Ghidra recovery and evidence
 
