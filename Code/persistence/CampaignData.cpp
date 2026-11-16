@@ -137,11 +137,11 @@ template <class A, class T> bool Effect(A& aArchive, T& aEffect) noexcept
            Form(aArchive, aEffect.EffectId);
 }
 
-template <class A, class T> bool Entry(A& aArchive, T& aEntry) noexcept
+template <class A, class T> bool Entry(A& aArchive, T& aEntry, size_t aMaxEffects = 256) noexcept
 {
     return Form(aArchive, aEntry.BaseId) && aArchive.Number(aEntry.Count) && aArchive.Number(aEntry.ExtraCharge) && Form(aArchive, aEntry.ExtraEnchantId) &&
            aArchive.Number(aEntry.ExtraEnchantCharge) && aArchive.Number(aEntry.EnchantData.IsWeapon) &&
-           aArchive.List(aEntry.EnchantData.Effects, 256, [](auto& archive, auto& effect) { return Effect(archive, effect); }) && aArchive.Number(aEntry.ExtraHealth) &&
+           aArchive.List(aEntry.EnchantData.Effects, aMaxEffects, [](auto& archive, auto& effect) { return Effect(archive, effect); }) && aArchive.Number(aEntry.ExtraHealth) &&
            Form(aArchive, aEntry.ExtraPoisonId) && aArchive.Number(aEntry.ExtraPoisonCount) && aArchive.Number(aEntry.ExtraSoulLevel) &&
            aArchive.Number(aEntry.ExtraEnchantRemoveUnequip) && aArchive.Number(aEntry.ExtraWorn) && aArchive.Number(aEntry.ExtraWornLeft) && aArchive.Number(aEntry.IsQuestItem);
 }
@@ -177,6 +177,30 @@ template <class A, class T> bool QuestFields(A& aArchive, T& aQuest) noexcept
                aQuest.Events, QuestJournal::kMaxEvents,
                [](auto& archive, auto& event) { return archive.Number(event.Status) && archive.Number(event.Stage) && archive.Number(event.Bootstrap) && event.Status <= 2; }) &&
            aArchive.List(aQuest.Decisions, 256, [](auto& archive, auto& decision) { return archive.Text(decision.Group, 64) && archive.Number(decision.Stage); });
+}
+
+template <class A, class T> bool WorldItemFields(A& aArchive, T& aItem) noexcept
+{
+    if (!aArchive.Number(aItem.Id) || !aArchive.Number(aItem.WorldEpoch) || !aArchive.Number(aItem.HostEpoch) ||
+        !aArchive.Number(aItem.Revision) || !aArchive.Number(aItem.Sequence) || !aArchive.Number(aItem.Tick) ||
+        !Form(aArchive, aItem.CellId) || !Form(aArchive, aItem.WorldSpaceId) ||
+        !aArchive.Number(aItem.Position.x) || !aArchive.Number(aItem.Position.y) || !aArchive.Number(aItem.Position.z))
+        return false;
+    for (auto& value : aItem.Rotation)
+        if (!aArchive.Number(value))
+            return false;
+    for (auto& value : aItem.LinearVelocity)
+        if (!aArchive.Number(value))
+            return false;
+    for (auto& value : aItem.AngularVelocity)
+        if (!aArchive.Number(value))
+            return false;
+    uint8_t mode = static_cast<uint8_t>(aItem.Mode);
+    if (!aArchive.Number(mode) || !Entry(aArchive, aItem.Item, WorldItemState::kMaxEffects) || !aArchive.Number(aItem.Deleted))
+        return false;
+    if constexpr (!std::is_const_v<std::remove_reference_t<T>>)
+        aItem.Mode = static_cast<WorldItemMotion::Motion>(mode);
+    return true;
 }
 
 bool Header(Writer& aWriter, uint8_t aKind) noexcept
@@ -232,5 +256,20 @@ bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, Quest& aQuest) noexce
     aQuest = {};
     Reader reader(acBytes);
     return acBytes.size() <= WorldStore::kMaxRecordBytes && Header(reader, 3) && QuestFields(reader, aQuest) && aQuest.Epoch != 0 && reader.End();
+}
+bool Encode(const WorldItemState& acItem, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept
+{
+    Writer writer(aBytes);
+    return acItem.IsValid() && Header(writer, 4) && WorldItemFields(writer, acItem);
+}
+
+bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, WorldItemState& aItem) noexcept
+{
+    WorldItemState candidate;
+    Reader reader(acBytes);
+    if (acBytes.size() > WorldStore::kMaxRecordBytes || !Header(reader, 4) || !WorldItemFields(reader, candidate) || !reader.End() || !candidate.IsValid())
+        return false;
+    aItem = std::move(candidate);
+    return true;
 }
 } // namespace Campaign

@@ -12,6 +12,7 @@
 #include <Forms/TESObjectCELL.h>
 
 #include <TimeManager.h>
+#include <Havok/PhysicsReplication.h>
 
 #include <Forms/TESNPC.h>
 #include <TiltedOnlinePCH.h>
@@ -96,7 +97,7 @@ bool TransportService::Send(const ClientMessage& acMessage, const TiltedPhoques:
         Buffer::Writer writer(&buffer);
         writer.WriteBits(0, 8); // Write first byte as packet needs it
 
-        acMessage.Serialize(writer);
+        acMessage.Serialize(writer, m_worldEpoch);
         TiltedPhoques::PacketView packet(reinterpret_cast<char*>(buffer.GetWriteData()), writer.Size());
 
         Client::Send(&packet, aPacketFlags);
@@ -113,7 +114,7 @@ void TransportService::OnConsume(const void* apData, uint32_t aSize)
     TiltedPhoques::ViewBuffer buf((uint8_t*)apData, aSize);
     Buffer::Reader reader(&buf);
 
-    auto pMessage = factory.Extract(reader);
+    auto pMessage = factory.Extract(reader, m_worldEpoch);
     if (!pMessage)
     {
         spdlog::error("Couldn't parse packet from server");
@@ -125,6 +126,8 @@ void TransportService::OnConsume(const void* apData, uint32_t aSize)
 
 void TransportService::OnConnected()
 {
+    PhysicsReplication::Reset();
+    m_worldEpoch = 0;
     m_connected = false;
     m_pendingAuthentication.reset();
     m_campaignNonce = 0;
@@ -184,12 +187,15 @@ void TransportService::OnConnected()
     request.PlayerTime.Year = pGameTime->GameYear->f;
     request.PlayerTime.Month = pGameTime->GameMonth->f;
     request.PlayerTime.Day = pGameTime->GameDay->f;
+    request.PlayerTime.DaysPassed = pGameTime->GameDaysPassed->f;
 
     m_queuedAuthentication = std::move(request);
 }
 
 void TransportService::OnDisconnected(EDisconnectReason aReason)
 {
+    PhysicsReplication::Reset();
+    m_worldEpoch = 0;
     m_connected = false;
     m_pendingAuthentication.reset();
     m_campaignNonce = 0;
@@ -283,11 +289,12 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
             Close();
             return;
         }
-        if (m_pendingAuthentication || m_connected || acMessage.WorldId.size() != 32)
+        if (m_pendingAuthentication || m_connected || acMessage.WorldId.size() != 32 || acMessage.WorldEpoch == 0)
         {
             FailCampaign("Invalid or duplicate campaign authentication response");
             return;
         }
+        m_worldEpoch = acMessage.WorldEpoch;
         m_pendingAuthentication = acMessage;
         m_world.SetServerSettings(acMessage.Settings);
 

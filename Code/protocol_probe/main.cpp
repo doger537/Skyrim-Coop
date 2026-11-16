@@ -38,8 +38,11 @@
 #include <Messages/NotifyQuestJournal.h>
 #include <Messages/RequestCampaignReady.h>
 #include <Messages/RequestCampaignSeed.h>
+#include <Messages/RequestCoopSleep.h>
+#include <Messages/NotifyCoopSleep.h>
 #include <chrono>
 #include <iostream>
+#include <cmath>
 #include <optional>
 #include <thread>
 
@@ -70,19 +73,33 @@ struct Probe final : Client
     bool AutoReady{true};
     uint64_t Nonce{};
     uint64_t CampaignRevision{};
+    uint64_t WorldEpoch{};
     bool SeedOwner{};
     Vector<NotifyQuestJournal> Journals;
     Vector<QuestJournal> Seed;
     float LastPositionX{};
+    std::optional<NotifyCoopSleep> RestState;
+    uint64_t RestSequence{};
+    uint32_t RestCommits{};
+    void Rest(CoopSleepVote::Action aAction, uint8_t aHours = 0, uint64_t aRound = 0)
+    {
+        RequestCoopSleep request;
+        request.Action = aAction;
+        request.Sequence = ++RestSequence;
+        request.Round = aRound;
+        request.Hours = aHours;
+        request.Tick = GetClock().GetCurrentTick();
+        SendMessage(request);
+    }
     void OnUpdate() override {}
     void OnDisconnected(EDisconnectReason) override { Ready = false; }
-    void OnConnected() override { SendMessage(Request); }
+    void OnConnected() override { WorldEpoch = 0; SendMessage(Request); }
     void SendMessage(const ClientMessage& acMessage)
     {
         Buffer buffer(65536);
         Buffer::Writer writer(&buffer);
         writer.WriteBits(0, 8);
-        acMessage.Serialize(writer);
+        acMessage.Serialize(writer, WorldEpoch);
         PacketView packet(reinterpret_cast<char*>(buffer.GetWriteData()), static_cast<uint32_t>(writer.Size()));
         Send(&packet);
     }
@@ -91,9 +108,13 @@ struct Probe final : Client
         ViewBuffer buffer(reinterpret_cast<uint8_t*>(const_cast<void*>(apData)), aSize);
         Buffer::Reader reader(&buffer);
         ServerMessageFactory factory;
-        const auto message = factory.Extract(reader);
+        const auto message = factory.Extract(reader, WorldEpoch);
         if (message && message->GetOpcode() == AuthenticationResponse::Opcode)
+        {
             Reply = *static_cast<AuthenticationResponse*>(message.get());
+            if (Reply->Type == ResponseType::kAccepted)
+                WorldEpoch = message->WorldEpoch;
+        }
         else if (message && message->GetOpcode() == NotifyCampaignCheckpoint::Opcode)
         {
             const auto& checkpoint = *static_cast<NotifyCampaignCheckpoint*>(message.get());
@@ -149,6 +170,12 @@ struct Probe final : Client
         {
             ++TimeNotifications;
             Time = *static_cast<ServerTimeSettings*>(message.get());
+        }
+        else if (message && message->GetOpcode() == NotifyCoopSleep::Opcode)
+        {
+            RestState = *static_cast<NotifyCoopSleep*>(message.get());
+            if (RestState->IsValid() && RestState->Phase == CoopSleepVote::Phase::Committed)
+                ++RestCommits;
         }
         else if (message && message->GetOpcode() == NotifyPlayerCellChanged::Opcode)
             PlayerCell = *static_cast<NotifyPlayerCellChanged*>(message.get());
@@ -700,9 +727,107 @@ bool CheckEnvironment(const std::string& acAddress)
     return passed;
 }
 
+bool CheckCoopSleep(const std::string& acAddress)
+{
+    Probe host, guest;
+    host.Request = MakeRequest();
+    host.Request.PlayerTime.Year = 201;
+    host.Request.PlayerTime.Month = 11;
+    host.Request.PlayerTime.Day = 31;
+    host.Request.PlayerTime.Time = 23.5f;
+    host.Request.PlayerTime.DaysPassed = 7000.5;
+    guest.Request = MakeRequest();
+    guest.Request.PlayerTime.Year = 299;
+    const auto check = [](bool aPassed, const char* apName)
+    {
+        std::cout << (aPassed ? "PASS: " : "FAIL: ") << apName << std::endl;
+        return aPassed;
+    };
+    if (!check(ConnectProbe(host, acAddress, ResponseType::kAccepted) && ConnectProbe(guest, acAddress, ResponseType::kAccepted),
+               "rest probes authenticate on the same world epoch"))
+        return false;
+    const auto pump = [&](const auto& acDone)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!acDone() && std::chrono::steady_clock::now() < until)
+        {
+            host.Update();
+            guest.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return acDone();
+    };
+    EnterInteriorCellRequest enter;
+    enter.CellId = host.Request.CellId;
+    host.SendMessage(enter);
+    guest.SendMessage(enter);
+    AssignCharacterRequest assign;
+    assign.ReferenceId = GameId(0, 0x14);
+    assign.CellId = host.Request.CellId;
+    host.SendMessage(assign);
+    guest.SendMessage(assign);
+    if (!check(pump([&] { return host.Assignment && guest.Assignment; }), "rest probe characters are loaded"))
+        return false;
+    host.SendMessage(PartyCreateRequest());
+    if (!check(pump([&] { return host.InParty && guest.InParty; }), "two rest participants form a party while in different cells"))
+        return false;
+    if (!check(host.Time && guest.Time && host.Time->timeModel.Year == 201 && guest.Time->timeModel.Year == 201 && host.WorldEpoch == guest.WorldEpoch && host.WorldEpoch != 0,
+               "late guest's future calendar cannot replace the host timeline"))
+        return false;
+    enter.CellId = GameId(1, 0x124);
+    guest.SendMessage(enter);
+    if (!check(pump([&] { return host.PlayerCell && host.PlayerCell->PlayerId == guest.Reply->PlayerId && host.PlayerCell->CellId == enter.CellId; }),
+               "guest enters another cell before the rest transaction"))
+        return false;
+    const uint32_t initialTime = host.TimeNotifications;
+    host.Rest(CoopSleepVote::Action::Vote, 8);
+    if (!check(pump([&] { return host.RestState && guest.RestState && guest.RestState->Phase == CoopSleepVote::Phase::Waiting; }) &&
+               host.RestCommits == 0 && guest.RestCommits == 0 && host.TimeNotifications == initialTime,
+               "one vote notifies both players without skipping time"))
+        return false;
+    const uint64_t firstRound = guest.RestState->Round;
+    guest.Rest(CoopSleepVote::Action::Vote, 4, firstRound);
+    if (!check(pump([&] { return host.RestState->Phase == CoopSleepVote::Phase::Preparing && guest.RestState->Phase == CoopSleepVote::Phase::Preparing; }) &&
+               host.RestCommits == 0 && guest.RestCommits == 0 && host.TimeNotifications == initialTime,
+               "both votes still wait for live menu acknowledgements"))
+        return false;
+    host.Rest(CoopSleepVote::Action::Ready, 0, firstRound);
+    guest.Rest(CoopSleepVote::Action::Ready, 0, firstRound);
+    if (!check(pump([&] { return host.RestCommits == 1 && guest.RestCommits == 1; }) && host.RestState->Hours == 4 &&
+               host.RestState->Time == guest.RestState->Time && host.RestState->Time.Year == 202 && host.RestState->Time.Month == 0 &&
+               host.RestState->Time.Day == 1 && std::abs(host.RestState->Time.Time - 3.5f) < 0.1f &&
+               std::abs(host.RestState->Time.DaysPassed - (7000.5 + 4.0 / 24.0)) < 0.005,
+               "one four-hour commit advances the same hour, date and elapsed days across midnight"))
+        return false;
+    host.Rest(CoopSleepVote::Action::Ready, 0, firstRound); // fresh sequence, expired transaction
+    host.Rest(CoopSleepVote::Action::Vote, 2);
+    if (!pump([&] { return guest.RestState->Round > firstRound && guest.RestState->Phase == CoopSleepVote::Phase::Waiting; }))
+        return check(false, "next rest transaction starts");
+    const uint64_t secondRound = guest.RestState->Round;
+    guest.Rest(CoopSleepVote::Action::Vote, 2, secondRound);
+    if (!pump([&] { return guest.RestState->Phase == CoopSleepVote::Phase::Preparing; }))
+        return check(false, "next rest transaction reaches prepare");
+    host.Rest(CoopSleepVote::Action::Cancel, 0, secondRound);
+    guest.Rest(CoopSleepVote::Action::Ready, 0, secondRound);
+    if (!check(pump([&] { return guest.RestState->Phase == CoopSleepVote::Phase::Cancelled; }) && host.RestCommits == 1 && guest.RestCommits == 1,
+               "closing either menu cancels prepare and replay cannot skip time twice"))
+        return false;
+    host.Rest(CoopSleepVote::Action::Vote, 1);
+    if (!pump([&] { return guest.RestState->Round > secondRound && guest.RestState->Phase == CoopSleepVote::Phase::Waiting; }))
+        return check(false, "disconnect scenario starts");
+    guest.Close();
+    if (!check(pump([&] { return host.RestState->Phase == CoopSleepVote::Phase::Cancelled; }) && host.RestCommits == 1,
+               "participant disconnect cancels an outstanding rest vote"))
+        return false;
+    host.Close();
+    return true;
+}
+
 int main(int argc, char** argv)
 {
     const std::string address = argc > 1 ? argv[1] : "127.0.0.1:10582";
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-coop-sleep")
+        return CheckCoopSleep(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-environment")
         return CheckEnvironment(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-campaign-admission")

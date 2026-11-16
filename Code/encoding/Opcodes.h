@@ -57,6 +57,7 @@ enum ClientOpcode : unsigned char
     kRequestActionEvents,
     kRequestCampaignReady,
     kRequestCampaignSeed,
+    kRequestCoopSleep,
     kClientOpcodeMax
 };
 
@@ -120,5 +121,6 @@ enum ServerOpcode : unsigned char
     kNotifyActionEvents,
     kNotifyCampaignCheckpoint,
     kNotifyQuestJournal,
+    kNotifyCoopSleep,
     kServerOpcodeMax
 };

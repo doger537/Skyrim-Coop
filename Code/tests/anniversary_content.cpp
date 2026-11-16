@@ -101,6 +101,7 @@ TEST_CASE("The complete 74-Creation profile fits and survives authentication enc
     TiltedPhoques::Buffer::Reader reader(&buffer);
     uint64_t opcode{};
     reader.ReadBits(opcode, 8);
+    REQUIRE(reader.ReadBits(opcode, 64)); // world timeline envelope
     AuthenticationRequest decoded;
     decoded.DeserializeRaw(reader);
     REQUIRE(request == decoded);

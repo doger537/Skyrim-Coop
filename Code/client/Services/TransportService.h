@@ -43,6 +43,7 @@ struct TransportService : Client
     void SetServerPassword(const std::string& acPassword) noexcept { m_serverPassword = acPassword; }
     const uint32_t& GetLocalPlayerId() const noexcept { return m_localPlayerId; }
     uint64_t GetConnectionGeneration() const noexcept { return m_connectionGeneration; }
+    uint64_t GetWorldEpoch() const noexcept { return m_worldEpoch; }
     void FailCampaign(const String& acReason) noexcept;
 
     // Times below are in ms on the networking library's local clock, which keeps running while the game thread is stalled
@@ -77,6 +78,7 @@ private:
     uint64_t m_manifestGeneration{};
     std::optional<AuthenticationResponse> m_pendingAuthentication;
     uint64_t m_campaignNonce{};
+    uint64_t m_worldEpoch{};
 
     entt::scoped_connection m_updateConnection;
     entt::scoped_connection m_sendServerMessageConnection;

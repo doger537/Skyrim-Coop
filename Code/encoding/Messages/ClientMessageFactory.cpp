@@ -29,14 +29,17 @@ static struct ClientMessageFactoryInit
 } s_ClientMessageFactoryInit;
 } // namespace details
 
-UniquePtr<ClientMessage> ClientMessageFactory::Extract(TiltedPhoques::Buffer::Reader& aReader) const noexcept
+UniquePtr<ClientMessage> ClientMessageFactory::Extract(TiltedPhoques::Buffer::Reader& aReader, uint64_t aExpectedEpoch) const noexcept
 {
-    uint64_t data;
-    aReader.ReadBits(data, sizeof(ClientOpcode) * 8);
-
-    if (data >= kClientOpcodeMax) [[unlikely]]
+    uint64_t data{};
+    uint64_t epoch{};
+    if (!aReader.ReadBits(data, sizeof(ClientOpcode) * 8) || data >= kClientOpcodeMax || !aReader.ReadBits(epoch, 64)) [[unlikely]]
         return {nullptr};
 
     const auto opcode = static_cast<ClientOpcode>(data);
-    return s_clientMessageExtractor[opcode](aReader);
+    if (aExpectedEpoch != 0 && opcode != kAuthenticationRequest && epoch != aExpectedEpoch)
+        return {nullptr};
+    auto message = s_clientMessageExtractor[opcode](aReader);
+    message->WorldEpoch = epoch;
+    return message;
 }

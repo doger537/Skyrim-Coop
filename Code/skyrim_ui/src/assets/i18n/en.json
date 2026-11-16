@@ -184,6 +184,12 @@
     },
     "PARTY_HINT": {
       "MESSAGE": "Want to quest together? Form a party and stay close to share quest progress! Check out our play guide to learn more."
+    },
+    "COOP_SLEEP": {
+      "WAITING": "You are ready to rest. Waiting for the other player to choose sleep or wait within 30 seconds.",
+      "INVITE": "Your partner wants to rest. Choose sleep or wait within 30 seconds, even in another location.",
+      "COMMITTED": "Both players are ready. Skipping {{hours}} hours.",
+      "CANCELLED": "Cooperative rest cancelled. Time has not been skipped."
     }
   }
 }

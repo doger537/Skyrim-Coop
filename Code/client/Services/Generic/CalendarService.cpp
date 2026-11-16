@@ -28,25 +28,13 @@ CalendarService::CalendarService(World& aWorld, entt::dispatcher& aDispatcher, T
 
 void CalendarService::OnTimeUpdate(const ServerTimeSettings& acMessage) noexcept
 {
+    if (!acMessage.timeModel.IsValid())
+        return;
     // disable the game clock
     ToggleGameClock(false);
     m_tickBaseline.Rebase(m_world.GetTick());
     m_fadeTimer = 0.f;
-    m_onlineTime.m_timeModel.TimeScale = acMessage.timeModel.TimeScale;
-    m_onlineTime.m_timeModel.Time = acMessage.timeModel.Time;
-
-    if (m_world.GetServerSettings().SyncPlayerCalendar)
-    {
-        m_onlineTime.m_timeModel.Day = acMessage.timeModel.Day;
-        m_onlineTime.m_timeModel.Month = acMessage.timeModel.Month;
-        m_onlineTime.m_timeModel.Year = acMessage.timeModel.Year;
-    }
-    else
-    {
-        m_onlineTime.m_timeModel.Day = m_offlineTime.m_timeModel.Day;
-        m_onlineTime.m_timeModel.Month = m_offlineTime.m_timeModel.Month;
-        m_onlineTime.m_timeModel.Year = m_offlineTime.m_timeModel.Year;
-    }
+    m_onlineTime = DateTime(acMessage.timeModel);
 }
 
 void CalendarService::OnDisconnected(const DisconnectedEvent&) noexcept
@@ -70,6 +58,7 @@ void CalendarService::ToggleGameClock(bool aEnable)
     m_offlineTime.m_timeModel.Year = pGameTime->GameYear->f;
     m_offlineTime.m_timeModel.Time = pGameTime->GameHour->f;
     m_offlineTime.m_timeModel.TimeScale = pGameTime->TimeScale->f;
+    m_offlineTime.m_timeModel.DaysPassed = pGameTime->GameDaysPassed->f;
 
     s_gameClockLocked = !aEnable;
 }
@@ -89,7 +78,7 @@ void CalendarService::HandleUpdate(const UpdateEvent& aEvent) noexcept
         pGameTime->GameDay->f = m_onlineTime.m_timeModel.Day;
         pGameTime->GameMonth->f = m_onlineTime.m_timeModel.Month;
         pGameTime->GameYear->f = m_onlineTime.m_timeModel.Year;
-        pGameTime->GameDaysPassed->f += m_onlineTime.GetDeltaTime(delta) * (1.f / 24.f);
+        pGameTime->GameDaysPassed->f = static_cast<float>(m_onlineTime.m_timeModel.DaysPassed);
 
         // time transition in
         if (m_fadeTimer < kTransitionSpeed)

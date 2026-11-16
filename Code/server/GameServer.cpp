@@ -46,7 +46,7 @@ Console::Setting bEnableDeathSystem{"Gameplay:bEnableDeathSystem", "Enables the 
 Console::Setting uTimeScale{"Gameplay:uTimeScale", "How many seconds pass ingame for every real second (0 to 1000). Changing this can make the game unstable", 20u};
 Console::Setting bSyncPlayerCalendar{
     "Gameplay:bSyncPlayerCalendar",
-    "Syncs up all player calendars to be the same day, month, and year. This uses the date of the player with the furthest ahead date at connection.", false};
+    "Legacy setting; the shared world date and elapsed days are always synchronized", true, Console::SettingsFlags::kLocked};
 Console::Setting bAutoPartyJoin{"Gameplay:bAutoPartyJoin", "Join parties automatically, as long as there is only one party in the server", true};
 Console::Setting bAllowConsoleCommands{
     "Gameplay:bAllowConsoleCommands",
@@ -140,11 +140,6 @@ constexpr char kMopoRecordsMissing[]{"Failed to start: ModPolicy's ModCheck is e
                                      "to join! Please create a Data/ directory, and put a \"loadorder.txt\" file in there."
                                      "Check the wiki, which can be found on skyrim-together.com, for more details."};
 
-constexpr char kCalendarSyncWarning[]{"Calendar sync is enabled. We generally do not recommend that you use this feature."
-                                      "Calendar sync can cause the calendar to jump ahead or behind, which might mess up the timing of quests."
-                                      "If you disable this feature again (which is the default setting), the days will still progress, but the"
-                                      "exact date will differ slightly between clients (which has no impact on gameplay)."};
-
 static uint16_t GetUserTickRate()
 {
     return bPremiumTickrate ? 60 : 30;
@@ -163,7 +158,7 @@ ServerSettings GetSettings()
     settings.PvpEnabled = bEnablePvp;
     settings.SyncPlayerHomes = bSyncPlayerHomes;
     settings.DeathSystemEnabled = bEnableDeathSystem;
-    settings.SyncPlayerCalendar = bSyncPlayerCalendar;
+    settings.SyncPlayerCalendar = true; // Shared world clock includes the entire calendar.
     settings.AutoPartyJoin = bAutoPartyJoin;
     settings.ConsoleCommandsAllowed = bAllowConsoleCommands;
     return settings;
@@ -235,6 +230,11 @@ GameServer::GameServer(Console::ConsoleRegistry& aConsole) noexcept
     }
     else if (campaign.GetContract())
     {
+        if (!campaign.AdvanceWorldEpoch())
+        {
+            spdlog::critical("Cannot start campaign timeline: {}", campaign.Error());
+            Kill();
+        }
         m_contentContract = campaign.GetContract()->Content;
         m_sessionRuntime = campaign.GetContract()->Runtime;
         m_pWorld->ctx().at<ModsComponent>().BindContract(*m_contentContract);
@@ -274,8 +274,7 @@ void GameServer::Initialize()
     if (!CheckMoPo())
         return;
 
-    if (bSyncPlayerCalendar)
-        spdlog::warn(kCalendarSyncWarning);
+    spdlog::info("Shared campaign calendar and elapsed days are synchronized");
 
     BindServerCommands();
     m_pWorld->GetScriptService().Initialize(*m_pResources);
@@ -646,7 +645,7 @@ void GameServer::OnConsume(const void* apData, const uint32_t aSize, const Conne
     Buffer::Reader reader(&buf);
 
     const ClientMessageFactory factory;
-    auto pMessage = factory.Extract(reader);
+    auto pMessage = factory.Extract(reader, m_pWorld->GetCampaign().WorldEpoch());
     if (!pMessage)
     {
         spdlog::error("Couldn't parse packet from {:x}", aConnectionId);
@@ -733,7 +732,7 @@ void GameServer::Send(const ConnectionId_t aConnectionId, const ServerMessage& a
     Buffer::Writer writer(&buffer);
     writer.WriteBits(0, 8); // Skip the first byte as it is used by packet
 
-    acServerMessage.Serialize(writer);
+    acServerMessage.Serialize(writer, m_pWorld->GetCampaign().WorldEpoch());
 
     TiltedPhoques::PacketView packet(reinterpret_cast<char*>(buffer.GetWriteData()), static_cast<uint32_t>(writer.Size()));
     Server::Send(aConnectionId, &packet, aPacketFlags);
@@ -952,6 +951,8 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
             [](const auto& resource) { return ContentCompatibility::NormalizeName(resource.Filename) == "runtime/skse"; });
         if (contentError.empty() && cHasSKSE != acRequest->SKSEActive)
             contentError = "SKSE state and library manifest disagree. Restart with a supported SKSE installation or remove SKSE from this profile";
+        if (contentError.empty() && !acRequest->PlayerTime.IsValid())
+            contentError = "The save's calendar is invalid. Load a save with a valid game date and reconnect";
         GameId checkedLocation;
         if (contentError.empty() &&
             (!ContentCompatibility::ResolveInitialForm(acRequest->WorldSpaceId, acRequest->UserMods, acRequest->UserMods, checkedLocation) ||
@@ -1076,7 +1077,7 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         serverResponse.PlayerId = pPlayer->GetId();
         if (!m_contentContract)
         {
-            if (!m_pWorld->GetCampaign().Bind(acRequest->RuntimeVersion, acRequest->UserMods))
+            if (!m_pWorld->GetCampaign().Bind(acRequest->RuntimeVersion, acRequest->UserMods) || !m_pWorld->GetCampaign().AdvanceWorldEpoch())
             {
                 serverResponse.ContentError = "Cannot create the persistent world contract: " + m_pWorld->GetCampaign().Error();
                 sendKick(RT::kContentMismatch);

@@ -129,6 +129,32 @@ TEST_CASE("Saved content contract and CC container survive a new campaign instan
     REQUIRE(restored.Bind("1.7.104.0", Content()));
 }
 
+TEST_CASE("World timeline survives reopening and advances beyond unrelated commits", "[world.epoch]")
+{
+    CampaignDirectory directory;
+    uint64_t first{};
+    {
+        Campaign::State state;
+        REQUIRE(state.Open(directory.File));
+        REQUIRE_FALSE(state.AdvanceWorldEpoch());
+        REQUIRE(state.Bind("1.7.104.0", Content()));
+        REQUIRE(state.AdvanceWorldEpoch());
+        first = state.WorldEpoch();
+        REQUIRE(first > 0);
+        REQUIRE(state.SaveObject(Container()));
+        REQUIRE(state.Revision() > first);
+        REQUIRE(state.WorldEpoch() == first);
+    }
+    Campaign::State reopened;
+    REQUIRE(reopened.Open(directory.File));
+    REQUIRE(reopened.WorldEpoch() == first);
+    REQUIRE(reopened.AdvanceWorldEpoch());
+    const uint64_t second = reopened.WorldEpoch();
+    REQUIRE(second > first + 1);
+    REQUIRE(reopened.AdvanceWorldEpoch());
+    REQUIRE(reopened.WorldEpoch() > second);
+}
+
 TEST_CASE("Persistent forms reject missing plugins and invalid ESL base IDs", "[world.campaign]")
 {
     CampaignDirectory directory;

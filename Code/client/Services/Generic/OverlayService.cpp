@@ -268,6 +268,17 @@ void OverlayService::SendSystemMessage(const std::string& acMessage)
     m_pOverlay->ExecuteAsync("message", pArguments);
 }
 
+void OverlayService::ShowCoopRest(uint8_t aPhase, uint8_t aHours, bool aLocalReady) const noexcept
+{
+    if (!m_pOverlay)
+        return;
+    auto args = CefListValue::Create();
+    args->SetInt(0, aPhase);
+    args->SetInt(1, aHours);
+    args->SetBool(2, aLocalReady);
+    m_pOverlay->ExecuteAsync("coopSleep", args);
+}
+
 void OverlayService::SetPlayerHealthPercentage(uint32_t aFormId) const noexcept
 {
     Actor* pActor = Cast<Actor>(TESForm::GetById(aFormId));

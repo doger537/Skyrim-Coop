@@ -15,18 +15,40 @@ uint32_t DateTime::GetNumberOfDaysByMonthIndex(int aIndex)
 
 void DateTime::Update(uint64_t aDeltaTick)
 {
-    m_timeModel.Time += GetDeltaTime(aDeltaTick);
+    AdvanceHours(static_cast<double>(aDeltaTick) / 1000.0 * m_timeModel.TimeScale / 3600.0);
+}
 
-    m_timeModel.Day += static_cast<uint32_t>(m_timeModel.Time / 24.f);
-    m_timeModel.Time = std::fmod(m_timeModel.Time, 24.f);
+bool DateTime::AdvanceHours(double aHours) noexcept
+{
+    if (!m_timeModel.IsValid() || !std::isfinite(aHours) || aHours < 0.0 || aHours > 24.0 * 366.0 ||
+        m_timeModel.DaysPassed + aHours / 24.0 > 365250.0)
+        return false;
+    TimeModel next = m_timeModel;
+    const double remainder = m_lastPublishedHour == next.Time ? m_hourRemainder : 0.0;
+    const double hours = next.Time + remainder + aHours;
+    next.Day += static_cast<uint32_t>(hours / 24.0);
+    const double exactHour = std::fmod(hours, 24.0);
+    next.Time = static_cast<float>(exactHour);
+    // Do not enter tomorrow early merely because float rounds up to 24.
+    if (next.Time >= 24.f)
+        next.Time = std::nextafter(24.f, 0.f);
+    next.DaysPassed += aHours / 24.0;
 
-    while (m_timeModel.Day > GetNumberOfDaysByMonthIndex(m_timeModel.Month))
+    while (next.Day > GetNumberOfDaysByMonthIndex(next.Month))
     {
-        m_timeModel.Day -= GetNumberOfDaysByMonthIndex(m_timeModel.Month);
-        m_timeModel.Month++;
+        next.Day -= GetNumberOfDaysByMonthIndex(next.Month);
+        if (++next.Month == 12)
+        {
+            next.Month = 0;
+            ++next.Year;
+        }
     }
-    m_timeModel.Year += m_timeModel.Month / 12;
-    m_timeModel.Month %= 12;
+    if (!next.IsValid())
+        return false;
+    m_timeModel = next;
+    m_hourRemainder = exactHour - next.Time;
+    m_lastPublishedHour = next.Time;
+    return true;
 }
 
 float DateTime::GetDeltaTime(uint64_t aDeltaTick) const noexcept

@@ -18,6 +18,8 @@ import { GroupComponent } from '../group/group.component';
 import { controlsAnimation } from './controls.animation';
 import { notificationsAnimation } from './notifications.animation';
 import { map } from 'rxjs/operators';
+import { PopupNotificationService } from '../../services/popup-notification.service';
+import { faBed } from '@fortawesome/free-solid-svg-icons';
 
 const REVEAL_EFFECT_DURATION_MS = 10000 // todo: pass value from C++?
 
@@ -56,6 +58,7 @@ export class RootComponent implements OnInit {
     private readonly uiRepository: UiRepository,
     private readonly translocoService: TranslocoService,
     private readonly settingService: SettingService,
+    private readonly popupNotifications: PopupNotificationService,
     public readonly overlay: Overlay, // used for mockup
   ) {
     this.translocoService.setActiveLang(
@@ -67,6 +70,19 @@ export class RootComponent implements OnInit {
     this.onInGameStateSubscription();
     this.onActivationStateSubscription();
     this.onFontSizeSubscription();
+    this.client.coopSleepChange.pipe(takeUntil(this.destroy$)).subscribe(state => {
+      const key = state.phase === 1
+        ? (state.localReady ? 'WAITING' : 'INVITE')
+        : state.phase === 3 ? 'COMMITTED' : state.phase === 4 ? 'CANCELLED' : undefined;
+      if (key) {
+        this.popupNotifications.addMessage({
+          messageKey: `SERVICE.COOP_SLEEP.${key}`,
+          messageParams: { hours: state.hours },
+          icon: faBed,
+          duration: state.phase === 1 ? 10000 : 5000,
+        });
+      }
+    });
   }
 
   public onInGameStateSubscription() {

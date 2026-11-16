@@ -15,6 +15,7 @@
 
 #include <Events/HealthChangeEvent.h>
 #include <Events/InventoryChangeEvent.h>
+#include <Events/ScopedInventoryEventBatch.h>
 #include <Events/MountEvent.h>
 #include <Events/DialogueEvent.h>
 #include <Games/Misc/MenuTopicManager.h>
@@ -1102,23 +1103,39 @@ void Actor::PickUpObject(TESObjectREFR* apObject, int32_t aCount, bool aUnk1, fl
 
 void* TP_MAKE_THISCALL(HookDropObject, Actor, void* apResult, TESBoundObject* apObject, ExtraDataList* apExtraData, int32_t aCount, NiPoint3* apLocation, NiPoint3* apRotation)
 {
+    if (ScopedInventoryOverride::IsOverriden() || aCount <= 0)
+        return TiltedPhoques::ThisCall(RealDropObject, apThis, apResult, apObject, apExtraData, aCount, apLocation, apRotation);
+
+    const uint32_t actorId = apThis->formID;
     auto& modSystem = World::Get().GetModSystem();
 
+    // ExtraData may be consumed by the native call; copy item properties first.
     Inventory::Entry item{};
     modSystem.GetServerModId(apObject->formID, item.BaseId);
-    item.Count = -aCount;
 
     if (apExtraData)
         apThis->GetItemFromExtraData(item, apExtraData);
+    // GetItemFromExtraData also reads ExtraCount. A transfer delta must retain
+    // the requested sign/quantity rather than becoming the source stack size.
+    item.Count = -aCount;
 
-    QueueActorInventoryChange(InventoryChangeEvent(apThis->formID, std::move(item), true));
+    ScopedInventoryEventBatch batch;
+    void* pNativeResult = nullptr;
+    {
+        ScopedInventoryOverride _;
+        pNativeResult = TiltedPhoques::ThisCall(RealDropObject, apThis, apResult, apObject, apExtraData, aCount, apLocation, apRotation);
+    }
 
-    ScopedInventoryOverride _;
-
-    return TiltedPhoques::ThisCall(RealDropObject, apThis, apResult, apObject, apExtraData, aCount, apLocation, apRotation);
+    // ID 40454 on 1.7.104 writes a 32-bit handle into its second argument and
+    // returns that argument. Publish only after the native result is available.
+    InventoryChangeEvent event(actorId, std::move(item), true);
+    if (apResult)
+        event.DroppedReferenceHandle = static_cast<const BSPointerHandle<TESObjectREFR>*>(apResult)->handle.iBits;
+    batch.Publish(std::move(event));
+    return pNativeResult;
 }
 
-void Actor::DropOrPickUpObject(const Inventory::Entry& arEntry, NiPoint3* apLocation, NiPoint3* apRotation) noexcept
+BSPointerHandle<TESObjectREFR> Actor::DropOrPickUpObject(const Inventory::Entry& arEntry, NiPoint3* apLocation, NiPoint3* apRotation) noexcept
 {
     ExtraDataList* pExtraData = GetExtraDataFromItem(arEntry);
 
@@ -1129,19 +1146,21 @@ void Actor::DropOrPickUpObject(const Inventory::Entry& arEntry, NiPoint3* apLoca
     if (!pObject)
     {
         spdlog::warn("Object to drop not found, {:X}:{:X}.", arEntry.BaseId.ModId, arEntry.BaseId.BaseId);
-        return;
+        return {};
     }
 
-    if (arEntry.Count < 0)
-        DropObject(pObject, pExtraData, -arEntry.Count, apLocation, apRotation);
+    if (arEntry.Count < 0 && arEntry.Count != std::numeric_limits<int32_t>::min())
+        return DropObject(pObject, pExtraData, -arEntry.Count, apLocation, apRotation);
     // TODO: pick up
+    return {};
 }
 
-void Actor::DropObject(TESBoundObject* apObject, ExtraDataList* apExtraData, int32_t aCount, NiPoint3* apLocation, NiPoint3* apRotation) noexcept
+BSPointerHandle<TESObjectREFR> Actor::DropObject(TESBoundObject* apObject, ExtraDataList* apExtraData, int32_t aCount, NiPoint3* apLocation, NiPoint3* apRotation) noexcept
 {
     spdlog::debug("Dropping object, form id: {:X}, count: {}, actor: {:X}", apObject->formID, aCount, formID);
     BSPointerHandle<TESObjectREFR> result{};
     TiltedPhoques::ThisCall(RealDropObject, this, &result, apObject, apExtraData, aCount, apLocation, apRotation);
+    return result;
 }
 
 TP_THIS_FUNCTION(TUpdateDetectionState, void, ActorKnowledge, void*);

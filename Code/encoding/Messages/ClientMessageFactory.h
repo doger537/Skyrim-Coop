@@ -1,6 +1,7 @@
 #pragma once
 #include <Messages/RequestCampaignReady.h>
 #include <Messages/RequestCampaignSeed.h>
+#include <Messages/RequestCoopSleep.h>
 
 #include <Messages/Message.h>
 #include <MetaMessage.h>
@@ -64,7 +65,7 @@ using TiltedPhoques::UniquePtr;
 
 struct ClientMessageFactory
 {
-    UniquePtr<ClientMessage> Extract(TiltedPhoques::Buffer::Reader& aReader) const noexcept;
+    UniquePtr<ClientMessage> Extract(TiltedPhoques::Buffer::Reader& aReader, uint64_t aExpectedEpoch = 0) const noexcept;
 
     template <class T> static auto Visit(T&& func)
     {
@@ -73,7 +74,7 @@ struct ClientMessageFactory
             PartyChangeLeaderRequest, PartyKickRequest, RequestActorValueChanges, RequestActorMaxValueChanges, EnterExteriorCellRequest, RequestHealthChangeBroadcast, ActivateRequest, LockChangeRequest, AssignObjectsRequest, RequestDeathStateChange, ShiftGridCellRequest,
             RequestOwnershipTransfer, RequestOwnershipClaim, RequestObjectInventoryChanges, SpellCastRequest, ProjectileLaunchRequest, InterruptCastRequest, AddTargetRequest, ScriptAnimationRequest, DrawWeaponRequest, MountRequest, NewPackageRequest, RequestRespawn, SyncExperienceRequest,
             RequestEquipmentChanges, SendChatMessageRequest, TeleportCommandRequest, PlayerRespawnRequest, DialogueRequest, SubtitleRequest, PlayerDialogueRequest, PlayerLevelRequest, TeleportRequest, RequestPlayerHealthUpdate, RequestWeatherChange, RequestCurrentWeather, RequestSetWaypoint,
-            RequestRemoveWaypoint, RemoveSpellRequest, SetTimeCommandRequest, RequestActionEvents, RequestCampaignReady, RequestCampaignSeed>;
+            RequestRemoveWaypoint, RemoveSpellRequest, SetTimeCommandRequest, RequestActionEvents, RequestCampaignReady, RequestCampaignSeed, RequestCoopSleep>;
 
         return s_visitor(std::forward<T>(func));
     }

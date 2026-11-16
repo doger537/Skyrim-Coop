@@ -25,6 +25,15 @@ public:
     };
     bool Open(const std::filesystem::path& acPath, const TiltedPhoques::String& acAdapters = QuestAdapters::kEmpty) noexcept;
     bool Bind(const TiltedPhoques::String& acRuntime, const Mods& acContent) noexcept;
+    // Start a new live timeline. Never roll back this marker with an in-game save.
+    bool AdvanceWorldEpoch() noexcept;
+    uint64_t WorldEpoch() const noexcept { return m_worldEpoch; }
+    enum class ItemWriteResult { Saved, Conflict, Invalid, StorageError };
+    bool ValidWorldItem(const WorldItemState& acItem) const noexcept;
+    bool LoadWorldItems(TiltedPhoques::Vector<WorldItemState>& aItems) noexcept;
+    // Id == 0 creates a new persistent identity. Existing IDs require the last
+    // committed lifecycle revision, never a motion sample sequence.
+    ItemWriteResult SaveWorldItem(WorldItemState& aItem, uint64_t aExpectedRevision) noexcept;
     bool LoadObject(GameId aId, ObjectData& aObject, bool& aFound) noexcept;
     bool SaveObject(const ObjectData& acObject) noexcept;
     bool SaveObjects(const TiltedPhoques::Vector<ObjectData>& acObjects) noexcept;
@@ -55,6 +64,7 @@ private:
     TiltedPhoques::Vector<SavedQuest> m_quests;
     uint64_t m_questRevision{};
     bool m_bootstrapped{};
+    uint64_t m_worldEpoch{};
 };
 
 // Checked arithmetic for authoritative snapshots; transfer acknowledgement is a separate layer.

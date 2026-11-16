@@ -29,14 +29,17 @@ static struct ServerMessageFactoryInit
 } s_ServerMessageFactoryInit;
 } // namespace details
 
-UniquePtr<ServerMessage> ServerMessageFactory::Extract(TiltedPhoques::Buffer::Reader& aReader) const noexcept
+UniquePtr<ServerMessage> ServerMessageFactory::Extract(TiltedPhoques::Buffer::Reader& aReader, uint64_t aExpectedEpoch) const noexcept
 {
-    uint64_t data;
-    aReader.ReadBits(data, sizeof(ServerOpcode) * 8);
-
-    if (data >= kServerOpcodeMax) [[unlikely]]
+    uint64_t data{};
+    uint64_t epoch{};
+    if (!aReader.ReadBits(data, sizeof(ServerOpcode) * 8) || data >= kServerOpcodeMax || !aReader.ReadBits(epoch, 64)) [[unlikely]]
         return {nullptr};
 
     const auto opcode = static_cast<ServerOpcode>(data);
-    return s_serverMessageExtractor[opcode](aReader);
+    if (aExpectedEpoch != 0 && opcode != kAuthenticationResponse && epoch != aExpectedEpoch)
+        return {nullptr};
+    auto message = s_serverMessageExtractor[opcode](aReader);
+    message->WorldEpoch = epoch;
+    return message;
 }

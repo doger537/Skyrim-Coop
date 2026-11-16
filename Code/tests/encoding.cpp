@@ -354,6 +354,7 @@ TEST_CASE("Packets", "[encoding.packets]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         recvMessage.DeserializeRaw(reader);
 
@@ -378,6 +379,7 @@ TEST_CASE("Packets", "[encoding.packets]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         recvMessage.DeserializeRaw(reader);
 
@@ -421,6 +423,7 @@ TEST_CASE("Packets", "[encoding.packets]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         recvMessage.DeserializeRaw(reader);
 
@@ -469,6 +472,7 @@ TEST_CASE("Packets", "[encoding.packets]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         recvMessage.DeserializeRaw(reader);
 
@@ -505,6 +509,7 @@ TEST_CASE("Packets", "[encoding.packets]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         recvMessage.DeserializeRaw(reader);
 
@@ -611,6 +616,7 @@ TEST_CASE("StringCache", "[encoding.string_cache]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         StringCacheUpdate recvUpdate;
         recvUpdate.DeserializeRaw(reader);

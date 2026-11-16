@@ -6,6 +6,7 @@
 #include <Structs/Mods.h>
 #include <Structs/ObjectData.h>
 #include <Structs/QuestJournal.h>
+#include <Structs/WorldItemState.h>
 
 namespace Campaign
 {
@@ -27,4 +28,6 @@ bool Encode(const ObjectData& acObject, TiltedPhoques::Vector<uint8_t>& aBytes) 
 bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, ObjectData& aObject) noexcept;
 bool Encode(const Quest& acQuest, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept;
 bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, Quest& aQuest) noexcept;
+bool Encode(const WorldItemState& acItem, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept;
+bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, WorldItemState& aItem) noexcept;
 } // namespace Campaign

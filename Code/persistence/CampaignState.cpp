@@ -12,6 +12,7 @@ bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) 
 {
     m_ready = false;
     m_contract.reset();
+    m_worldEpoch = 0;
     m_error.clear();
     if (!m_store.Open(acPath) || !m_store.VerifyRecords())
     {
@@ -63,7 +64,38 @@ bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) 
             }
         }
     }
+    WorldStore::Record epoch;
+    const auto epochResult = m_store.Read("$world-epoch", epoch);
+    if (epochResult == WorldStore::ReadResult::Failed ||
+        (epochResult == WorldStore::ReadResult::Found && epoch.Value != Vector<uint8_t>{'T', 'C', 'W', 'E', 1}))
+    {
+        m_error = "Cannot read the authoritative world timeline marker; preserve the database";
+        return false;
+    }
+    if (epochResult == WorldStore::ReadResult::Found)
+        m_worldEpoch = epoch.Revision;
     m_ready = true;
+    return true;
+}
+
+bool State::AdvanceWorldEpoch() noexcept
+{
+    if (!m_ready || !m_contract)
+    {
+        m_error = "Cannot start a timeline before the world content contract is bound";
+        return false;
+    }
+    WorldStore::Record marker;
+    marker.Key = "$world-epoch";
+    marker.Revision = m_worldEpoch;
+    marker.Value = {'T', 'C', 'W', 'E', 1};
+    uint64_t revision{};
+    if (m_store.Commit({marker}, revision) != WorldStore::WriteResult::Committed)
+    {
+        m_error = "Cannot persist a new world timeline: " + m_store.Error();
+        return false;
+    }
+    m_worldEpoch = revision;
     return true;
 }
 

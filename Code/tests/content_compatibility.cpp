@@ -39,6 +39,7 @@ template <class T> void CheckRoundTrip(const T& acMessage)
     TiltedPhoques::Buffer::Reader reader(&buffer);
     uint64_t opcode;
     reader.ReadBits(opcode, 8);
+    REQUIRE(reader.ReadBits(opcode, 64)); // world timeline envelope
     T decoded;
     decoded.DeserializeRaw(reader);
     REQUIRE(decoded == acMessage);
