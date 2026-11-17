@@ -17,9 +17,9 @@ This is implemented for the MCP-verified 1.7.104 runtime. It still needs verific
 
 `Tools/TrueCoop/build_player_markers.py` adds QUST `TrueCoopPlayerMarkers` (local ID 0x4DF4) and STAT `TrueCoopPlayerMarkerAnchor` (0x4DF5) to the bundled GPL SkyrimTogether.esp. The quest has eight optional reference aliases/objectives, no stages/fragments/scripts and no inventory/faction/AI changes. Optional aliases never make players essential, protected, reserved or quest objects. The model-free anchor has only EDID and zero OBND.
 
-All original records remain byte-identical; only TES4's record count/next ID and the QUST group size change. The generator verifies preservation and idempotence and refuses a conflicting reserved ID. Tests pin the original 6420-byte ESP and generated 7530-byte ESP hashes.
+All original records remain byte-identical; only TES4's record count/next ID and the QUST group size change. The generator verifies preservation and idempotence and refuses a conflicting reserved ID. Tests pin the original 6420-byte ESP, intermediate 7530-byte marker-only ESP and current 8186-byte ESP. The latter adds nine identity globals; see [CHARACTER_IDENTITY.md](CHARACTER_IDENTITY.md).
 
-The known original SHA256 `3196266aa29855574bda48335da9ab2f18ad33a80eee116400da7c5c81c93d7e` upgrades to `9ef8a8f8bb08dca12f43355e073adf0a3bd69cb4f947964fec10a278a1f7694b` in a restored 1.7.104 campaign contract. Only that exact, non-ESL SkyrimTogether.esp with its original two masters is upgraded. The contract commit is atomic and idempotent; original object inventory/locks and world ID survive reopening. Unknown edits, other plugins/resources, downgrades and pinned quest adapters incompatible with the new digest remain rejected. This does not relax the requirement for matching active content on both players.
+The known original SHA256 `3196266aa29855574bda48335da9ab2f18ad33a80eee116400da7c5c81c93d7e` and the marker-only `9ef8a8f8bb08dca12f43355e073adf0a3bd69cb4f947964fec10a278a1f7694b` upgrade to the current core `ff52f44a06d57bded74a2a306966844845ec254d8b9ae015b30ec493ff224502` in a restored 1.7.104 campaign contract. Only that exact, non-ESL SkyrimTogether.esp with its original two masters is upgraded. The contract commit is atomic and idempotent; original object inventory/locks and world ID survive reopening. Unknown edits, other plugins/resources, downgrades and pinned quest adapters incompatible with the new digest remain rejected. This does not relax the requirement for matching active content on both players.
 
 The quest's empty stage list excludes it from the shared campaign journal using the existing QuestService rule. The generated ESP must be deployed alongside this client; an old ESP is not sufficient. No new plugin needs enabling.
 
@@ -37,8 +37,8 @@ Ghidra MCP is reached through the read-only stdio bridge after opening the exist
 ## Validation at this stage
 
 - Native client/launcher, server/DLL/runner and protocol probe built.
-- 91 Catch2 cases / 2595 assertions passed (new checked location codec and atomic core-contract upgrade checks included).
-- Five asset tests pass: pinned hashes, deterministic/idempotent generation, byte preservation of existing records, no stages/scripts/AI flags/model, conflicting IDs and truncation rejection.
+- 94 Catch2 cases / 2727 assertions passed (new checked location codec and atomic core-contract upgrade checks included).
+- Six asset tests pass: pinned hashes, deterministic/idempotent generation, byte preservation of existing records, no stages/scripts/AI flags/model, conflicting IDs and truncation rejection.
 - `TrueCoopProtocolProbe --verify-locations`: eleven scenarios pass, including cross-interior delivery, no relabelled old-cell coordinates, wrong sender/epoch/replay rejection, party privacy, expiry, recovery and party removal.
 
 Full item physics, ragdoll/furniture/navmesh, paired native save rollback and quest item/reward custody are separate remaining modules. Alternate Start is excluded from the latest requested scope and was not modified.

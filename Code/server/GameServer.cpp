@@ -895,6 +895,12 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         sendKick(RT::kContentMismatch);
         return;
     }
+    if (!acRequest->CharacterIdentityDecoded || !acRequest->CharacterId.IsValid())
+    {
+        serverResponse.ContentError = "The saved character identity is missing or invalid. Deploy the complete matching True Coop package and reconnect";
+        sendKick(RT::kContentMismatch);
+        return;
+    }
     if (acRequest->Version != BUILD_COMMIT)
     {
         spdlog::info("New player {:x} '{}' tried to connect with client {} - Version mismatch", aConnectionId, remoteAddress, acRequest->Version.c_str());
@@ -953,6 +959,13 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
             contentError = "SKSE state and library manifest disagree. Restart with a supported SKSE installation or remove SKSE from this profile";
         if (contentError.empty() && !acRequest->PlayerTime.IsValid())
             contentError = "The save's calendar is invalid. Load a save with a valid game date and reconnect";
+        if (contentError.empty())
+            for (const Player* existing : m_pWorld->GetPlayerManager())
+                if (existing->GetPersistentCharacterId() == acRequest->CharacterId)
+                {
+                    contentError = "This character is already connected. Each player needs their own character; do not share one character save";
+                    break;
+                }
         GameId checkedLocation;
         if (contentError.empty() &&
             (!ContentCompatibility::ResolveInitialForm(acRequest->WorldSpaceId, acRequest->UserMods, acRequest->UserMods, checkedLocation) ||
@@ -1063,6 +1076,7 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         pPlayer->SetMods(playerMods);
         pPlayer->SetModIds(playerModsIds);
         pPlayer->SetLevel(acRequest->Level);
+        pPlayer->SetPersistentCharacterId(acRequest->CharacterId);
 
         // this event is shit, needs to be fixed, i know
         auto [canceled, reason] = m_pWorld->GetScriptService().HandlePlayerJoin(aConnectionId);
@@ -1086,6 +1100,13 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
             }
             m_contentContract = acRequest->UserMods;
             m_sessionRuntime = acRequest->RuntimeVersion;
+        }
+        if (!m_pWorld->GetCampaign().RegisterParticipant(acRequest->CharacterId))
+        {
+            serverResponse.ContentError = m_pWorld->GetCampaign().Error();
+            sendKick(RT::kContentMismatch);
+            m_pWorld->GetPlayerManager().Remove(pPlayer);
+            return;
         }
 
         auto modList = PrettyPrintModList(acRequest->UserMods.ModList);

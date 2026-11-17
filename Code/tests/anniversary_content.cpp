@@ -91,6 +91,7 @@ TEST_CASE("The complete 74-Creation profile fits and survives authentication enc
     std::set<std::string_view> unique(kAnniversaryPlugins.begin(), kAnniversaryPlugins.end());
     REQUIRE(unique.size() == 74);
     AuthenticationRequest request;
+    request.CharacterId.Parts[0] = 1;
     request.RuntimeVersion = "1.7.104.0";
     request.UserMods = mods;
     request.Token = "test-password";
@@ -219,6 +220,7 @@ TEST_CASE("Unknown authentication protocol is refused before parsing the changed
     writer.WriteBits(kTrueCoopProtocolVersion + 1, 32);
     TiltedPhoques::Buffer::Reader reader(&buffer);
     AuthenticationRequest request;
+    request.CharacterId.Parts[0] = 1;
     request.DeserializeRaw(reader);
     REQUIRE(request.ProtocolVersion != kTrueCoopProtocolVersion);
     REQUIRE(request.UserMods.ModList.empty());

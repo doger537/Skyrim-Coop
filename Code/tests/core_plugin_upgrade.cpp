@@ -40,13 +40,15 @@ TEST_CASE("Core marker upgrade changes only the known bundled plugin digest and 
     const auto original = PreviousCore();
     auto updated = original;
     REQUIRE(CorePluginUpgrade::Upgrade(updated));
-    REQUIRE(updated.ModList[2].Digest == CorePluginUpgrade::kMarkers);
+    REQUIRE(updated.ModList[2].Digest == CorePluginUpgrade::kCharacters);
     REQUIRE(updated.Resources == original.Resources);
     REQUIRE(updated.ModList[0] == original.ModList[0]);
     REQUIRE(updated.ModList[1] == original.ModList[1]);
     updated.ModList[2].Digest = CorePluginUpgrade::kPrevious;
     REQUIRE(updated == original);
     updated.ModList[2].Digest = CorePluginUpgrade::kMarkers;
+    REQUIRE(CorePluginUpgrade::Upgrade(updated));
+    REQUIRE(updated.ModList[2].Digest == CorePluginUpgrade::kCharacters);
     const auto next = updated;
     REQUIRE_FALSE(CorePluginUpgrade::Upgrade(updated));
     REQUIRE(updated == next);

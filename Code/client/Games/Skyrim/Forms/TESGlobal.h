@@ -16,3 +16,4 @@ struct TESGlobal : TESForm
 };
 
 static_assert(offsetof(TESGlobal, f) == 0x34);
+static_assert(offsetof(TESGlobal, unk1C) == 0x30);

@@ -233,6 +233,7 @@ TEST_CASE("Inventory operations are applied at most once per connection", "[inve
 TEST_CASE("Content metadata and operation IDs survive the wire", "[content.protocol]")
 {
     AuthenticationRequest request;
+    request.CharacterId.Parts[0] = 1;
     request.RuntimeVersion = "1.7.104.0";
     request.UserMods = MakeManifest();
     CheckRoundTrip(request);

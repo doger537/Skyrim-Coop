@@ -12,9 +12,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Cannot identify native source' }
 $buildInfo = Get-Content -LiteralPath (Join-Path $repo 'build/BuildInfo.h') -Raw
 if (!$buildInfo.Contains('#define BUILD_COMMIT "' + $version + '"')) { throw 'Native build identity differs from selected source' }
 # Packaging scripts/docs may evolve without rebuilding unchanged C++ under a new protocol identity.
-$nativeChanges = @(git -C $repo diff --name-only $revision -- Code Libraries modules xmake.lua)
+$nativeChanges = @(git -C $repo diff --name-only $revision -- Code Libraries modules GameFiles xmake.lua)
 if ($LASTEXITCODE -ne 0 -or $nativeChanges.Count) { throw 'Native/UI source changed since the selected native build' }
-$untracked = @(git -C $repo ls-files --others --exclude-standard -- Code Libraries modules)
+$untracked = @(git -C $repo ls-files --others --exclude-standard -- Code Libraries modules GameFiles)
 if ($untracked.Count) { throw 'Untracked source files prevent native identity verification' }
 $configuration = Get-Content -LiteralPath (Join-Path $repo '.xmake/windows/x64/xmake.conf') -Raw
 if ($configuration -notmatch 'skyrim_version\s*=\s*"latest"' -or $configuration -notmatch 'mode\s*=\s*"releasedbg"') { throw 'This package requires the verified latest/1.7.104 Windows releasedbg configuration' }
@@ -54,7 +54,7 @@ Copy-Item -LiteralPath (Join-Path $repo 'build/BuildInfo.h') -Destination $info
 foreach ($name in @('TiltedConnect','TiltedHooks','TiltedReverse','TiltedUI')) { Copy-Item -LiteralPath (Join-Path $repo "Libraries/$name/LICENSE") -Destination (Join-Path $info "$name-LICENSE.txt") }
 foreach ($name in @('CONNECTION.md','PERSISTENCE.md','QUESTS.md','OBJECTS.md')) { Copy-Item -LiteralPath (Join-Path $repo "docs/truecoop/ae/$name") -Destination $info }
 Copy-Item -LiteralPath (Join-Path $repo 'GameFiles/Server/TrueCoopQuestAdapters.example.json') -Destination $info
-foreach ($name in @('COOP_RESYNC.md','DEEP_COOP_TEST_RU.md','docs/truecoop/HOST_AUTHORITY_DESIGN.md','docs/truecoop/PHYSICS_NPC_AUDIT.md','docs/truecoop/DIALOGUE_LEASE.md')) {
+foreach ($name in @('COOP_RESYNC.md','DEEP_COOP_TEST_RU.md','docs/truecoop/HOST_AUTHORITY_DESIGN.md','docs/truecoop/PHYSICS_NPC_AUDIT.md','docs/truecoop/DIALOGUE_LEASE.md','docs/truecoop/PLAYER_MARKERS.md','docs/truecoop/CHARACTER_IDENTITY.md')) {
     $source = Join-Path $repo $name
     if (Test-Path -LiteralPath $source) {
         $target = Join-Path $info $name
@@ -62,7 +62,10 @@ foreach ($name in @('COOP_RESYNC.md','DEEP_COOP_TEST_RU.md','docs/truecoop/HOST_
         Copy-Item -LiteralPath $source -Destination $target
     }
 }
-[ordered]@{NativeRevision=$revision;Build=$version;Runtime='1.7.104.0';Profile='Identical active AE content';GameTested=$false;CommonSELauncherIncluded=$false} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $info 'BUILD.json') -Encoding utf8
+$protocolHeader = Get-Content -LiteralPath (Join-Path $repo 'Code/encoding/Structs/ProtocolVersion.h') -Raw
+if ($protocolHeader -notmatch 'kTrueCoopProtocolVersion\s*=\s*(0x[0-9A-Fa-f]+)') { throw 'Cannot read the protocol identity' }
+$protocol = $Matches[1]
+[ordered]@{NativeRevision=$revision;Build=$version;Protocol=$protocol;CorePluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/SkyrimTogether.esp')).Hash;Runtime='1.7.104.0';Profile='Identical active AE content';GameTested=$false;CommonSELauncherIncluded=$false} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $info 'BUILD.json') -Encoding utf8
 $records = @(foreach ($file in Get-ChildItem -LiteralPath $stage -File -Recurse) {
     [pscustomobject]@{Path=[IO.Path]::GetRelativePath($stage,$file.FullName).Replace('\','/');Bytes=$file.Length;SHA256=(Get-FileHash -LiteralPath $file.FullName).Hash}
 })

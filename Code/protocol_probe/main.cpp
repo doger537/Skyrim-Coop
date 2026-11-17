@@ -229,7 +229,11 @@ struct Probe final : Client
 
 AuthenticationRequest MakeRequest()
 {
+    static uint16_t nextIdentity = 1;
+    static const uint64_t processIdentity = static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     AuthenticationRequest request;
+    request.CharacterId.Parts = {nextIdentity++, static_cast<uint16_t>(processIdentity), static_cast<uint16_t>(processIdentity >> 16),
+        static_cast<uint16_t>(processIdentity >> 32), static_cast<uint16_t>(processIdentity >> 48), 0xD2C8, 0x1284, 0xA9F0};
     request.Version = BUILD_COMMIT;
     request.RuntimeVersion = "1.7.104.0";
     request.Username = "Protocol probe";
@@ -983,7 +987,9 @@ bool CheckDialogueLease(const std::string& acAddress)
 bool CheckPartyLocations(const std::string& acAddress)
 {
     Probe host, guest, outsider;
-    host.Request = guest.Request = outsider.Request = MakeRequest();
+    host.Request = MakeRequest();
+    guest.Request = MakeRequest();
+    outsider.Request = MakeRequest();
     const auto check = [](bool aPassed, const char* apName)
     {
         std::cout << (aPassed ? "PASS: " : "FAIL: ") << apName << std::endl;
@@ -1129,6 +1135,12 @@ int main(int argc, char** argv)
         baseline.Update();
     };
     check("matching active content", MakeRequest(), ResponseType::kAccepted);
+    auto duplicateCharacter = MakeRequest();
+    duplicateCharacter.CharacterId = baseline.Request.CharacterId;
+    check("duplicate active saved character", duplicateCharacter, ResponseType::kContentMismatch);
+    auto missingCharacter = MakeRequest();
+    missingCharacter.CharacterId = {};
+    check("missing saved character identity", missingCharacter, ResponseType::kContentMismatch);
     auto changed = MakeRequest();
     changed.ProtocolVersion += 1;
     check("unknown protocol schema", changed, ResponseType::kContentMismatch);

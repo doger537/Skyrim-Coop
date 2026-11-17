@@ -302,6 +302,10 @@ void DiscoveryService::OnConnected(const ConnectedEvent& acEvent) noexcept
 
 BSTEventResult DiscoveryService::OnEvent(const TESLoadGameEvent*, const EventDispatcher<TESLoadGameEvent>*)
 {
+    // Publish only copied/atomic state here; transport consumes it on its runner
+    // before a completed load can reuse the previous admission or hash task.
+    m_world.GetTransport().NativeLoadCompleted();
+    m_world.GetRunner().InvalidateGameplay();
     spdlog::info("Finished loading, triggering visit cell");
 
 #if (IS_MASTER)

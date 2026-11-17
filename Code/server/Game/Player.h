@@ -1,5 +1,6 @@
 #pragma once
 #include <Structs/OperationWindow.h>
+#include <Structs/CharacterIdentity.h>
 
 struct ServerMessage;
 struct Player
@@ -14,6 +15,8 @@ struct Player
     Player& operator=(const Player&) = delete;
 
     [[nodiscard]] uint32_t GetId() const noexcept { return m_id; }
+    const CharacterIdentity& GetPersistentCharacterId() const noexcept { return m_persistentCharacterId; }
+    void SetPersistentCharacterId(const CharacterIdentity& acId) noexcept { m_persistentCharacterId = acId; }
     [[nodiscard]] ConnectionId_t GetConnectionId() const noexcept { return m_connectionId; }
     [[nodiscard]] std::optional<entt::entity> GetCharacter() const noexcept { return m_character; }
     [[nodiscard]] PartyComponent& GetParty() noexcept { return m_party; }
@@ -48,6 +51,7 @@ struct Player
 
 private:
     uint32_t m_id{0};
+    CharacterIdentity m_persistentCharacterId;
     ConnectionId_t m_connectionId;
     std::optional<entt::entity> m_character;
     Vector<String> m_mods;

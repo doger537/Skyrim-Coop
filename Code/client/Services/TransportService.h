@@ -44,6 +44,13 @@ struct TransportService : Client
     const uint32_t& GetLocalPlayerId() const noexcept { return m_localPlayerId; }
     uint64_t GetConnectionGeneration() const noexcept { return m_connectionGeneration; }
     uint64_t GetWorldEpoch() const noexcept { return m_worldEpoch; }
+    // Native event callback may only publish this barrier, never close sockets
+    // or retain engine pointers. The runner consumes it before polling packets.
+    void NativeLoadCompleted() noexcept
+    {
+        ++m_connectionGeneration;
+        m_nativeLoadCompleted.store(true, std::memory_order_release);
+    }
     void FailCampaign(const String& acReason) noexcept;
 
     // Times below are in ms on the networking library's local clock, which keeps running while the game thread is stalled
@@ -79,6 +86,7 @@ private:
     std::optional<AuthenticationResponse> m_pendingAuthentication;
     uint64_t m_campaignNonce{};
     uint64_t m_worldEpoch{};
+    std::atomic<bool> m_nativeLoadCompleted{};
 
     entt::scoped_connection m_updateConnection;
     entt::scoped_connection m_sendServerMessageConnection;

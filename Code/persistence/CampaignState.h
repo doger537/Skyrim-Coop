@@ -3,6 +3,7 @@
 #include "WorldStore.h"
 #include "QuestAdapters.h"
 #include <optional>
+#include <Structs/CharacterIdentity.h>
 
 namespace Campaign
 {
@@ -27,6 +28,7 @@ public:
     bool Bind(const TiltedPhoques::String& acRuntime, const Mods& acContent) noexcept;
     // Start a new live timeline. Never roll back this marker with an in-game save.
     bool AdvanceWorldEpoch() noexcept;
+    bool RegisterParticipant(const CharacterIdentity& acIdentity) noexcept;
     uint64_t WorldEpoch() const noexcept { return m_worldEpoch; }
     enum class ItemWriteResult { Saved, Conflict, Invalid, StorageError };
     bool ValidWorldItem(const WorldItemState& acItem) const noexcept;

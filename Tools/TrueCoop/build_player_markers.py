@@ -160,6 +160,8 @@ def main():
     path = ROOT / 'GameFiles/Skyrim/SkyrimTogether.esp'
     before = path.read_bytes()
     after = add_quest(before, local_id, slots)
+    from build_character_identity import add_identity
+    after = add_identity(after)
     if args.check:
         if before != after:
             raise SystemExit('Bundled marker quest needs generating')

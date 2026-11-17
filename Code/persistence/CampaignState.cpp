@@ -51,7 +51,7 @@ bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) 
         // Unknown edits, other mods, resources and downgrades stay incompatible.
         if (m_contract->Runtime == "1.7.104.0" && CorePluginUpgrade::Upgrade(m_contract->Content) && !m_adapters.Validate(m_contract->Content))
         {
-            m_error = "The additive core marker update conflicts with a pinned quest adapter: " + m_adapters.Error();
+            m_error = "The additive core plugin update conflicts with a pinned quest adapter: " + m_adapters.Error();
             return false;
         }
         // Upgrade only after validating the pinned policy and journal. Older H
@@ -105,6 +105,38 @@ bool State::AdvanceWorldEpoch() noexcept
         return false;
     }
     m_worldEpoch = revision;
+    return true;
+}
+
+bool State::RegisterParticipant(const CharacterIdentity& acIdentity) noexcept
+{
+    if (!m_ready || !m_contract || !acIdentity.IsValid())
+    {
+        m_error = "Cannot register an invalid character or an unbound world";
+        return false;
+    }
+    WorldStore::Record record;
+    record.Key = "$participant/";
+    constexpr char hex[] = "0123456789abcdef";
+    for (uint16_t part : acIdentity.Parts)
+        for (int shift = 12; shift >= 0; shift -= 4)
+            record.Key += hex[(part >> shift) & 15];
+    const auto result = m_store.Read(record.Key, record);
+    const Vector<uint8_t> format{'T', 'C', 'P', 'I', 1};
+    if (result == WorldStore::ReadResult::Found && record.Value == format)
+        return true;
+    if (result != WorldStore::ReadResult::Missing)
+    {
+        m_error = "Cannot read the durable character identity record; preserve the database";
+        return false;
+    }
+    record.Value = format;
+    uint64_t revision{};
+    if (m_store.Commit({record}, revision) != WorldStore::WriteResult::Committed)
+    {
+        m_error = "Cannot persist the character identity: " + m_store.Error();
+        return false;
+    }
     return true;
 }
 

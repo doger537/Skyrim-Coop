@@ -28,6 +28,8 @@
 #include <ScriptExtender.h>
 #include <Structs/ContentCompatibility.h>
 #include <Systems/ContentFingerprint.h>
+#include <Forms/SavedCharacterIdentity.h>
+#include <bcrypt.h>
 #include "../../../immersive_launcher/utils/FileVersion.inl"
 #include <Services/DiscordService.h>
 #include <Services/QuestService.h>
@@ -140,6 +142,14 @@ void TransportService::OnConnected()
     request.RuntimeVersion = QueryFileVersion((std::filesystem::current_path() / L"SkyrimSE.exe").c_str()).c_str();
     request.SKSEActive = IsScriptExtenderLoaded();
     request.MO2Active = GetModuleHandleW(kMO2DllName);
+    if (SavedCharacterIdentity::Read(request.CharacterId) == SavedCharacterIdentity::Result::Invalid)
+    {
+        ConnectionErrorEvent event;
+        event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"Cannot read the character identity. Deploy the complete matching True Coop package, load a save and reconnect\"}}";
+        m_dispatcher.trigger(event);
+        Close();
+        return;
+    }
 
     request.Token = m_serverPassword;
     m_serverPassword = "";
@@ -220,7 +230,14 @@ void TransportService::OnUpdate()
         if (m_manifestGeneration == m_connectionGeneration && Client::IsConnected())
         {
             const auto result = ContentCompatibility::Validate(request.UserMods);
-            if (result)
+            if (!request.CharacterId.IsValid() || !SavedCharacterIdentity::Commit(request.CharacterId))
+            {
+                ConnectionErrorEvent event;
+                event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"The loaded character changed during connection or its identity is invalid. Reconnect after loading finishes\"}}";
+                m_dispatcher.trigger(event);
+                Close();
+            }
+            else if (result)
                 Send(request);
             else
             {
@@ -246,6 +263,9 @@ void TransportService::OnUpdate()
             std::launch::async,
             [request = std::move(request), dataPath, addressLibrary, scriptExtender]() mutable
             {
+                if (!request.CharacterId.IsValid() && BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(request.CharacterId.Parts.data()),
+                    static_cast<ULONG>(sizeof(request.CharacterId.Parts)), BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0)
+                    request.CharacterId = {};
                 FingerprintContent(dataPath, addressLibrary, scriptExtender, request.UserMods);
                 if (request.SKSEActive && scriptExtender.empty())
                 {
@@ -264,6 +284,20 @@ double TransportService::GetMessageReceiveTime() const noexcept
 
 void TransportService::HandleUpdate(const UpdateEvent& acEvent) noexcept
 {
+    if (m_nativeLoadCompleted.exchange(false, std::memory_order_acq_rel))
+    {
+        m_world.GetRunner().InvalidateGameplay();
+        m_queuedAuthentication.reset();
+        if (Client::IsConnected())
+        {
+            // A local .ess load is not a coordinated server rollback. Never
+            // continue applying the old session to the newly loaded world.
+            ConnectionErrorEvent event;
+            event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"A local save was loaded. Reconnect after loading finishes; coordinated two-player rollback is not available in this test build\"}}";
+            m_dispatcher.trigger(event);
+            Close();
+        }
+    }
     // Taken before polling, so that every message that arrived before this time gets handled by this update
     m_lastPollTime = static_cast<double>(SteamNetworkingUtils()->GetLocalTimestamp()) / 1000.0;
 

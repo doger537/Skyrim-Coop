@@ -17,6 +17,7 @@ Player::Player(ConnectionId_t aConnectionId)
 
 Player::Player(Player&& aRhs) noexcept
     : m_id{std::exchange(aRhs.m_id, 0)}
+    , m_persistentCharacterId{std::exchange(aRhs.m_persistentCharacterId, {})}
     , m_connectionId{std::exchange(aRhs.m_connectionId, 0)}
     , m_character{std::exchange(aRhs.m_character, std::nullopt)}
     , m_mods{std::exchange(aRhs.m_mods, {})}
