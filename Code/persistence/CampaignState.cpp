@@ -1,4 +1,5 @@
 #include "CampaignState.h"
+#include "CorePluginUpgrade.h"
 #include <Structs/ContentCompatibility.h>
 #include <algorithm>
 #include <limits>
@@ -45,6 +46,14 @@ bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) 
         return false;
     if (m_contract)
     {
+        // A narrowly pinned additive upgrade of our own ESP changes no existing
+        // FormIDs/records. Do it before binding the restored server contract.
+        // Unknown edits, other mods, resources and downgrades stay incompatible.
+        if (m_contract->Runtime == "1.7.104.0" && CorePluginUpgrade::Upgrade(m_contract->Content) && !m_adapters.Validate(m_contract->Content))
+        {
+            m_error = "The additive core marker update conflicts with a pinned quest adapter: " + m_adapters.Error();
+            return false;
+        }
         // Upgrade only after validating the pinned policy and journal. Older H
         // servers reject contract v2 instead of silently ignoring the common story.
         Vector<uint8_t> current;

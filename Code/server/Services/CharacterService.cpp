@@ -425,6 +425,9 @@ void CharacterService::OnReferencesMoveRequest(const PacketEvent<ClientReference
             continue;
         movementComponent.OwnershipEpoch = movement.OwnershipEpoch;
         movementComponent.Tick = message.Tick;
+        movementComponent.ReceivedTick = GameServer::Get()->GetTick();
+        movementComponent.ReceivedCell = movement.CellId;
+        movementComponent.ReceivedWorldSpace = cellIdComponent.WorldSpaceId;
         movementComponent.Position = movement.Position;
         movementComponent.Rotation = glm::vec3(movement.Rotation.x, 0.f, movement.Rotation.y);
         movementComponent.Variables = movement.Variables;
@@ -716,6 +719,9 @@ void CharacterService::CreateCharacter(const PacketEvent<AssignCharacterRequest>
 
     auto& movementComponent = m_world.emplace<MovementComponent>(cEntity);
     movementComponent.Tick = pServer->GetTick();
+    movementComponent.ReceivedTick = movementComponent.Tick;
+    movementComponent.ReceivedCell = message.CellId;
+    movementComponent.ReceivedWorldSpace = message.WorldSpaceId;
     movementComponent.Position = message.Position;
     movementComponent.Rotation = {message.Rotation.x, 0.f, message.Rotation.y};
 

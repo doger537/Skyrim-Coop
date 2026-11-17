@@ -1,5 +1,7 @@
 # Deep co-op implementation checkpoint
 
+Latest continuation: user requests completing remaining modules from easiest and explicitly excludes **Alternate Start**. Native player markers and a bounded cross-cell party-location stream are implemented; see [PLAYER_MARKERS.md](PLAYER_MARKERS.md). These changes are newer than archive 2d630a5a and require their own committed/rebuilt identity before packaging. Protocol is now 0x54430007. Headless location probe: 11 PASS; tests: 91 cases / 2595 assertions; five asset checks pass. Actual in-game marker rendering is unverified. Ghidra CodeBrowser was reopened and its read-only MCP bridge works again.
+
 Branch `fix/deep-host-coop-20261116`, based on `2a1ca7ca`; commits `f59bf388` and native candidate `2d630a5a`. Packaging documentation is in later commits. This remains an intermediate implementation of the user's five modules. A verified test ZIP is available; game/Vortex/saves have not been overwritten. The user will test with their friend later.
 
 ## Candidate handed off for later gameplay testing
@@ -64,9 +66,9 @@ Other verified IDs: drop40454, retained handle lookup17201, generic reference fa
 
 1. Host-confirmed drop/pickup service with stable binding, pre-pickup interception, replay guards and atomic inventory/item transaction. Do not merely enable old bEnableItemDrops relay. Connect native capture/kinematic playback, including missing 3D, cell transitions, expiry and disconnect cleanup.
 2. Verified full ragdoll graph, physical grab intents, NPC animation/furniture/navmesh. Guest-dialogue lease transport/native intent is implemented but needs actual gameplay verification. Current physics adapter deliberately rejects actors; it does not solve ragdoll bugs.
-3. Player compass/map/world markers with persistent identity.
+3. Player compass/map/world markers: native quest-target integration and distant model-free anchors are implemented with server snapshots and cleanup; actual rendering, door routing and frame times need gameplay verification. Long-lived player/character identity for world rollback remains part of persistence work.
 4. Native paired save/load checkpoints, world/player snapshots and a live rollback/epoch barrier.
-5. Quest-run identity, initiator-only item custody, exactly-once rewards, complete shared journal, Alternate Start integration.
+5. Quest-run identity, initiator-only item custody, exactly-once rewards, complete shared journal. **Do not modify Alternate Start:** user excluded it in the latest request.
 
 Continue all five; do not present the codec, queue or setup as complete gameplay. All engine API calls remain on engine/runner thread; workers carry copied data only. Gameplay tests need user participation; unit tests stay restricted to critical protocol/math/storage.
 

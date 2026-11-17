@@ -17,6 +17,7 @@
 #include <Services/MapService.h>
 #include <Services/CoopSleepService.h>
 #include <Services/DialogueService.h>
+#include <Services/PlayerLocationService.h>
 
 #include <es_loader/ESLoader.h>
 
@@ -42,6 +43,7 @@ World::World()
     ctx().emplace<MapService>(*this, m_dispatcher);
     ctx().emplace<CoopSleepService>(*this, m_dispatcher);
     ctx().emplace<DialogueService>(*this, m_dispatcher);
+    ctx().emplace<PlayerLocationService>(*this, m_dispatcher);
 
     ESLoader::ESLoader loader;
     // emplace loaded mods into modscomponent.

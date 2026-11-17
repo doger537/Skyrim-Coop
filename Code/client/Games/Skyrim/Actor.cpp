@@ -901,6 +901,10 @@ void Actor::FixVampireLordModel() noexcept
 
 char TP_MAKE_THISCALL(HookSetPosition, Actor, NiPoint3& aPosition)
 {
+    // This native function belongs to every reference, including our model-free
+    // map anchors and dropped objects. Only actors carry an ActorExtension.
+    if (apThis->formType != Actor::Type)
+        return TiltedPhoques::ThisCall(RealSetPosition, apThis, aPosition);
     const auto pExtension = apThis ? apThis->GetExtension() : nullptr;
     const auto bIsRemote = pExtension && pExtension->IsRemote();
 

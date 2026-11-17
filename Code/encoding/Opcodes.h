@@ -124,5 +124,6 @@ enum ServerOpcode : unsigned char
     kNotifyQuestJournal,
     kNotifyCoopSleep,
     kNotifyDialogueLease,
+    kNotifyPartyLocations,
     kServerOpcodeMax
 };

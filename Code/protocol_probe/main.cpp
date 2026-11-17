@@ -42,6 +42,9 @@
 #include <Messages/NotifyCoopSleep.h>
 #include <Messages/RequestDialogueLease.h>
 #include <Messages/NotifyDialogueLease.h>
+#include <Messages/NotifyPartyLocations.h>
+#include <Messages/NotifyPartyLeft.h>
+#include <Messages/PartyLeaveRequest.h>
 #include <chrono>
 #include <iostream>
 #include <cmath>
@@ -85,6 +88,8 @@ struct Probe final : Client
     uint32_t RestCommits{};
     std::optional<NotifyDialogueLease> DialogueLease;
     uint32_t DialogueNotifications{};
+    std::optional<NotifyPartyLocations> PartyLocations;
+    uint32_t LocationNotifications{};
     void Rest(CoopSleepVote::Action aAction, uint8_t aHours = 0, uint64_t aRound = 0)
     {
         RequestCoopSleep request;
@@ -157,6 +162,17 @@ struct Probe final : Client
             DialogueLease = *static_cast<NotifyDialogueLease*>(message.get());
             ++DialogueNotifications;
         }
+        else if (message && message->GetOpcode() == NotifyPartyLocations::Opcode)
+        {
+            const auto& snapshot = *static_cast<const NotifyPartyLocations*>(message.get());
+            if (snapshot.IsValid())
+            {
+                PartyLocations = snapshot;
+                ++LocationNotifications;
+            }
+        }
+        else if (message && message->GetOpcode() == NotifyPartyLeft::Opcode)
+            InParty = false;
         else if (message && message->GetOpcode() == AssignCharacterResponse::Opcode)
             Assignment = *static_cast<AssignCharacterResponse*>(message.get());
         else if (message && message->GetOpcode() == NotifyInventoryChanges::Opcode)
@@ -964,9 +980,113 @@ bool CheckDialogueLease(const std::string& acAddress)
     return true;
 }
 
+bool CheckPartyLocations(const std::string& acAddress)
+{
+    Probe host, guest, outsider;
+    host.Request = guest.Request = outsider.Request = MakeRequest();
+    const auto check = [](bool aPassed, const char* apName)
+    {
+        std::cout << (aPassed ? "PASS: " : "FAIL: ") << apName << std::endl;
+        return aPassed;
+    };
+    const auto pump = [&](const auto& acDone, int aMilliseconds = 6000)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(aMilliseconds);
+        while (!acDone() && std::chrono::steady_clock::now() < until)
+        {
+            host.Update(); guest.Update(); outsider.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return acDone();
+    };
+    const auto settle = [&](int aMilliseconds)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(aMilliseconds);
+        pump([&] { return std::chrono::steady_clock::now() >= until; }, aMilliseconds + 1000);
+    };
+    if (!check(ConnectProbe(host, acAddress, ResponseType::kAccepted) && ConnectProbe(guest, acAddress, ResponseType::kAccepted) &&
+               ConnectProbe(outsider, acAddress, ResponseType::kAccepted), "location probes authenticate"))
+        return false;
+    EnterInteriorCellRequest enter;
+    enter.CellId = host.Request.CellId;
+    host.SendMessage(enter); guest.SendMessage(enter); outsider.SendMessage(enter);
+    AssignCharacterRequest assign;
+    assign.ReferenceId = GameId(0, 0x14);
+    assign.CellId = enter.CellId;
+    host.SendMessage(assign); guest.SendMessage(assign); outsider.SendMessage(assign);
+    if (!check(pump([&] { return host.Assignment && guest.Assignment && outsider.Assignment; }), "all synthetic player characters load"))
+        return false;
+    host.SendMessage(PartyCreateRequest());
+    if (!pump([&] { return host.InParty && guest.InParty && outsider.InParty; }))
+        return check(false, "location party forms");
+    outsider.SendMessage(PartyLeaveRequest());
+    if (!check(pump([&] { return !outsider.InParty; }), "observer leaves the private party"))
+        return false;
+    const uint32_t outsiderBefore = outsider.LocationNotifications;
+    if (!check(pump([&] { return host.PartyLocations && guest.PartyLocations; }) && host.PartyLocations->Players.size() == 2,
+               "bounded snapshots include both ready party characters"))
+        return false;
+    auto findGuest = [&]() -> const NotifyPartyLocations::Location*
+    {
+        if (host.PartyLocations)
+            for (const auto& location : host.PartyLocations->Players)
+                if (location.PlayerId == guest.Reply->PlayerId)
+                    return &location;
+        return nullptr;
+    };
+    enter.CellId = GameId(0, 0x124);
+    guest.SendMessage(enter);
+    const uint64_t beforeCellChange = host.PartyLocations->Sequence;
+    if (!check(pump([&] { return host.PartyLocations->Sequence > beforeCellChange && findGuest() == nullptr; }),
+               "a cell transition cannot relabel coordinates sampled in the previous cell"))
+        return false;
+    ClientReferencesMoveRequest movement;
+    movement.Tick = guest.GetClock().GetCurrentTick() + 100;
+    auto& position = movement.Updates[guest.Assignment->ServerId];
+    position.OwnershipEpoch = guest.Assignment->OwnershipEpoch;
+    position.CellId = enter.CellId;
+    position.Position = glm::vec3(100.f, -200.f, 30.f);
+    guest.SendMessage(movement);
+    if (!check(pump([&] { const auto* location = findGuest(); return location && location->Cell == enter.CellId && location->Position.x == 100.f; }),
+               "a guest in another interior still reaches the host map stream"))
+        return false;
+    const uint64_t acceptedTick = findGuest()->ReceivedTick;
+    const uint64_t acceptedSequence = host.PartyLocations->Sequence;
+    movement.Tick += 100;
+    position.OwnershipEpoch += 10;
+    position.Position.x = 999.f;
+    guest.SendMessage(movement);
+    position.OwnershipEpoch = guest.Assignment->OwnershipEpoch;
+    host.SendMessage(movement); // Wrong sender for the guest's character.
+    movement.Tick -= 200;
+    guest.SendMessage(movement); // Out-of-order packet from the correct sender.
+    if (!check(pump([&] { return host.PartyLocations->Sequence > acceptedSequence; }) && findGuest() &&
+               findGuest()->Position.x == 100.f && findGuest()->ReceivedTick == acceptedTick,
+               "wrong sender, stale ownership and replay cannot move or refresh the marker"))
+        return false;
+    settle(600);
+    if (!check(outsider.LocationNotifications == outsiderBefore, "party map positions are not sent to a non-member"))
+        return false;
+    if (!check(pump([&] { return findGuest() == nullptr; }), "missing movement observations expire from full snapshots"))
+        return false;
+    movement.Tick = guest.GetClock().GetCurrentTick() + 200;
+    position.Position.x = 150.f;
+    guest.SendMessage(movement);
+    if (!check(pump([&] { const auto* location = findGuest(); return location && location->Position.x == 150.f; }),
+               "a fresh accepted observation restores the distant player location"))
+        return false;
+    guest.SendMessage(PartyLeaveRequest());
+    if (!check(pump([&] { return !guest.InParty && findGuest() == nullptr; }), "leaving the party removes the marker location"))
+        return false;
+    host.Close(); guest.Close(); outsider.Close();
+    return true;
+}
+
 int main(int argc, char** argv)
 {
     const std::string address = argc > 1 ? argv[1] : "127.0.0.1:10582";
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-locations")
+        return CheckPartyLocations(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-dialogue")
         return CheckDialogueLease(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-coop-sleep")
