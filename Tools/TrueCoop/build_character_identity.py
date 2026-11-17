@@ -16,7 +16,10 @@ def add_identity(blob):
     existing = [blob[a:b] for a, b, tag in top if tag == b'GRUP' and blob[a + 8:a + 12] == b'GLOB']
     group = struct.pack('<4sI4sIII', b'GRUP', 24 + sum(map(len, wanted)), b'GLOB', 0, 0, 0) + b''.join(wanted)
     if existing:
-        if existing != [group]:
+        from build_checkpoint_globals import checkpoint_records
+        combined = wanted + checkpoint_records()
+        expanded = struct.pack('<4sI4sIII', b'GRUP', 24 + sum(map(len, combined)), b'GLOB', 0, 0, 0) + b''.join(combined)
+        if existing not in ([group], [expanded]):
             raise ValueError('Conflicting character identity globals')
         return blob
     # Refuse an unrelated use of any reserved local ID, including other groups.

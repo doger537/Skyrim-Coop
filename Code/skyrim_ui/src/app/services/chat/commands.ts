@@ -50,9 +50,34 @@ export class CommandHandler {
 
   private readonly commands = new Map<string, Command>();
 
+  private CoopSave: Command = {
+    name: 'coop-save',
+    executor: async (args) => {
+      if (args.length) {
+        this.chatService.pushSystemMessage('Использование: /coop-save');
+        return;
+      }
+      skyrimtogether.sendMessage(0, '/coop-save');
+    },
+  };
+
+  private CoopLoad: Command = {
+    name: 'coop-load',
+    executor: async (args) => {
+      if (args.length !== 1 || !/^[1-9][0-9]{0,18}$/.test(args[0])) {
+        this.chatService.pushSystemMessage('Использование: /coop-load <номер общего сохранения>');
+        return;
+      }
+      // Keep the 64-bit checkpoint ID as text across the JavaScript bridge.
+      skyrimtogether.sendMessage(0, '/coop-load ' + args[0]);
+    },
+  };
+
   public constructor(private readonly chatService: ChatService) {
     this.register(this.Help);
     this.register(this.SetTime);
+    this.register(this.CoopSave);
+    this.register(this.CoopLoad);
   }
 
   public readonly COMMAND_PREFIX = '/';

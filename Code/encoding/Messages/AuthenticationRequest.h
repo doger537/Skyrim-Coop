@@ -27,11 +27,12 @@ struct AuthenticationRequest final : ClientMessage
         return GetOpcode() == achRhs.GetOpcode() && ProtocolVersion == achRhs.ProtocolVersion && DiscordId == achRhs.DiscordId && SKSEActive == achRhs.SKSEActive &&
                MO2Active == achRhs.MO2Active && Token == achRhs.Token && Version == achRhs.Version && UserMods == achRhs.UserMods && Username == achRhs.Username &&
                RuntimeVersion == achRhs.RuntimeVersion && WorldSpaceId == achRhs.WorldSpaceId && CellId == achRhs.CellId && Level == achRhs.Level &&
-               PlayerTime == achRhs.PlayerTime && CharacterId == achRhs.CharacterId;
+               PlayerTime == achRhs.PlayerTime && CharacterId == achRhs.CharacterId && CheckpointToken == achRhs.CheckpointToken;
     }
 
     uint32_t ProtocolVersion{kTrueCoopProtocolVersion};
     CharacterIdentity CharacterId;
+    uint64_t CheckpointToken{};
     bool CharacterIdentityDecoded{true};
     uint64_t DiscordId{};
     bool SKSEActive{};

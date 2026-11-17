@@ -187,7 +187,39 @@ bool State::BootstrapQuests(const Vector<Quest>& acQuests, bool aAllowMisc) noex
     return true;
 }
 
-State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc) noexcept
+bool State::ReadQuestRunParticipants(GameId aId, uint32_t aEpoch, QuestRunParticipants& aParticipants, bool& aFound) noexcept
+{
+    aFound = false;
+    aParticipants = {};
+    if (!m_ready || !ValidForm(aId) || !aEpoch)
+        return false;
+    WorldStore::Record record;
+    const auto result = m_store.Read(Key("quest-run", aId) + "/" + std::to_string(aEpoch).c_str(), record);
+    if (result == WorldStore::ReadResult::Missing)
+        return true;
+    if (result != WorldStore::ReadResult::Found || record.Value.size() != 49 || record.Value[0] != 1)
+    {
+        m_error = "Quest run ownership is unreadable; do not guess a quest-item custodian";
+        return false;
+    }
+    size_t offset = 1;
+    for (auto* identity : {&aParticipants.Initiator, &aParticipants.Players[0], &aParticipants.Players[1]})
+        for (auto& part : identity->Parts)
+        {
+            part = uint16_t(record.Value[offset]) | uint16_t(uint16_t(record.Value[offset + 1]) << 8);
+            offset += 2;
+        }
+    if (!aParticipants.IsValid())
+    {
+        m_error = "Quest run ownership contains invalid or duplicate characters";
+        return false;
+    }
+    aFound = true;
+    return true;
+}
+
+State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
+    const QuestRunParticipants* apParticipants) noexcept
 {
     if (!m_ready || !m_bootstrapped || !ValidForm(aId) || aEpoch == 0 || aStatus > 2 || aType > 11)
     {
@@ -200,6 +232,12 @@ State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
     if ((aType == 0 || aType == 6) && !aAllowMisc && !(adapter && adapter->AllowMisc))
         return QuestResult::Ignored;
     const auto* saved = FindQuest(aId);
+    const bool newRun = !saved || (aStatus == 1 && saved->Data.Stopped && saved->Data.Epoch < UINT32_MAX && aEpoch == saved->Data.Epoch + 1);
+    if (apParticipants && !apParticipants->IsValid())
+    {
+        m_error = "Invalid quest initiator or reward recipient identities";
+        return QuestResult::Invalid;
+    }
     Quest next = saved ? saved->Data : Quest{};
     next.Id = aId;
     next.Type = aType;
@@ -257,7 +295,21 @@ State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
         return QuestResult::Invalid;
     }
     uint64_t revision = 0;
-    if (m_store.Commit({state, audit}, revision) != WorldStore::WriteResult::Committed)
+    Vector<WorldStore::Record> records{state, audit};
+    if (newRun && apParticipants)
+    {
+        WorldStore::Record ownership;
+        ownership.Key = Key("quest-run", aId) + "/" + std::to_string(aEpoch).c_str();
+        ownership.Value.push_back(1);
+        for (const auto* identity : {&apParticipants->Initiator, &apParticipants->Players[0], &apParticipants->Players[1]})
+            for (const auto part : identity->Parts)
+            {
+                ownership.Value.push_back(static_cast<uint8_t>(part));
+                ownership.Value.push_back(static_cast<uint8_t>(part >> 8));
+            }
+        records.push_back(std::move(ownership));
+    }
+    if (m_store.Commit(records, revision) != WorldStore::WriteResult::Committed)
     {
         m_error = m_store.Error();
         return QuestResult::StorageError;

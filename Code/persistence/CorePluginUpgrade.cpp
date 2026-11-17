@@ -4,11 +4,11 @@
 bool CorePluginUpgrade::Upgrade(Mods& aPinnedContent) noexcept
 {
     for (auto& entry : aPinnedContent.ModList)
-        if (ContentCompatibility::NormalizeName(entry.Filename) == "skyrimtogether.esp" && !entry.IsLite && (entry.Digest == kPrevious || entry.Digest == kMarkers) &&
+        if (ContentCompatibility::NormalizeName(entry.Filename) == "skyrimtogether.esp" && !entry.IsLite && (entry.Digest == kPrevious || entry.Digest == kMarkers || entry.Digest == kCharacters) &&
             entry.Masters.size() == 2 && ContentCompatibility::NormalizeName(entry.Masters[0]) == "skyrim.esm" &&
             ContentCompatibility::NormalizeName(entry.Masters[1]) == "update.esm")
         {
-            entry.Digest = kCharacters;
+            entry.Digest = kCheckpoints;
             return true;
         }
     return false;

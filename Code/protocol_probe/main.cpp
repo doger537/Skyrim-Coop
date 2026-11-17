@@ -8,6 +8,7 @@
 #include <Client.hpp>
 #include <Packet.hpp>
 #include <Messages/AuthenticationRequest.h>
+#include <Messages/RequestWorldCheckpoint.h>
 #include <Messages/AuthenticationResponse.h>
 #include <Messages/AssignCharacterRequest.h>
 #include <Messages/AssignCharacterResponse.h>
@@ -50,6 +51,7 @@
 #include <cmath>
 #include <optional>
 #include <thread>
+#include <fstream>
 
 using namespace TiltedPhoques;
 using ResponseType = AuthenticationResponse::ResponseType;
@@ -90,6 +92,8 @@ struct Probe final : Client
     uint32_t DialogueNotifications{};
     std::optional<NotifyPartyLocations> PartyLocations;
     uint32_t LocationNotifications{};
+    std::optional<NotifyWorldCheckpoint> WorldCheckpointState;
+    uint32_t WorldCheckpointNotifications{};
     void Rest(CoopSleepVote::Action aAction, uint8_t aHours = 0, uint64_t aRound = 0)
     {
         RequestCoopSleep request;
@@ -169,6 +173,15 @@ struct Probe final : Client
             {
                 PartyLocations = snapshot;
                 ++LocationNotifications;
+            }
+        }
+        else if (message && message->GetOpcode() == NotifyWorldCheckpoint::Opcode)
+        {
+            const auto& checkpoint = *static_cast<const NotifyWorldCheckpoint*>(message.get());
+            if (checkpoint.IsValid())
+            {
+                WorldCheckpointState = checkpoint;
+                ++WorldCheckpointNotifications;
             }
         }
         else if (message && message->GetOpcode() == NotifyPartyLeft::Opcode)
@@ -1088,9 +1101,154 @@ bool CheckPartyLocations(const std::string& acAddress)
     return true;
 }
 
+
+bool CheckWorldCheckpoints(const std::string& address, const char* apRecoveryFile = nullptr, bool aLeavePending = false)
+{
+    using Phase = NotifyWorldCheckpoint::Phase;
+    using Kind = RequestWorldCheckpoint::Kind;
+    Probe host, guest;
+    host.Request = MakeRequest(); guest.Request = MakeRequest();
+    const auto check = [](bool passed, const char* name) { std::cout << (passed ? "PASS: " : "FAIL: ") << name << std::endl; return passed; };
+    if (!check(ConnectProbe(host, address, ResponseType::kAccepted) && ConnectProbe(guest, address, ResponseType::kAccepted), "paired checkpoint participants authenticate")) return false;
+    const auto pump = [&](const auto& done)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!done() && std::chrono::steady_clock::now() < deadline) { host.Update(); guest.Update(); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        return done();
+    };
+    const auto settle = [&] { const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(200); pump([&] { return std::chrono::steady_clock::now() >= until; }); };
+    const auto phase = [](const Probe& probe, Phase value) { return probe.WorldCheckpointState && probe.WorldCheckpointState->State == value; };
+    EnterInteriorCellRequest enter; enter.CellId = host.Request.CellId; host.SendMessage(enter); guest.SendMessage(enter);
+    AssignCharacterRequest assign; assign.ReferenceId = GameId(0, 0x14); assign.CellId = enter.CellId; host.SendMessage(assign); guest.SendMessage(assign);
+    if (!pump([&] { return host.Assignment && guest.Assignment; })) return false;
+    host.SendMessage(PartyCreateRequest());
+    if (!check(pump([&] { return host.InParty && guest.InParty; }), "checkpoint participants have assigned characters and one party")) return false;
+    RequestWorldCheckpoint request;
+    guest.SendMessage(request);
+    if (!check(pump([&] { return phase(guest, Phase::Cancelled); }) && !host.WorldCheckpointState, "a guest cannot start a host checkpoint")) return false;
+    AssignObjectsRequest objects;
+    auto& object = objects.Objects.emplace_back(); object.Id = GameId(1, 0x811); object.CellId = enter.CellId;
+    Inventory::Entry item; item.BaseId = GameId(0, 0xF); item.Count = 3; object.CurrentInventory.Entries.push_back(item);
+    host.SendMessage(objects);
+    if (!check(pump([&] { return host.Objects.has_value(); }), "baseline object inventory is durable before the paired save")) return false;
+    host.SendMessage(request);
+    if (!check(pump([&] { return phase(host, Phase::PrepareSave) && phase(guest, Phase::PrepareSave); }), "one save request prepares both participants")) return false;
+    const auto prepared = *host.WorldCheckpointState;
+    const uint64_t oldEpoch = host.WorldEpoch;
+    request.Action = Kind::Prepared; request.Id = prepared.Id; request.Nonce = prepared.Nonce + 1;
+    guest.SendMessage(request); request.Nonce = prepared.Nonce; host.SendMessage(request); host.SendMessage(request); settle();
+    if (!check(phase(host, Phase::PrepareSave) && phase(guest, Phase::PrepareSave), "replayed preparation and a wrong nonce cannot start the native saves")) return false;
+    guest.SendMessage(request);
+    if (!check(pump([&] { return phase(host, Phase::SaveNow) && phase(guest, Phase::SaveNow); }), "both preparation acknowledgements authorize the two native saves")) return false;
+    RequestWorldCheckpoint saved; saved.Action = Kind::Saved; saved.Id = prepared.Id; saved.Nonce = prepared.Nonce;
+    saved.Contribution.Character = host.Request.CharacterId; saved.Contribution.Save.Bytes = 100; saved.Contribution.Save.Digest.fill(1);
+    guest.SendMessage(saved); host.SendMessage(saved); settle();
+    if (!check(phase(host, Phase::SaveNow) && phase(guest, Phase::SaveNow), "one file receipt or another player's identity cannot commit a pair")) return false;
+    saved.Contribution.Character = guest.Request.CharacterId; saved.Contribution.Save.Digest.fill(2); guest.SendMessage(saved);
+    if (!check(pump([&] { return phase(host, Phase::Saved) && phase(guest, Phase::Saved); }) && host.WorldEpoch == oldEpoch,
+        "two checked file receipts commit one immutable manifest without changing the live epoch")) return false;
+    const auto manifest = host.WorldCheckpointState->Manifest;
+    LockChangeRequest lock; lock.Id = object.Id; lock.CellId = object.CellId; lock.IsLocked = true; lock.LockLevel = 0; host.SendMessage(lock);
+    if (!check(pump([&] { return guest.LockNotifications > 0; }), "world changes after the checkpoint are accepted before rollback")) return false;
+    request = {}; request.Action = Kind::Load; request.Id = prepared.Id; host.SendMessage(request);
+    if (!check(pump([&] { return phase(host, Phase::PrepareLoad) && phase(guest, Phase::PrepareLoad); }) &&
+        host.WorldCheckpointState->Manifest.Players == manifest.Players, "restore preparation reuses the exact two saved-file digests")) return false;
+    const auto load = *host.WorldCheckpointState;
+    request.Action = Kind::Prepared; request.Nonce = load.Nonce;
+    host.SendMessage(request); settle();
+    if (!check(phase(host, Phase::PrepareLoad), "a single prepared client cannot roll back the world")) return false;
+    guest.SendMessage(request);
+    if (!check(pump([&] { return phase(host, Phase::LoadNow) && phase(guest, Phase::LoadNow); }) && host.WorldCheckpointState->WorldEpoch > oldEpoch,
+        "both file checks atomically restore state and authorize a newer world epoch")) return false;
+    const uint64_t newEpoch = host.WorldCheckpointState->WorldEpoch;
+    const auto hostRequest = host.Request, guestRequest = guest.Request;
+    if (apRecoveryFile)
+    {
+        std::ofstream file(apRecoveryFile, std::ios::binary | std::ios::trunc);
+        const auto write = [&](uint64_t value, size_t bytes) { for (size_t i = 0; i < bytes; ++i) file.put(static_cast<char>(value >> (i * 8))); };
+        file.write("TCREC001", 8);
+        for (const auto* identity : {&hostRequest.CharacterId, &guestRequest.CharacterId})
+            for (const auto part : identity->Parts) write(part, 2);
+        write(prepared.Id, 8); write(newEpoch, 8);
+        file.close();
+        if (!check(!file.fail(), "synthetic checkpoint recovery identities are recorded")) return false;
+    }
+    host.Close(); guest.Close(); settle();
+    if (aLeavePending)
+        return check(apRecoveryFile != nullptr, "both clients leave before the restored world rendezvous");
+    Probe wrong; wrong.Request = hostRequest; wrong.Request.CheckpointToken = 0;
+    if (!check(ConnectProbe(wrong, address, ResponseType::kContentMismatch), "a save from outside the restored pair cannot rejoin")) return false;
+    wrong.Close();
+    Probe guestReturn, hostReturn;
+    guestReturn.Request = guestRequest; hostReturn.Request = hostRequest;
+    guestReturn.Request.CheckpointToken = hostReturn.Request.CheckpointToken = prepared.Id;
+    if (!check(ConnectProbe(guestReturn, address, ResponseType::kAccepted) && ConnectProbe(hostReturn, address, ResponseType::kAccepted),
+        "both original characters can rejoin the restored checkpoint in reverse connection order")) return false;
+    const auto finish = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while ((!hostReturn.WorldCheckpointState || hostReturn.WorldCheckpointState->State != Phase::Resume) && std::chrono::steady_clock::now() < finish)
+    { hostReturn.Update(); guestReturn.Update(); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+    if (!check(hostReturn.WorldEpoch == newEpoch && guestReturn.WorldEpoch == newEpoch && hostReturn.WorldCheckpointState &&
+        hostReturn.WorldCheckpointState->State == Phase::Resume && hostReturn.PartyLeader && !guestReturn.PartyLeader,
+        "resume preserves the epoch and original host even when the guest reconnects first")) return false;
+    hostReturn.SendMessage(enter); hostReturn.SendMessage(objects);
+    const auto query = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!hostReturn.Objects && std::chrono::steady_clock::now() < query) { hostReturn.Update(); guestReturn.Update(); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+    const bool restored = hostReturn.Objects && hostReturn.Objects->Objects.size() == 1 && !hostReturn.Objects->Objects[0].CurrentLockData.IsLocked &&
+        hostReturn.Objects->Objects[0].CurrentInventory.Entries.size() == 1 && hostReturn.Objects->Objects[0].CurrentInventory.Entries[0].Count == 3;
+    check(restored, "post-load object assignment reads checkpoint state rather than abandoned future state");
+    hostReturn.Close(); guestReturn.Close();
+    return restored;
+}
+
+bool CheckCheckpointRecovery(const std::string& address, const char* apRecoveryFile, bool aPending)
+{
+    using Phase = NotifyWorldCheckpoint::Phase;
+    const auto check = [](bool passed, const char* name) { std::cout << (passed ? "PASS: " : "FAIL: ") << name << std::endl; return passed; };
+    std::ifstream file(apRecoveryFile, std::ios::binary);
+    std::array<uint8_t, 56> bytes{};
+    file.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
+    if (!file || file.peek() != std::char_traits<char>::eof() || std::memcmp(bytes.data(), "TCREC001", 8))
+        return check(false, "recovery fixture is exact, bounded synthetic data");
+    size_t cursor = 8;
+    const auto read = [&](size_t count) { uint64_t value{}; for (size_t i = 0; i < count; ++i) value |= uint64_t(bytes[cursor++]) << (i * 8); return value; };
+    Probe host, guest; host.Request = MakeRequest(); guest.Request = MakeRequest();
+    for (auto* identity : {&host.Request.CharacterId, &guest.Request.CharacterId})
+        for (auto& part : identity->Parts) part = static_cast<uint16_t>(read(2));
+    host.Request.CheckpointToken = guest.Request.CheckpointToken = read(8);
+    const uint64_t previousEpoch = read(8);
+    if (aPending)
+    {
+        Probe outsider; outsider.Request = MakeRequest(); outsider.Request.CheckpointToken = host.Request.CheckpointToken;
+        if (!check(ConnectProbe(outsider, address, ResponseType::kContentMismatch), "pending recovery refuses an unrelated character")) return false;
+    }
+    if (!check(ConnectProbe(guest, address, ResponseType::kAccepted) && ConnectProbe(host, address, ResponseType::kAccepted),
+        "original checkpoint characters authenticate after server restart")) return false;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (aPending && (!host.WorldCheckpointState || host.WorldCheckpointState->State != Phase::Resume) && std::chrono::steady_clock::now() < deadline)
+    { host.Update(); guest.Update(); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+    if (!check(host.WorldEpoch > previousEpoch && guest.WorldEpoch == host.WorldEpoch, "restart has a fresh epoch with the same restored pair")) return false;
+    if (aPending && !check(host.WorldCheckpointState && host.WorldCheckpointState->State == Phase::Resume && host.PartyLeader && !guest.PartyLeader,
+        "unfinished rollback survives restart and restores the original host")) return false;
+    AssignObjectsRequest objects;
+    auto& object = objects.Objects.emplace_back(); object.Id = GameId(1, 0x811); object.CellId = host.Request.CellId;
+    EnterInteriorCellRequest enter; enter.CellId = host.Request.CellId; host.SendMessage(enter); host.SendMessage(objects);
+    const auto query = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!host.Objects && std::chrono::steady_clock::now() < query) { host.Update(); guest.Update(); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+    const bool restored = host.Objects && host.Objects->Objects.size() == 1 && !host.Objects->Objects[0].CurrentLockData.IsLocked &&
+        host.Objects->Objects[0].CurrentInventory.Entries.size() == 1 && host.Objects->Objects[0].CurrentInventory.Entries[0].Count == 3;
+    if (!check(restored, "recovered server accepts gameplay and reads the rolled-back object inventory")) return false;
+    if (!aPending && !check(!host.WorldCheckpointState && !guest.WorldCheckpointState, "completed rollback does not start another rendezvous on restart")) return false;
+    host.Close(); guest.Close();
+    return true;
+}
+
 int main(int argc, char** argv)
 {
     const std::string address = argc > 1 ? argv[1] : "127.0.0.1:10582";
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-checkpoints")
+        return CheckWorldCheckpoints(address, argc > 3 ? argv[3] : nullptr, argc > 4 && std::string_view(argv[4]) == "pending") ? 0 : 1;
+    if (argc > 4 && std::string_view(argv[2]) == "--verify-checkpoint-recovery")
+        return CheckCheckpointRecovery(address, argv[3], std::string_view(argv[4]) == "pending") ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-locations")
         return CheckPartyLocations(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-dialogue")

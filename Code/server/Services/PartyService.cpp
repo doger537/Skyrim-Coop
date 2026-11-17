@@ -441,3 +441,25 @@ void PartyService::SendPartyJoinedEvent(Party& aParty, Player* aPlayer) noexcept
     spdlog::debug("[PartyService]: Sending party join event to player");
     aPlayer->Send(joinedMessage);
 }
+
+void PartyService::RestoreCheckpointLeader(Player* apHost, Player* apGuest) noexcept
+{
+    auto* party = GetPlayerParty(apHost);
+    if (!party || GetPlayerParty(apGuest) != party)
+    {
+        RemovePlayerFromParty(apHost);
+        RemovePlayerFromParty(apGuest);
+        const uint32_t id = m_nextId++;
+        auto& restored = m_parties[id];
+        restored.LeaderPlayerId = apHost->GetId();
+        restored.Members = {apHost, apGuest};
+        apHost->GetParty().JoinedPartyId = id;
+        apGuest->GetParty().JoinedPartyId = id;
+        SendPartyJoinedEvent(restored, apHost);
+        SendPartyJoinedEvent(restored, apGuest);
+        BroadcastPartyInfo(id);
+        return;
+    }
+    party->LeaderPlayerId = apHost->GetId();
+    BroadcastPartyInfo(*apHost->GetParty().JoinedPartyId);
+}

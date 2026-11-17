@@ -38,6 +38,7 @@ struct PartyService
     bool IsPlayerInParty(Player* const apPlayer) const noexcept;
     bool IsPlayerLeader(const Player* const apPlayer) const noexcept;
     Party* GetPlayerParty(Player* const apPlayer) noexcept;
+    void RestoreCheckpointLeader(Player* apHost, Player* apGuest) noexcept;
 
 protected:
     void OnUpdate(const UpdateEvent& acEvent) noexcept;

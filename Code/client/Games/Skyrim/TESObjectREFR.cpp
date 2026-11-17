@@ -909,19 +909,9 @@ void TESObjectREFR::AddOrRemoveItem(const Inventory::Entry& arEntry, bool aIsSet
         RemoveItem(pObject, -arEntry.Count, ITEM_REMOVE_REASON::kRemove, pExtraDataList, nullptr);
     }
 
-    // TODO(cosideci): this is still flawed. Adding the refr to the quest leader is hard.
-    // It is still recommended that the quest leader loots all quest items.
-    if (arEntry.IsQuestItem && arEntry.Count > 0 && !aIsSettingInventory)
-    {
-        PlayerCharacter* pPlayer = PlayerCharacter::Get();
-
-        if (!pPlayer->IsItemInInventory(objectId))
-        {
-            Actor* pActor = Cast<Actor>(this);
-            if (pActor && pActor->GetExtension()->IsRemotePlayer())
-                pPlayer->AddOrRemoveItem(arEntry);
-        }
-    }
+    // Replicating the remote player's inventory must not also mint a copy of a
+    // quest item in our local inventory. Actual custody/rewards use a separate
+    // quest transaction; a remote actor snapshot is never a grant to us.
 
     UpdateItemList(nullptr);
 }

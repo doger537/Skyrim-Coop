@@ -30,6 +30,13 @@ struct TransportService : Client
 
     TP_NOCOPYMOVE(TransportService);
 
+    using Client::Connect;
+    bool Connect(const std::string& acEndpoint) noexcept;
+    void ReconnectAfterCheckpoint() noexcept;
+    void CompleteCheckpointConnection() noexcept;
+    void PollCheckpointFrame(const UpdateEvent& acEvent) noexcept { HandleUpdate(acEvent); }
+    const String& GetCampaignWorldId() const noexcept { return m_campaignWorldId; }
+
     bool Send(const ClientMessage& acMessage, TiltedPhoques::EPacketFlags aPacketFlags = TiltedPhoques::kReliable) const noexcept;
 
     void OnConsume(const void* apData, uint32_t aSize) override;
@@ -77,6 +84,10 @@ private:
     entt::dispatcher& m_dispatcher;
     bool m_connected;
     String m_serverPassword{};
+    String m_reconnectPassword;
+    std::string m_reconnectEndpoint;
+    String m_campaignWorldId;
+    std::optional<uint32_t> m_deferredCheckpointPlayer;
     uint32_t m_localPlayerId;
     double m_lastPollTime{};
     std::optional<AuthenticationRequest> m_queuedAuthentication;

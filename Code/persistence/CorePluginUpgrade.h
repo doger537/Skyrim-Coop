@@ -23,5 +23,6 @@ inline constexpr auto kPrevious = Digest("3196266aa29855574bda48335da9ab2f18ad33
 inline constexpr auto kMarkers = Digest("9ef8a8f8bb08dca12f43355e073adf0a3bd69cb4f947964fec10a278a1f7694b");
 // Adds only nine nonconstant identity GLOB records; retains every old record.
 inline constexpr auto kCharacters = Digest("ff52f44a06d57bded74a2a306966844845ec254d8b9ae015b30ec493ff224502");
+inline constexpr auto kCheckpoints = Digest("c16976f0eff6490c17bc53d2ef5c7651250b4c9de9dc525f9261d913aa90806e");
 bool Upgrade(Mods& aPinnedContent) noexcept;
 }

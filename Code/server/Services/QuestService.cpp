@@ -42,7 +42,13 @@ void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acMessa
 {
     const auto& message = acMessage.Packet;
     auto& campaign = m_world.GetCampaign();
-    const auto result = campaign.UpdateQuest(message.Id, message.Epoch, message.Status, message.Stage, message.ClientQuestType, AllowsMisc());
+    Campaign::QuestRunParticipants participants;
+    participants.Initiator = acMessage.pPlayer->GetPersistentCharacterId();
+    if (const auto* party = m_world.GetPartyService().GetPlayerParty(acMessage.pPlayer); party && party->Members.size() == 2)
+        for (size_t i = 0; i < 2; ++i)
+            participants.Players[i] = party->Members[i]->GetPersistentCharacterId();
+    const auto result = campaign.UpdateQuest(message.Id, message.Epoch, message.Status, message.Stage, message.ClientQuestType, AllowsMisc(),
+        participants.IsValid() ? &participants : nullptr);
     using Result = Campaign::State::QuestResult;
     if (result == Result::Ignored)
         return;

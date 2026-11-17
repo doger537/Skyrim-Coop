@@ -73,7 +73,8 @@ void CalendarService::HandleUpdate(const UpdateEvent& aEvent) noexcept
         const auto now = m_world.GetTick();
         const uint64_t delta = m_tickBaseline.Sample(now);
 
-        m_onlineTime.Update(delta);
+        if (!m_checkpointFrozen)
+            m_onlineTime.Update(delta);
         pGameTime->TimeScale->f = m_onlineTime.m_timeModel.TimeScale;
         pGameTime->GameDay->f = m_onlineTime.m_timeModel.Day;
         pGameTime->GameMonth->f = m_onlineTime.m_timeModel.Month;
@@ -89,4 +90,21 @@ void CalendarService::HandleUpdate(const UpdateEvent& aEvent) noexcept
         else
             pGameTime->GameHour->f = m_onlineTime.m_timeModel.Time;
     }
+}
+
+void CalendarService::FreezeForCheckpoint(const TimeModel& acModel) noexcept
+{
+    if (!acModel.IsValid())
+        return;
+    m_checkpointFrozen = true;
+    m_onlineTime = DateTime(acModel);
+    m_tickBaseline.Rebase(m_world.GetTick());
+    m_fadeTimer = kTransitionSpeed;
+    s_gameClockLocked = true;
+    HandleUpdate(UpdateEvent(0));
+}
+void CalendarService::ThawCheckpoint() noexcept
+{
+    m_checkpointFrozen = false;
+    m_tickBaseline.Rebase(m_world.GetTick());
 }

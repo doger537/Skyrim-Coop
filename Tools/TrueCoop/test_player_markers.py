@@ -7,6 +7,7 @@ from pathlib import Path
 
 import build_player_markers as builder
 from build_character_identity import add_identity
+from build_checkpoint_globals import add_checkpoint
 
 ROOT = Path(__file__).resolve().parents[2]
 OLD = ROOT / 'Code/tests/data/SkyrimTogether-core-legacy.esp'
@@ -14,6 +15,7 @@ NEW = ROOT / 'GameFiles/Skyrim/SkyrimTogether.esp'
 LEGACY_SHA = '3196266aa29855574bda48335da9ab2f18ad33a80eee116400da7c5c81c93d7e'
 MARKER_SHA = '9ef8a8f8bb08dca12f43355e073adf0a3bd69cb4f947964fec10a278a1f7694b'
 IDENTITY_SHA = 'ff52f44a06d57bded74a2a306966844845ec254d8b9ae015b30ec493ff224502'
+CHECKPOINT_SHA = 'c16976f0eff6490c17bc53d2ef5c7651250b4c9de9dc525f9261d913aa90806e'
 
 
 def records(blob):
@@ -49,29 +51,32 @@ class MarkerAssetTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(old).hexdigest(), LEGACY_SHA)
         marker = builder.add_quest(old, 0x4DF4, 8)
         self.assertEqual(hashlib.sha256(marker).hexdigest(), MARKER_SHA)
-        self.assertEqual(hashlib.sha256(new).hexdigest(), IDENTITY_SHA)
-        self.assertEqual(add_identity(marker), new)
+        identity = add_identity(marker)
+        self.assertEqual(hashlib.sha256(identity).hexdigest(), IDENTITY_SHA)
+        self.assertEqual(hashlib.sha256(new).hexdigest(), CHECKPOINT_SHA)
+        self.assertEqual(add_checkpoint(identity), new)
+        self.assertEqual(add_checkpoint(new), new)
         self.assertEqual(add_identity(new), new)
         self.assertEqual(builder.add_quest(new, 0x4DF4, 8), new)
 
     def test_all_existing_records_are_byte_identical(self):
         old, new = records(OLD.read_bytes()), records(NEW.read_bytes())
-        self.assertEqual(len(new), len(old) + 11)
+        self.assertEqual(len(new), len(old) + 15)
         for key, value in old.items():
             self.assertEqual(new[key], value, key)
-        self.assertEqual(set(new) - set(old), {(b'QUST', 0x02004DF4), (b'STAT', 0x02004DF5)} | {(b'GLOB', 0x02004DF6 + i) for i in range(9)})
+        self.assertEqual(set(new) - set(old), {(b'QUST', 0x02004DF4), (b'STAT', 0x02004DF5)} | {(b'GLOB', 0x02004DF6 + i) for i in range(13)})
 
     def test_identity_globals_are_nonconstant_exact_float_slots_without_scripts(self):
         header = (ROOT / 'Code/common/CharacterIdentityIds.h').read_text()
         self.assertEqual(int(re.search(r'kFirstPartLocalId = (0x[0-9A-F]+)', header)[1], 16), 0x4DF6)
         self.assertEqual(int(re.search(r'kVersionLocalId = (0x[0-9A-F]+)', header)[1], 16), 0x4DFE)
         current = records(NEW.read_bytes())
-        for part in range(9):
+        for part in range(13):
             record = current[(b'GLOB', 0x02004DF6 + part)]
             self.assertEqual(struct.unpack_from('<I', record, 8)[0], 0)
             fields = subrecords(record)
             self.assertEqual([tag for tag, _ in fields], [b'EDID', b'FNAM', b'FLTV'])
-            expected = f'TrueCoopCharacterPart{part}' if part < 8 else 'TrueCoopCharacterVersion'
+            expected = f'TrueCoopCharacterPart{part}' if part < 8 else 'TrueCoopCharacterVersion' if part == 8 else f'TrueCoopCheckpointPart{part - 9}'
             self.assertEqual(fields[0][1], expected.encode() + b'\0')
             self.assertEqual(fields[1][1], b'f')
             self.assertEqual(fields[2][1], bytes(4))

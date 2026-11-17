@@ -68,6 +68,7 @@ struct GameServer final : Server
     const Info& GetInfo() const noexcept { return m_info; }
 
     bool IsRunning() const noexcept { return !m_requestStop; }
+    void DetachCheckpointSession(ConnectionId_t aConnection);
     bool IsPasswordProtected() const noexcept { return m_isPasswordProtected; }
     [[nodiscard]] bool IsPublicServer() const noexcept;
     [[nodiscard]] bool AllowsAutoPartyJoin() const noexcept;
@@ -123,6 +124,7 @@ private:
     Console::ConsoleRegistry& m_commands;
 
     TiltedPhoques::Set<ConnectionId_t> m_adminSessions;
+    TiltedPhoques::Set<ConnectionId_t> m_detachedCheckpointConnections;
     TiltedPhoques::Map<ConnectionId_t, entt::entity> m_connectionToEntity;
 
     UniquePtr<World> m_pWorld;

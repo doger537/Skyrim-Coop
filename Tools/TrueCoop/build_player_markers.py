@@ -162,6 +162,8 @@ def main():
     after = add_quest(before, local_id, slots)
     from build_character_identity import add_identity
     after = add_identity(after)
+    from build_checkpoint_globals import add_checkpoint
+    after = add_checkpoint(after)
     if args.check:
         if before != after:
             raise SystemExit('Bundled marker quest needs generating')

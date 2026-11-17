@@ -130,7 +130,7 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
             return false;
         }
         const int schema = sqlite3_column_int(version.Value, 0);
-        if (schema != 0 && schema != 1)
+        if (schema != 0 && schema != 1 && schema != 2)
         {
             m_error = "Unsupported world database schema; use the matching server build, do not reset the database";
             Close();
@@ -139,7 +139,7 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
         Statement application(m_db, "PRAGMA application_id");
         Statement tables(m_db, "SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'");
         if (!application || !tables || sqlite3_step(application.Value) != SQLITE_ROW || sqlite3_step(tables.Value) != SQLITE_ROW ||
-            (schema == 1 && sqlite3_column_int(application.Value, 0) != 1414546256) ||
+            (schema != 0 && sqlite3_column_int(application.Value, 0) != 1414546256) ||
             (schema == 0 && (sqlite3_column_int(application.Value, 0) != 0 || sqlite3_column_int(tables.Value, 0) != 0)))
         {
             m_error = "The selected file is not a supported True Coop world database";
@@ -151,8 +151,10 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
                  "CREATE TABLE IF NOT EXISTS identity(id INTEGER PRIMARY KEY CHECK(id=1), world_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>=0)) STRICT;"
                  "CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, value BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32), revision INTEGER NOT NULL "
                  "CHECK(revision>0)) STRICT;"
+                 "CREATE TABLE IF NOT EXISTS checkpoints(id INTEGER PRIMARY KEY CHECK(id>0), captured_revision INTEGER NOT NULL, metadata BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32)) STRICT;"
+                 "CREATE TABLE IF NOT EXISTS checkpoint_state(checkpoint_id INTEGER NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32), revision INTEGER NOT NULL CHECK(revision>0), PRIMARY KEY(checkpoint_id,key)) STRICT;"
                  "INSERT OR IGNORE INTO identity VALUES(1,lower(hex(randomblob(16))),0);"
-                 "PRAGMA user_version=1; PRAGMA application_id=1414546256; COMMIT;"))
+                 "PRAGMA user_version=2; PRAGMA application_id=1414546256; COMMIT;"))
     {
         Close();
         return false;
@@ -301,4 +303,225 @@ bool WorldStore::VerifyRecords() noexcept
         }
     }
     return result == SQLITE_DONE || Fail("Cannot complete world integrity scan");
+}
+
+namespace
+{
+constexpr size_t kMaxCheckpointRecords = 65536;
+constexpr size_t kMaxCheckpointBytes = 64 * 1024 * 1024;
+bool OutsideTimeline(const String& acKey) noexcept
+{
+    return acKey == "$world-epoch" || acKey == "$restored-checkpoint" || acKey == "$restore-pending" || acKey.starts_with("$checkpoint-reservation/") || acKey.starts_with("$participant/");
+}
+String ReservationKey(uint64_t aId) noexcept
+{
+    return String("$checkpoint-reservation/") + std::to_string(aId).c_str();
+}
+std::array<uint8_t, 32> CheckpointDigest(const String& acWorld, const WorldStore::Checkpoint& acCheckpoint) noexcept
+{
+    CryptoPP::SHA256 hash;
+    const auto seed = Digest(acWorld + "/checkpoint/" + std::to_string(acCheckpoint.Id).c_str(), acCheckpoint.CapturedRevision, acCheckpoint.Metadata);
+    hash.Update(seed.data(), seed.size());
+    for (const auto& record : acCheckpoint.Records)
+    {
+        const auto digest = Digest(record.Key, record.Revision, record.Value);
+        hash.Update(digest.data(), digest.size());
+    }
+    std::array<uint8_t, 32> result{};
+    hash.Final(result.data());
+    return result;
+}
+}
+
+bool WorldStore::ReserveCheckpoint(uint64_t& aId) noexcept
+{
+    aId = 0;
+    if (m_revision >= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+        return Fail("Checkpoint identity exhausted");
+    const uint64_t id = m_revision + 1;
+    uint64_t revision{};
+    if (Commit({{ReservationKey(id), {'T', 'C', 'R', 1}, 0}}, revision) != WriteResult::Committed)
+        return false;
+    aId = revision;
+    return true;
+}
+
+bool WorldStore::CaptureCheckpoint(uint64_t aId, const Vector<uint8_t>& acMetadata) noexcept
+{
+    Record reservation;
+    if (!m_db || aId == 0 || aId > m_revision || m_revision >= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
+        acMetadata.empty() || acMetadata.size() > 65536 || Read(ReservationKey(aId), reservation) != ReadResult::Found ||
+        reservation.Revision != aId || reservation.Value != Vector<uint8_t>{'T', 'C', 'R', 1})
+        return Fail("Checkpoint reservation or metadata is invalid");
+    Checkpoint checkpoint{aId, m_revision, acMetadata, {}};
+    Statement rows(m_db, "SELECT key,value,digest,revision FROM state ORDER BY key");
+    if (!rows)
+        return Fail("Cannot enumerate the checkpoint timeline");
+    size_t bytes = acMetadata.size();
+    int result{};
+    while ((result = sqlite3_step(rows.Value)) == SQLITE_ROW)
+    {
+        Record record;
+        if (!ReadRecord(rows.Value, record) || record.Revision > m_revision)
+            return Fail("Cannot capture an unreadable world record");
+        if (OutsideTimeline(record.Key))
+            continue;
+        bytes += record.Key.size() + record.Value.size() + 40;
+        if (checkpoint.Records.size() >= kMaxCheckpointRecords || bytes > kMaxCheckpointBytes)
+            return Fail("World checkpoint exceeds the supported size");
+        checkpoint.Records.push_back(std::move(record));
+    }
+    if (result != SQLITE_DONE)
+        return Fail("Cannot enumerate the checkpoint timeline");
+    const auto digest = CheckpointDigest(m_worldId, checkpoint);
+    if (!Execute("BEGIN IMMEDIATE"))
+        return false;
+    struct Rollback { sqlite3* Db; bool Done{}; ~Rollback() { if (!Done) sqlite3_exec(Db, "ROLLBACK", nullptr, nullptr, nullptr); } } rollback{m_db};
+    Statement insert(m_db, "INSERT INTO checkpoints VALUES(?1,?2,?3,?4)");
+    if (!insert || sqlite3_bind_int64(insert.Value, 1, aId) != SQLITE_OK || sqlite3_bind_int64(insert.Value, 2, m_revision) != SQLITE_OK ||
+        sqlite3_bind_blob(insert.Value, 3, acMetadata.data(), static_cast<int>(acMetadata.size()), SQLITE_TRANSIENT) != SQLITE_OK ||
+        sqlite3_bind_blob(insert.Value, 4, digest.data(), 32, SQLITE_TRANSIENT) != SQLITE_OK || sqlite3_step(insert.Value) != SQLITE_DONE)
+        return Fail("Cannot commit the checkpoint manifest (existing IDs cannot be replaced)");
+    Statement copy(m_db, "INSERT INTO checkpoint_state SELECT ?1,key,value,digest,revision FROM state WHERE key!='$world-epoch' AND key!='$restored-checkpoint' AND key!='$restore-pending' AND key NOT GLOB '$checkpoint-reservation/*' AND key NOT GLOB '$participant/*'");
+    if (!copy || sqlite3_bind_int64(copy.Value, 1, aId) != SQLITE_OK || sqlite3_step(copy.Value) != SQLITE_DONE ||
+        !Execute("UPDATE identity SET revision=revision+1 WHERE id=1; COMMIT"))
+        return Fail("Cannot commit the checkpoint timeline");
+    rollback.Done = true;
+    ++m_revision;
+    return true;
+}
+
+bool WorldStore::ReadCheckpoint(uint64_t aId, Checkpoint& aCheckpoint) noexcept
+{
+    if (!m_db || aId == 0 || aId > m_revision)
+        return Fail("Invalid checkpoint identity");
+    Statement header(m_db, "SELECT captured_revision,metadata,digest FROM checkpoints WHERE id=?1");
+    if (!header || sqlite3_bind_int64(header.Value, 1, aId) != SQLITE_OK || sqlite3_step(header.Value) != SQLITE_ROW ||
+        sqlite3_column_int64(header.Value, 0) < static_cast<int64_t>(aId) || sqlite3_column_int64(header.Value, 0) > static_cast<int64_t>(m_revision) ||
+        sqlite3_column_bytes(header.Value, 1) < 1 || sqlite3_column_bytes(header.Value, 1) > 65536 || sqlite3_column_bytes(header.Value, 2) != 32)
+        return Fail("Checkpoint manifest is missing or invalid");
+    Checkpoint checkpoint;
+    checkpoint.Id = aId;
+    checkpoint.CapturedRevision = static_cast<uint64_t>(sqlite3_column_int64(header.Value, 0));
+    const auto* metadata = static_cast<const uint8_t*>(sqlite3_column_blob(header.Value, 1));
+    checkpoint.Metadata.assign(metadata, metadata + sqlite3_column_bytes(header.Value, 1));
+    std::array<uint8_t, 32> expected{};
+    std::memcpy(expected.data(), sqlite3_column_blob(header.Value, 2), 32);
+    Statement rows(m_db, "SELECT key,value,digest,revision FROM checkpoint_state WHERE checkpoint_id=?1 ORDER BY key");
+    if (!rows || sqlite3_bind_int64(rows.Value, 1, aId) != SQLITE_OK)
+        return Fail("Cannot enumerate checkpoint records");
+    int result{};
+    size_t bytes = checkpoint.Metadata.size();
+    while ((result = sqlite3_step(rows.Value)) == SQLITE_ROW)
+    {
+        Record record;
+        if (!ReadRecord(rows.Value, record) || record.Revision > checkpoint.CapturedRevision || OutsideTimeline(record.Key))
+            return Fail("Checkpoint contains an unreadable or forbidden timeline record");
+        bytes += record.Key.size() + record.Value.size() + 40;
+        if (checkpoint.Records.size() >= kMaxCheckpointRecords || bytes > kMaxCheckpointBytes)
+            return Fail("Checkpoint timeline exceeds the supported size");
+        checkpoint.Records.push_back(std::move(record));
+    }
+    if (result != SQLITE_DONE || expected != CheckpointDigest(m_worldId, checkpoint))
+        return Fail("Checkpoint timeline checksum differs; preserve the database");
+    aCheckpoint = std::move(checkpoint);
+    return true;
+}
+
+bool WorldStore::RestoreCheckpoint(uint64_t aId, uint64_t& aNewEpoch) noexcept
+{
+    aNewEpoch = 0;
+    Checkpoint checkpoint;
+    if (!ReadCheckpoint(aId, checkpoint) || m_revision >= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+        return false;
+    // A checkpoint cannot change the world's installed content or adapter policy.
+    for (const char* key : {"$contract", "$adapters"})
+    {
+        const auto saved = std::find_if(checkpoint.Records.begin(), checkpoint.Records.end(), [key](const Record& record) { return record.Key == key; });
+        Record current;
+        const auto read = Read(key, current);
+        if ((read == ReadResult::Missing) != (saved == checkpoint.Records.end()) || read == ReadResult::Failed ||
+            (read == ReadResult::Found && current.Value != saved->Value))
+            return Fail("Checkpoint content or adapter policy differs from the current world");
+    }
+    const uint64_t epoch = m_revision + 1;
+    const Vector<uint8_t> marker{'T', 'C', 'W', 'E', 1};
+    const auto markerDigest = Digest("$world-epoch", epoch, marker);
+    if (!Execute("BEGIN IMMEDIATE"))
+        return false;
+    struct Rollback { sqlite3* Db; bool Done{}; ~Rollback() { if (!Done) sqlite3_exec(Db, "ROLLBACK", nullptr, nullptr, nullptr); } } rollback{m_db};
+    if (!Execute("DELETE FROM state WHERE key!='$world-epoch' AND key!='$restored-checkpoint' AND key!='$restore-pending' AND key NOT GLOB '$checkpoint-reservation/*' AND key NOT GLOB '$participant/*'"))
+        return false;
+    Statement copy(m_db, "INSERT INTO state SELECT key,value,digest,revision FROM checkpoint_state WHERE checkpoint_id=?1");
+    Statement writeEpoch(m_db, "INSERT INTO state VALUES('$world-epoch',?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,digest=excluded.digest,revision=excluded.revision");
+    Statement head(m_db, "UPDATE identity SET revision=?1 WHERE id=1");
+    Vector<uint8_t> restored;
+    for (size_t byte = 0; byte < 8; ++byte)
+        restored.push_back(static_cast<uint8_t>(aId >> (byte * 8)));
+    const auto restoredDigest = Digest("$restored-checkpoint", epoch, restored);
+    Statement writeRestored(m_db, "INSERT INTO state VALUES('$restored-checkpoint',?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,digest=excluded.digest,revision=excluded.revision");
+    const Vector<uint8_t> pending{1};
+    const auto pendingDigest = Digest("$restore-pending", epoch, pending);
+    Statement writePending(m_db, "INSERT INTO state VALUES('$restore-pending',?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,digest=excluded.digest,revision=excluded.revision");
+    if (!copy || sqlite3_bind_int64(copy.Value, 1, aId) != SQLITE_OK || sqlite3_step(copy.Value) != SQLITE_DONE ||
+        !writeEpoch || sqlite3_bind_blob(writeEpoch.Value, 1, marker.data(), static_cast<int>(marker.size()), SQLITE_TRANSIENT) != SQLITE_OK ||
+        sqlite3_bind_blob(writeEpoch.Value, 2, markerDigest.data(), 32, SQLITE_TRANSIENT) != SQLITE_OK || sqlite3_bind_int64(writeEpoch.Value, 3, epoch) != SQLITE_OK ||
+        sqlite3_step(writeEpoch.Value) != SQLITE_DONE || !writeRestored ||
+        sqlite3_bind_blob(writeRestored.Value, 1, restored.data(), static_cast<int>(restored.size()), SQLITE_TRANSIENT) != SQLITE_OK ||
+        sqlite3_bind_blob(writeRestored.Value, 2, restoredDigest.data(), 32, SQLITE_TRANSIENT) != SQLITE_OK ||
+        sqlite3_bind_int64(writeRestored.Value, 3, epoch) != SQLITE_OK || sqlite3_step(writeRestored.Value) != SQLITE_DONE ||
+        !writePending || sqlite3_bind_blob(writePending.Value, 1, pending.data(), 1, SQLITE_TRANSIENT) != SQLITE_OK ||
+        sqlite3_bind_blob(writePending.Value, 2, pendingDigest.data(), 32, SQLITE_TRANSIENT) != SQLITE_OK ||
+        sqlite3_bind_int64(writePending.Value, 3, epoch) != SQLITE_OK || sqlite3_step(writePending.Value) != SQLITE_DONE ||
+        !head || sqlite3_bind_int64(head.Value, 1, epoch) != SQLITE_OK ||
+        sqlite3_step(head.Value) != SQLITE_DONE || sqlite3_changes(m_db) != 1 || !Execute("COMMIT"))
+        return Fail("Cannot atomically restore checkpoint and advance the world epoch");
+    rollback.Done = true;
+    m_revision = aNewEpoch = epoch;
+    return true;
+}
+
+bool WorldStore::LastRestoredCheckpoint(uint64_t& aId, uint64_t& aEpoch) noexcept
+{
+    aId = aEpoch = 0;
+    Record record;
+    const auto result = Read("$restored-checkpoint", record);
+    if (result == ReadResult::Missing)
+        return true;
+    if (result != ReadResult::Found || record.Value.size() != 8)
+        return Fail("Cannot read the durable rollback admission marker");
+    for (size_t byte = 0; byte < 8; ++byte)
+        aId |= uint64_t(record.Value[byte]) << (byte * 8);
+    aEpoch = record.Revision;
+    return (aId != 0 && aId < aEpoch) || Fail("Invalid rollback checkpoint identity");
+}
+
+bool WorldStore::IsRestorePending(bool& aPending) noexcept
+{
+    aPending = false;
+    Record pending;
+    const auto read = Read("$restore-pending", pending);
+    if (read == ReadResult::Missing)
+    {
+        uint64_t id{}, epoch{};
+        return LastRestoredCheckpoint(id, epoch) && id == 0;
+    }
+    if (read != ReadResult::Found || pending.Value.size() != 1 || pending.Value[0] > 1)
+        return Fail("Invalid durable checkpoint rendezvous marker");
+    aPending = pending.Value[0] != 0;
+    return true;
+}
+bool WorldStore::CompleteRestore() noexcept
+{
+    bool pending{};
+    if (!IsRestorePending(pending))
+        return false;
+    if (!pending)
+        return true;
+    Record record;
+    if (Read("$restore-pending", record) != ReadResult::Found)
+        return false;
+    record.Value = {0};
+    uint64_t revision{};
+    return Commit({record}, revision) == WriteResult::Committed;
 }

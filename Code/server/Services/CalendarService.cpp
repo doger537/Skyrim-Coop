@@ -1,4 +1,5 @@
 #include <Services/CalendarService.h>
+#include <Services/WorldCheckpointService.h>
 
 #include <GameServer.h>
 #include <World.h>
@@ -31,6 +32,8 @@ CalendarService::CalendarService(World& aWorld, entt::dispatcher& aDispatcher)
 void CalendarService::OnUpdate(const UpdateEvent&) noexcept
 {
     const uint64_t delta = m_tickBaseline.Sample(GameServer::Get()->GetTick());
+    if (m_world.ctx().at<WorldCheckpointService>().IsFrozen())
+        return;
     m_dateTime.Update(delta);
     if (m_resyncCadence.Advance(delta))
         SendTimeResync();
@@ -133,4 +136,13 @@ bool CalendarService::SetTimeScale(float aScale) noexcept
     }
 
     return false;
+}
+
+void CalendarService::RestoreCheckpointModel(const TimeModel& acModel) noexcept
+{
+    if (!acModel.IsValid())
+        return;
+    m_dateTime = DateTime(acModel);
+    m_timeSetFromFirstPlayer = true;
+    m_tickBaseline.Rebase(GameServer::Get()->GetTick());
 }

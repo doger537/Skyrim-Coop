@@ -20,8 +20,11 @@ public:
     CalendarService(World&, entt::dispatcher&, TransportService&);
 
     static bool AllowGameTick() noexcept;
+    void FreezeForCheckpoint(const TimeModel& acModel) noexcept;
+    void ThawCheckpoint() noexcept;
 
 private:
+    bool m_checkpointFrozen{};
     void OnTimeUpdate(const ServerTimeSettings&) noexcept;
     void HandleUpdate(const UpdateEvent&) noexcept;
     void OnDisconnected(const DisconnectedEvent&) noexcept;

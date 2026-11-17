@@ -9,6 +9,7 @@
 #include <Events/CharacterRemoveEvent.h>
 #include <Events/OwnershipTransferEvent.h>
 #include <Events/PacketEvent.h>
+#include <Services/WorldCheckpointService.h>
 #include <Events/PlayerJoinEvent.h>
 #include <Events/PlayerLeaveCellEvent.h>
 #include <Events/PlayerLeaveEvent.h>
@@ -341,6 +342,8 @@ void GameServer::BindMessageHandlers()
 
             if (!pPlayer->IsCampaignReady() || m_rejectedCampaigns.contains(aConnectionId))
                 return;
+            if (m_pWorld->ctx().at<WorldCheckpointService>().IsFrozen() && T::Opcode != kRequestWorldCheckpoint)
+                return;
             const auto pRealMessage = CastUnique<T>(std::move(apMessage));
 
             m_pWorld->GetDispatcher().trigger(PacketEvent<T>(pRealMessage.get(), pPlayer));
@@ -663,6 +666,8 @@ void GameServer::OnConnection(const ConnectionId_t aHandle)
 
 void GameServer::OnDisconnection(const ConnectionId_t aConnectionId, EDisconnectReason aReason)
 {
+    if (m_detachedCheckpointConnections.erase(aConnectionId))
+        return; // Gameplay cleanup already ran before restoring the database.
     m_adminSessions.erase(aConnectionId);
     m_rejectedCampaigns.erase(aConnectionId);
 
@@ -960,6 +965,8 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         if (contentError.empty() && !acRequest->PlayerTime.IsValid())
             contentError = "The save's calendar is invalid. Load a save with a valid game date and reconnect";
         if (contentError.empty())
+            m_pWorld->ctx().at<WorldCheckpointService>().CanAuthenticate(acRequest->CharacterId, acRequest->CheckpointToken, contentError);
+        if (contentError.empty())
             for (const Player* existing : m_pWorld->GetPlayerManager())
                 if (existing->GetPersistentCharacterId() == acRequest->CharacterId)
                 {
@@ -1209,4 +1216,10 @@ String GameServer::SanitizeUsername(const String& acUsername) const noexcept
     std::ranges::replace(username, '_', ' ');
 
     return username;
+}
+
+void GameServer::DetachCheckpointSession(ConnectionId_t aConnection)
+{
+    OnDisconnection(aConnection, EDisconnectReason::Quit);
+    m_detachedCheckpointConnections.insert(aConnection);
 }

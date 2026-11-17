@@ -10,6 +10,8 @@
 #include <Messages/TeleportRequest.h>
 
 #include <Events/SetTimeCommandEvent.h>
+#include <Events/WorldCheckpointIntent.h>
+#include <charconv>
 
 #include <World.h>
 
@@ -117,6 +119,22 @@ void OverlayClient::ProcessRevealPlayersMessage()
 void OverlayClient::ProcessChatMessage(CefRefPtr<CefListValue> aEventArgs)
 {
     std::string contents = aEventArgs->GetString(1).ToString();
+    if (contents == "/coop-save" || contents.starts_with("/coop-load "))
+    {
+        WorldCheckpointIntent intent;
+        intent.Load = contents != "/coop-save";
+        intent.ConnectionGeneration = m_transport.GetConnectionGeneration();
+        if (intent.Load)
+        {
+            const auto number = std::string_view(contents).substr(11);
+            const auto result = std::from_chars(number.data(), number.data() + number.size(), intent.Id);
+            if (result.ec != std::errc{} || result.ptr != number.data() + number.size() || !intent.Id)
+                return;
+        }
+        // CEF's callback is not the engine thread. Queue only copied values.
+        World::Get().GetRunner().Trigger(intent);
+        return;
+    }
     if (!contents.empty())
     {
         SendChatMessageRequest messageRequest;

@@ -2,6 +2,7 @@
 #include "CampaignData.h"
 #include "WorldStore.h"
 #include "QuestAdapters.h"
+#include "QuestRunParticipants.h"
 #include <optional>
 #include <Structs/CharacterIdentity.h>
 
@@ -29,6 +30,13 @@ public:
     // Start a new live timeline. Never roll back this marker with an in-game save.
     bool AdvanceWorldEpoch() noexcept;
     bool RegisterParticipant(const CharacterIdentity& acIdentity) noexcept;
+    bool ReserveCheckpoint(uint64_t& aId) noexcept;
+    bool CaptureCheckpoint(uint64_t aId, const TiltedPhoques::Vector<uint8_t>& acMetadata) noexcept;
+    bool ReadCheckpoint(uint64_t aId, WorldStore::Checkpoint& aCheckpoint) noexcept;
+    bool RestoreCheckpoint(uint64_t aId) noexcept;
+    bool LastRestoredCheckpoint(uint64_t& aId, uint64_t& aEpoch) noexcept;
+    bool IsRestorePending(bool& aPending) noexcept;
+    bool CompleteRestore() noexcept;
     uint64_t WorldEpoch() const noexcept { return m_worldEpoch; }
     enum class ItemWriteResult { Saved, Conflict, Invalid, StorageError };
     bool ValidWorldItem(const WorldItemState& acItem) const noexcept;
@@ -42,7 +50,9 @@ public:
     bool ValidForm(GameId aId, bool aOptional = false) const noexcept;
     bool ValidObject(const ObjectData& acObject) const noexcept;
     bool BootstrapQuests(const TiltedPhoques::Vector<Quest>& acQuests, bool aAllowMisc) noexcept;
-    QuestResult UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc) noexcept;
+    QuestResult UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
+        const QuestRunParticipants* apParticipants = nullptr) noexcept;
+    bool ReadQuestRunParticipants(GameId aId, uint32_t aEpoch, QuestRunParticipants& aParticipants, bool& aFound) noexcept;
     const TiltedPhoques::Vector<SavedQuest>& Quests() const noexcept { return m_quests; }
     const SavedQuest* FindQuest(GameId aId) const noexcept;
     const QuestAdapter* Adapter(GameId aId) const noexcept;

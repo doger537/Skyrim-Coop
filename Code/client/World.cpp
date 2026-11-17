@@ -24,6 +24,7 @@
 #include <Services/CoopSleepService.h>
 #include <Services/DialogueService.h>
 #include <Services/PlayerMarkerService.h>
+#include <Services/WorldCheckpointService.h>
 
 #include <Events/PreUpdateEvent.h>
 #include <Events/UpdateEvent.h>
@@ -60,6 +61,7 @@ World::World()
     ctx().emplace<CoopSleepService>(*this, m_dispatcher, m_transport);
     ctx().emplace<DialogueService>(*this, m_dispatcher, m_transport);
     ctx().emplace<PlayerMarkerService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<WorldCheckpointService>(*this, m_dispatcher, m_transport);
 
     BehaviorVar::Get()->Init();
 }
@@ -74,10 +76,18 @@ void World::Update() noexcept
 
     const auto cDeltaSeconds = std::chrono::duration_cast<std::chrono::duration<double>>(cDelta).count();
 
-    m_dispatcher.trigger(PreUpdateEvent(cDeltaSeconds));
+    auto& checkpoints = ctx().at<WorldCheckpointService>();
+    if (!checkpoints.IsFrozen())
+        m_dispatcher.trigger(PreUpdateEvent(cDeltaSeconds));
 
     // Force run this before so we get the tasks scheduled to run
     m_runner.OnUpdate(UpdateEvent(cDeltaSeconds));
+    if (checkpoints.IsFrozen())
+    {
+        m_transport.PollCheckpointFrame(UpdateEvent(cDeltaSeconds));
+        checkpoints.Tick(UpdateEvent(cDeltaSeconds));
+        return;
+    }
     m_dispatcher.trigger(UpdateEvent(cDeltaSeconds));
 }
 

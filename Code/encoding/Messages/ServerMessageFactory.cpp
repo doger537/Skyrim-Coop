@@ -37,9 +37,15 @@ UniquePtr<ServerMessage> ServerMessageFactory::Extract(TiltedPhoques::Buffer::Re
         return {nullptr};
 
     const auto opcode = static_cast<ServerOpcode>(data);
-    if (aExpectedEpoch != 0 && opcode != kAuthenticationResponse && epoch != aExpectedEpoch)
+    if (aExpectedEpoch != 0 && opcode != kAuthenticationResponse && opcode != kNotifyWorldCheckpoint && epoch != aExpectedEpoch)
         return {nullptr};
     auto message = s_serverMessageExtractor[opcode](aReader);
     message->WorldEpoch = epoch;
+    if (opcode == kNotifyWorldCheckpoint && aExpectedEpoch != 0 && epoch != aExpectedEpoch)
+    {
+        const auto& checkpoint = *static_cast<const NotifyWorldCheckpoint*>(message.get());
+        if (!checkpoint.IsValid() || checkpoint.State != NotifyWorldCheckpoint::Phase::LoadNow || checkpoint.PreviousEpoch != aExpectedEpoch || epoch <= aExpectedEpoch)
+            return {nullptr};
+    }
     return message;
 }
