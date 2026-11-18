@@ -14,6 +14,7 @@ struct Invocation
     uint32_t ItemFormId{};
     uint32_t Count{};
     bool Silent{};
+    bool Remove{};
 };
 struct Policy
 {
@@ -35,7 +36,7 @@ using Execute = BSScript::Variable* (*)(void*, BSScript::Variable*, const QuestI
 void Configure(Policy aPolicy) noexcept;
 void SetRunnerThread(uint32_t aThread) noexcept;
 BSScript::Variable* Invoke(void* apFunctor, BSScript::Variable* apResult, const QuestItemScriptOrigin& acSource,
-    uint32_t aItemFormId, uint32_t aCount, bool aSilent, Execute aOriginal) noexcept;
+    uint32_t aItemFormId, uint32_t aCount, bool aSilent, Execute aOriginal, bool aRemove = false) noexcept;
 bool HasPending() noexcept;
 bool HasLive() noexcept;
 bool NeedsReload() noexcept;

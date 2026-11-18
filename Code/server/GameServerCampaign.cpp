@@ -133,6 +133,7 @@ void GameServer::HandleCampaignReady(ConnectionId_t aConnectionId, const Request
     const auto joined = pending;
     m_pendingCampaigns.erase(aConnectionId);
     pPlayer->SetCampaignReady();
+    pPlayer->SetCampaignNonce(joined.Nonce);
     m_pWorld->GetQuestService().FillPlayerJournal(*pPlayer);
     NotifyCampaignCheckpoint accepted;
     accepted.State = NotifyCampaignCheckpoint::Accepted;

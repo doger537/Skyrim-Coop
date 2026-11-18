@@ -8,6 +8,7 @@
 #include <Events/ActivateEvent.h>
 #include <Events/InventoryChangeEvent.h>
 #include <NativeQuestContext.h>
+#include <Services/SharedQuestEffectService.h>
 #include <Events/ScriptAnimationEvent.h>
 #include <Events/LockChangeEvent.h>
 
@@ -45,8 +46,9 @@ namespace
 void QueueReferenceInventoryChange(InventoryChangeEvent aEvent, TESObjectREFR* apTransferReference)
 {
     aEvent.IsPlayerTransfer = apTransferReference && apTransferReference == PlayerCharacter::Get();
-    if (aEvent.FormId == 0x14 && aEvent.Item.Count > 0)
+    if (aEvent.FormId == 0x14)
         aEvent.ScriptOrigin = NativeQuestContext::Current();
+    if (aEvent.ScriptOrigin && aEvent.ScriptOrigin->Operation && World::Get().ctx().at<SharedQuestEffectService>().Records(aEvent.ScriptOrigin->Operation)) return;
     World::Get().GetRunner().Trigger(std::move(aEvent));
 }
 

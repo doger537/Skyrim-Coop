@@ -52,6 +52,7 @@ struct TransportService : Client
     const uint32_t& GetLocalPlayerId() const noexcept { return m_localPlayerId; }
     uint64_t GetConnectionGeneration() const noexcept { return m_connectionGeneration; }
     uint64_t GetWorldEpoch() const noexcept { return m_worldEpoch; }
+    uint64_t GetCampaignNonce() const noexcept { return m_campaignNonce; }
     // Native event callback may only publish this barrier, never close sockets
     // or retain engine pointers. The runner consumes it before polling packets.
     void NativeLoadCompleted() noexcept

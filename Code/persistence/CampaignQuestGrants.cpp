@@ -8,6 +8,13 @@ namespace Campaign
 {
 namespace
 {
+Inventory Positive(Inventory aInventory) noexcept
+{
+    for (auto& item : aInventory.Entries)
+        if (!item.Count) item.Count = 1; // validate the form/metadata of a no-op receipt too
+        else if (item.Count < 0 && item.Count >= -1000000) item.Count = -item.Count;
+    return aInventory;
+}
 String Inbox(const CharacterIdentity& acCharacter) noexcept
 {
     constexpr char hex[] = "0123456789abcdef";
@@ -25,8 +32,8 @@ bool State::ReadValidQuestGrant(const WorldStore::Record& acRecord, QuestGrantRe
     QuestRunParticipants participants;
     if (!Decode(acRecord.Value, aReceipt) || !ValidForm(aReceipt.Plan.Quest) ||
         acRecord.Key != Key("quest-grant", aReceipt.Plan.Quest) + "/" + std::to_string(aReceipt.Plan.Run).c_str() + "/" + aReceipt.Plan.Event ||
-        !ValidInventory(aReceipt.For(aReceipt.Participants.Players[0])) || !ValidInventory(aReceipt.For(aReceipt.Participants.Players[1])) ||
-        !ReadQuestRunParticipants(aReceipt.Plan.Quest, aReceipt.Plan.Run, participants, found) || !found || participants != aReceipt.Participants)
+        !ValidInventory(Positive(aReceipt.For(aReceipt.Participants.Players[0]))) || !ValidInventory(Positive(aReceipt.For(aReceipt.Participants.Players[1]))) ||
+        !ReadQuestRunParticipants(aReceipt.Plan.Quest, aReceipt.Plan.Run, participants, found, aReceipt.Plan.Shared()) || !found || participants != aReceipt.Participants)
     {
         m_error = "Saved quest grant does not match its content, event or durable participants";
         return false;
@@ -93,7 +100,7 @@ State::GrantResult State::CommitQuestGrant(const QuestGrantPlan& acPlan, QuestGr
     Inventory inventory;
     for (const auto& value : acPlan.Items)
         inventory.Entries.push_back(value.Item);
-    if (!ValidInventory(inventory))
+    if (!ValidInventory(Positive(std::move(inventory))))
     {
         m_error = "Quest grant has unmapped item/enchantment forms";
         return GrantResult::Invalid;
@@ -134,11 +141,11 @@ State::GrantResult State::CommitQuestGrant(const QuestGrantPlan& acPlan, QuestGr
     const auto* quest = FindQuest(acPlan.Quest);
     bool found{};
     QuestRunParticipants participants;
-    if (!ReadQuestRunParticipants(acPlan.Quest, acPlan.Run, participants, found))
+    if (!ReadQuestRunParticipants(acPlan.Quest, acPlan.Run, participants, found, acPlan.Shared()))
         return GrantResult::StorageError;
-    if (!quest || quest->Data.Epoch != acPlan.Run || !found || participants.Initiator != acPlan.Initiator ||
+    if (!quest || quest->Data.Epoch != acPlan.Run || !found || participants.Initiator != acPlan.Initiator || (!acPlan.Shared() &&
         std::none_of(quest->Data.Events.begin(), quest->Data.Events.end(), [&](const auto& event)
-        { return !event.Bootstrap && event.Status != 2 && event.Stage == acPlan.Stage; }))
+        { return !event.Bootstrap && event.Status != 2 && event.Stage == acPlan.Stage; })))
     {
         m_error = "Quest grant lacks a matching accepted run, stage or known initiator";
         return GrantResult::Invalid;

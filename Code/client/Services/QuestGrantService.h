@@ -16,6 +16,8 @@ public:
     // Called only by an admitted native grant broker after the original effect
     // has completed in THIS runtime. Never persist this marker in a sidecar.
     bool RecordNativeExecution(GameId aQuest, uint32_t aRun, const String& acEvent) noexcept;
+    void Wake() noexcept { m_nextPoll = 0; }
+    bool Applied(uint64_t aRevision) const noexcept { return m_ready && m_available && m_cursor >= aRevision; }
 private:
     struct Executed { GameId Quest; uint32_t Run{}; String Event; };
     void OnConnected(const ConnectedEvent&) noexcept;

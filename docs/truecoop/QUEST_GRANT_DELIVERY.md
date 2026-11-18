@@ -1,5 +1,11 @@
 # Quest grant inbox and saved cursor
 
+Update: an accelerated host-led producer now feeds the inbox with signed plain
+Shared item effects; see [ACCELERATED_QUESTS_RU.md](ACCELERATED_QUESTS_RU.md).
+The original semantic Key/Reward producer described below remains unconnected.
+Shared negative effects validate sufficient quantity before native application.
+Protocol is now 0x5443000D; schema 5. No gameplay tests have been run.
+
 Implemented source path: immutable server ledger → bounded read-only inbox →
 recipient validation → admitted runner inventory application/readback → native
 saved revision cursor. This is **not yet automatic vanilla quest reward sync**:

@@ -1,5 +1,15 @@
 # Implementation checkpoint — 2026-11-18
 
+Current continuation: the user approved an accelerated host-led scope and shared
+item effects instead of classifying every key/reward. An experimental producer is
+now connected for standard base-form AddItem and RemoveItem (no destination).
+It uses permission before native execution, actual count readback, immutable
+signed Shared receipts, guest duplicate suppression and both-recipient cursor
+acknowledgement before VM release. Protocol is **0x5443000D**, SQLite **schema 5**.
+Details and explicit unsupported cases: [ACCELERATED_QUESTS_RU.md](ACCELERATED_QUESTS_RU.md).
+The earlier notes below describe the classified route/foundations; they do not
+supersede this narrower newly enabled producer. No tests or game launch occurred.
+
 Latest user order: physics and NPCs first, then finish quests and make the ZIP; do not change Alternate Start. All tests remain deferred. No automatic/gameplay tests, game launches or installed-game/save/profile modifications were performed after that instruction.
 
 Implemented in this checkpoint:

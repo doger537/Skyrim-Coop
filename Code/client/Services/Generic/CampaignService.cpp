@@ -205,6 +205,14 @@ void QuestService::OnCampaignCheckpoint(const NotifyCampaignCheckpoint& acMessag
     m_world.GetTransport().Send(ready);
 }
 
+bool QuestService::SharedRun(uint32_t aFormId, GameId& aQuest, uint32_t& aRun) const noexcept
+{
+    auto* quest = Cast<TESQuest>(TESForm::GetById(aFormId));
+    if (!m_checkpointComplete || !IsSharedQuest(quest) || !m_world.GetModSystem().GetServerModId(aFormId, aQuest)) return false;
+    const auto it = m_cursors.find(aFormId);
+    aRun = it == m_cursors.end() ? 1 : it->second.Epoch;
+    return aRun != 0;
+}
 void QuestService::SendQuestUpdate(uint32_t aFormId, uint16_t aStage, uint8_t aStatus, uint8_t aType) noexcept
 {
     if (!m_world.GetTransport().IsConnected())
@@ -212,6 +220,9 @@ void QuestService::SendQuestUpdate(uint32_t aFormId, uint16_t aStage, uint8_t aS
     auto* quest = Cast<TESQuest>(TESForm::GetById(aFormId));
     if (!IsSharedQuest(quest))
         return;
+    // The server accepts a guest echo only if its exact change is already in
+    // the authoritative journal. Asynchronous replay fragments can emit an
+    // event after ScopedQuestOverride ended; they must not become proposals.
     RequestQuestUpdate update;
     if (!m_world.GetModSystem().GetServerModId(aFormId, update.Id))
         return;

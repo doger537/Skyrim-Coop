@@ -181,19 +181,24 @@ template <class A, class T> bool QuestFields(A& aArchive, T& aQuest) noexcept
            aArchive.List(aQuest.Decisions, 256, [](auto& archive, auto& decision) { return archive.Text(decision.Group, 64) && archive.Number(decision.Stage); });
 }
 
-template <class A, class T> bool GrantFields(A& aArchive, T& aReceipt) noexcept
+template <class A, class T> bool PlanFields(A& aArchive, T& plan) noexcept
 {
-    auto& plan = aReceipt.Plan;
     if (!Form(aArchive, plan.Quest) || !aArchive.Number(plan.Run) || !aArchive.Number(plan.Stage) || !aArchive.Text(plan.Event, 96))
         return false;
-    for (auto* identity : {&plan.Initiator, &aReceipt.Participants.Initiator, &aReceipt.Participants.Players[0], &aReceipt.Participants.Players[1]})
-        for (auto& part : identity->Parts)
-            if (!aArchive.Number(part))
-                return false;
+    for (auto& part : plan.Initiator.Parts) if (!aArchive.Number(part)) return false;
     return aArchive.List(plan.Items, QuestGrantPlan::kMaxItems, [](auto& archive, auto& value)
     {
         return archive.Number(value.Role) && Entry(archive, value.Item, 64);
     });
+}
+template <class A, class T> bool GrantFields(A& aArchive, T& aReceipt) noexcept
+{
+    // Preserve the schema-2 stored receipt order used by existing campaigns.
+    auto& plan = aReceipt.Plan;
+    if (!Form(aArchive, plan.Quest) || !aArchive.Number(plan.Run) || !aArchive.Number(plan.Stage) || !aArchive.Text(plan.Event, 96)) return false;
+    for (auto* identity : {&plan.Initiator, &aReceipt.Participants.Initiator, &aReceipt.Participants.Players[0], &aReceipt.Participants.Players[1]})
+        for (auto& part : identity->Parts) if (!aArchive.Number(part)) return false;
+    return aArchive.List(plan.Items, QuestGrantPlan::kMaxItems, [](auto& archive, auto& value) { return archive.Number(value.Role) && Entry(archive, value.Item, 64); });
 }
 
 template <class A, class T> bool WorldItemFields(A& aArchive, T& aItem) noexcept
@@ -318,6 +323,18 @@ bool Encode(const WorldItemReceipt& acReceipt, TiltedPhoques::Vector<uint8_t>& a
 {
     Writer writer(aBytes);
     return acReceipt.IsValid() && Header(writer, 6) && ItemReceiptFields(writer, acReceipt);
+}
+bool Encode(const QuestGrantPlan& acPlan, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept
+{
+    Writer writer(aBytes);
+    return acPlan.IsValid() && Header(writer, 7) && PlanFields(writer, acPlan);
+}
+bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, QuestGrantPlan& aPlan) noexcept
+{
+    QuestGrantPlan candidate;
+    Reader reader(acBytes);
+    if (acBytes.size() > 16384 || !Header(reader, 7) || !PlanFields(reader, candidate) || !reader.End() || !candidate.IsValid()) return false;
+    aPlan = std::move(candidate); return true;
 }
 bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, WorldItemReceipt& aReceipt) noexcept
 {

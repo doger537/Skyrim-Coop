@@ -30,6 +30,7 @@ Player::Player(Player&& aRhs) noexcept
     , m_cell{std::exchange(aRhs.m_cell, {})}
     , m_inventoryOperations{std::exchange(aRhs.m_inventoryOperations, {})}
     , m_campaignReady{std::exchange(aRhs.m_campaignReady, false)}
+    , m_admissionNonce{std::exchange(aRhs.m_admissionNonce, 0)}
 {
 }
 

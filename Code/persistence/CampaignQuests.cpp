@@ -187,14 +187,14 @@ bool State::BootstrapQuests(const Vector<Quest>& acQuests, bool aAllowMisc) noex
     return true;
 }
 
-bool State::ReadQuestRunParticipants(GameId aId, uint32_t aEpoch, QuestRunParticipants& aParticipants, bool& aFound) noexcept
+bool State::ReadQuestRunParticipants(GameId aId, uint32_t aEpoch, QuestRunParticipants& aParticipants, bool& aFound, bool aShared) noexcept
 {
     aFound = false;
     aParticipants = {};
     if (!m_ready || !ValidForm(aId) || !aEpoch)
         return false;
     WorldStore::Record record;
-    const auto result = m_store.Read(Key("quest-run", aId) + "/" + std::to_string(aEpoch).c_str(), record);
+    const auto result = m_store.Read(Key(aShared ? "quest-shared-run" : "quest-run", aId) + "/" + std::to_string(aEpoch).c_str(), record);
     if (result == WorldStore::ReadResult::Missing)
         return true;
     if (result != WorldStore::ReadResult::Found || record.Value.size() != 49 || record.Value[0] != 1)
@@ -215,6 +215,20 @@ bool State::ReadQuestRunParticipants(GameId aId, uint32_t aEpoch, QuestRunPartic
         return false;
     }
     aFound = true;
+    return true;
+}
+bool State::BindSharedQuestRun(GameId aId, uint32_t aEpoch, const QuestRunParticipants& acParticipants) noexcept
+{
+    const auto* quest = FindQuest(aId);
+    if (!m_ready || !m_contract || !acParticipants.IsValid() || !quest || quest->Data.Epoch != aEpoch || !quest->Data.Started) return false;
+    QuestRunParticipants existing; bool found{};
+    if (!ReadQuestRunParticipants(aId, aEpoch, existing, found, true)) return false;
+    if (found) return existing == acParticipants;
+    WorldStore::Record record; record.Key = Key("quest-shared-run", aId) + "/" + std::to_string(aEpoch).c_str(); record.Value = {1};
+    for (const auto* identity : {&acParticipants.Initiator, &acParticipants.Players[0], &acParticipants.Players[1]})
+        for (uint16_t part : identity->Parts) { record.Value.push_back(static_cast<uint8_t>(part)); record.Value.push_back(static_cast<uint8_t>(part >> 8)); }
+    uint64_t revision{};
+    if (m_store.Commit({record}, revision) != WorldStore::WriteResult::Committed) { m_error = m_store.Error(); return false; }
     return true;
 }
 

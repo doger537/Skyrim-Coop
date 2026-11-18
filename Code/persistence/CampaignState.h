@@ -68,7 +68,8 @@ public:
         const QuestRunParticipants* apParticipants = nullptr) noexcept;
     QuestResult PreviewQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
         const QuestRunParticipants* apParticipants = nullptr) noexcept;
-    bool ReadQuestRunParticipants(GameId aId, uint32_t aEpoch, QuestRunParticipants& aParticipants, bool& aFound) noexcept;
+    bool ReadQuestRunParticipants(GameId aId, uint32_t aEpoch, QuestRunParticipants& aParticipants, bool& aFound, bool aShared = false) noexcept;
+    bool BindSharedQuestRun(GameId aId, uint32_t aEpoch, const QuestRunParticipants& acParticipants) noexcept;
     enum class GrantResult { Committed, Duplicate, Conflict, Invalid, StorageError };
     GrantResult CommitQuestGrant(const QuestGrantPlan& acPlan, QuestGrantReceipt& aReceipt) noexcept;
     bool ReadQuestGrants(const CharacterIdentity& acRecipient, uint64_t aAfterRevision, TiltedPhoques::Vector<QuestGrantReceipt>& aReceipts) noexcept;

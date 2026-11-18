@@ -16,6 +16,7 @@
 #include <Events/HealthChangeEvent.h>
 #include <Events/InventoryChangeEvent.h>
 #include <NativeQuestContext.h>
+#include <Services/SharedQuestEffectService.h>
 #include <Events/ScopedInventoryEventBatch.h>
 #include <Events/MountEvent.h>
 #include <Events/DialogueEvent.h>
@@ -65,8 +66,9 @@ namespace
 void QueueActorInventoryChange(InventoryChangeEvent aEvent, TESObjectREFR* apTransferReference = nullptr)
 {
     aEvent.IsPlayerTransfer = apTransferReference && apTransferReference == PlayerCharacter::Get();
-    if (aEvent.FormId == 0x14 && aEvent.Item.Count > 0)
+    if (aEvent.FormId == 0x14)
         aEvent.ScriptOrigin = NativeQuestContext::Current();
+    if (aEvent.ScriptOrigin && aEvent.ScriptOrigin->Operation && World::Get().ctx().at<SharedQuestEffectService>().Records(aEvent.ScriptOrigin->Operation)) return;
     World::Get().GetRunner().Trigger(std::move(aEvent));
 }
 }

@@ -1,6 +1,7 @@
 #include <Services/QuestGrantService.h>
 #include <Services/TransportService.h>
 #include <Services/WorldCheckpointService.h>
+#include <Services/SharedQuestEffectService.h>
 #include <World.h>
 #include <Events/ConnectedEvent.h>
 #include <Events/DisconnectedEvent.h>
@@ -111,6 +112,9 @@ bool QuestGrantService::Preflight(const Campaign::QuestGrantReceipt& acReceipt) 
     m_skipNative = std::any_of(m_executed.begin(), m_executed.end(), [&](const auto& value)
         { return value.Quest == plan.Quest && value.Run == plan.Run && value.Event == plan.Event; });
     if (m_skipNative && m_character != plan.Initiator) return false;
+    // An old host save cannot reconstruct proof that its original fragment
+    // ran. Recover through the paired world checkpoint, not another AddItem.
+    if (plan.Shared() && m_character == plan.Initiator && !m_skipNative) return false;
     m_delivery = acReceipt.For(m_character);
     for (const auto& item : m_delivery.Entries)
     {
@@ -156,7 +160,7 @@ void QuestGrantService::Apply(const NotifyQuestGrant& acMessage) noexcept
         return;
     }
     receipt.Revision = acMessage.ReceiptRevision;
-    m_receipt = std::move(receipt); m_item = 0; m_deadline = GetTickCount64() + 30000;
+    m_receipt = std::move(receipt); m_item = 0; m_deadline = GetTickCount64() + (m_receipt->Plan.Shared() ? 180000 : 30000);
 }
 void QuestGrantService::OnUpdate(const UpdateEvent&) noexcept
 {
@@ -176,11 +180,13 @@ void QuestGrantService::OnUpdate(const UpdateEvent&) noexcept
         { Fail("Quest grant application lost its saved character/cursor or timed out. Reload a matching checkpoint"); return; }
         if (!m_skipNative && m_item < m_delivery.Entries.size())
         {
+            if (m_receipt->Plan.Shared() && !m_world.ctx().at<SharedQuestEffectService>().GuestReady(m_receipt->Plan)) return;
             const auto& item = m_delivery.Entries[m_item];
+            if (!item.Count) { ++m_item; return; } // matched native no-op, still receipt/cursor fenced
             const uint32_t form = m_world.GetModSystem().GetGameId(item.BaseId);
             const int64_t before = Count(player, form, item);
-            if (before < 0 || before > int64_t(std::numeric_limits<int32_t>::max()) - item.Count)
-            { Fail("Quest grant would overflow the native inventory count"); return; }
+            if (before < 0 || before + int64_t(item.Count) < 0 || before + int64_t(item.Count) > std::numeric_limits<int32_t>::max())
+            { Fail("Shared quest effect has insufficient items or would overflow the inventory count"); return; }
             m_mutated = true;
             // Existing owned-player inventory hooks relay the resulting delta.
             // Do not use the remote-actor inventory override here.
@@ -195,6 +201,7 @@ void QuestGrantService::OnUpdate(const UpdateEvent&) noexcept
         { Fail("Cannot commit the saved quest grant receipt. Reload a matching checkpoint"); return; }
         m_cursor = m_receipt->Revision;
         const auto& plan = m_receipt->Plan;
+        if (plan.Shared() && !m_skipNative) m_world.ctx().at<SharedQuestEffectService>().GuestApplied(plan);
         std::erase_if(m_executed, [&](const auto& value) { return value.Quest == plan.Quest && value.Run == plan.Run && value.Event == plan.Event; });
         NativeGrantDelivery::Complete(m_nativeGeneration); m_pending = m_mutated = m_skipNative = false;
         m_receipt.reset(); m_delivery.Entries.clear(); m_nextPoll = now + 300;

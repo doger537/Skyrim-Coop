@@ -56,6 +56,14 @@ static_assert(offsetof(AddItemFunctor, Vm) == 0x20);
 static_assert(sizeof(AddItemFunctor) == 0x28);
 using Execute = BSScript::Variable*(__fastcall)(AddItemFunctor*, BSScript::Variable*);
 Execute* s_execute{};
+struct RemoveItemFunctor
+{
+    void* Vtable; uint32_t References, StackId, TargetHandle, DestinationHandle, ItemFormId, Count;
+    bool Silent; uint8_t Padding[7]; BSScript::IVirtualMachine* Vm;
+};
+static_assert(offsetof(RemoveItemFunctor, ItemFormId) == 0x18 && offsetof(RemoveItemFunctor, Vm) == 0x28 && sizeof(RemoveItemFunctor) == 0x30);
+using RemoveExecute = BSScript::Variable*(__fastcall)(RemoveItemFunctor*, BSScript::Variable*);
+RemoveExecute* s_removeExecute{};
 std::atomic<DWORD> s_runnerThread{};
 thread_local const QuestItemScriptOrigin* s_origin{};
 
@@ -144,9 +152,9 @@ TESQuest* Owner(BSScript::IObjectHandlePolicy& aPolicy, uint64_t aHandle, BSScri
     return quest && quest->formType == FormType::QuestItem && quest->formID && !(quest->TESForm::flags & TESForm::STILL_LOADING) ? quest : nullptr;
 }
 
-std::optional<QuestItemScriptOrigin> Read(const AddItemFunctor& acFunctor) noexcept
+std::optional<QuestItemScriptOrigin> Read(BSScript::IVirtualMachine* apVm, uint32_t aStack) noexcept
 {
-    StackReference reference(acFunctor.Vm, acFunctor.StackId);
+    StackReference reference(apVm, aStack);
     auto* stack = reference.Get();
     auto* policy = BSScript::IObjectHandlePolicy::Get();
     if (!stack || !policy || !stack->FrameCount)
@@ -166,7 +174,7 @@ std::optional<QuestItemScriptOrigin> Read(const AddItemFunctor& acFunctor) noexc
         if (!object)
             continue;
         QuestItemScriptOrigin origin;
-        auto* quest = Owner(*policy, object->GetHandle(), acFunctor.Vm, origin.Kind);
+        auto* quest = Owner(*policy, object->GetHandle(), apVm, origin.Kind);
         if (!quest)
             continue;
         // MCP's own stack formatter reads type-name +8 and GetName slot 1.
@@ -174,7 +182,7 @@ std::optional<QuestItemScriptOrigin> Read(const AddItemFunctor& acFunctor) noexc
         if (!CopyName(name, origin.Script) || !CopyName(frame->Function->GetName().AsAscii(), origin.Function))
             return {};
         origin.QuestFormId = quest->formID;
-        origin.StackId = acFunctor.StackId;
+        origin.StackId = aStack;
         origin.InstructionOffset = frame->Instruction;
         return origin;
     }
@@ -202,7 +210,7 @@ BSScript::Variable* ExecuteHook(AddItemFunctor* apFunctor, BSScript::Variable* a
     const ScopedReference target(apFunctor->TargetHandle);
     if (!target || target.Get()->formID != 0x14)
         return s_execute(apFunctor, apResult);
-    const auto origin = Read(*apFunctor);
+    const auto origin = Read(apFunctor->Vm, apFunctor->StackId);
     if (origin)
         return NativeQuestGate::Invoke(apFunctor, apResult, *origin, apFunctor->ItemFormId, apFunctor->Count, apFunctor->Silent, ExecuteWithOrigin);
     struct Restore
@@ -213,6 +221,24 @@ BSScript::Variable* ExecuteHook(AddItemFunctor* apFunctor, BSScript::Variable* a
     s_origin = nullptr;
     // An unknown source retains its original engine behavior.
     return s_execute(apFunctor, apResult);
+}
+BSScript::Variable* RemoveWithOrigin(void* apFunctor, BSScript::Variable* apResult, const QuestItemScriptOrigin& acSource)
+{
+    struct Restore { const QuestItemScriptOrigin* Previous{s_origin}; ~Restore() { s_origin = Previous; } } restore;
+    s_origin = &acSource;
+    return s_removeExecute(static_cast<RemoveItemFunctor*>(apFunctor), apResult);
+}
+BSScript::Variable* RemoveHook(RemoveItemFunctor* apFunctor, BSScript::Variable* apResult)
+{
+    // MCP Run 140A418E0: target +10, destination +14, form +18, count
+    // +1C, silent +20, retained VM +28; native result is a fresh Variable*.
+    if (!apFunctor || !apFunctor->Vm || s_runnerThread.load(std::memory_order_acquire) != GetCurrentThreadId() || apFunctor->DestinationHandle)
+        return s_removeExecute(apFunctor, apResult);
+    ScopedReference target(apFunctor->TargetHandle);
+    if (!target || target.Get()->formID != 0x14) return s_removeExecute(apFunctor, apResult);
+    const auto origin = Read(apFunctor->Vm, apFunctor->StackId);
+    if (origin) return NativeQuestGate::Invoke(apFunctor, apResult, *origin, apFunctor->ItemFormId, apFunctor->Count, apFunctor->Silent, RemoveWithOrigin, true);
+    return s_removeExecute(apFunctor, apResult);
 }
 }
 
@@ -246,5 +272,8 @@ static TiltedPhoques::Initializer s_hooks([]()
     POINTER_SKYRIMSE(Execute, execute, 56095);
     s_execute = execute.Get();
     TP_HOOK(&s_execute, ExecuteHook);
+    POINTER_SKYRIMSE(RemoveExecute, remove, 56098);
+    s_removeExecute = remove.Get();
+    TP_HOOK(&s_removeExecute, RemoveHook);
 });
 }

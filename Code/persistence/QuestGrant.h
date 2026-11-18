@@ -9,7 +9,7 @@ struct QuestGrantItem
 {
     // Roles come from a verified adapter/custody decision. AddItem's presence
     // in a quest script alone is not evidence of a final reward.
-    enum : uint8_t { Key, Reward };
+    enum : uint8_t { Key, Reward, Shared };
     uint8_t Role{};
     Inventory::Entry Item;
     bool operator==(const QuestGrantItem&) const noexcept = default;
@@ -24,6 +24,10 @@ struct QuestGrantPlan
     // Stable adapter event/occurrence identity; never a VM stack/socket ID.
     TiltedPhoques::String Event;
     TiltedPhoques::Vector<QuestGrantItem> Items;
+    bool Shared() const noexcept
+    {
+        return !Items.empty() && std::all_of(Items.begin(), Items.end(), [](const auto& value) { return value.Role == QuestGrantItem::Shared; });
+    }
     bool IsValid() const noexcept
     {
         return Run && Initiator.IsValid() && !Event.empty() && Event.size() <= 96 &&
@@ -34,9 +38,11 @@ struct QuestGrantPlan
             }) && !Items.empty() && Items.size() <= kMaxItems &&
             std::all_of(Items.begin(), Items.end(), [](const auto& value)
             {
-                return value.Role <= QuestGrantItem::Reward && value.Item.Count > 0 && value.Item.Count <= 1000000 &&
+                return value.Role == QuestGrantItem::Shared ? value.Item.Count >= -1000000 && value.Item.Count <= 1000000 &&
+                    value.Item.BaseId && !value.Item.ContainsExtraData() :
+                    value.Role <= QuestGrantItem::Reward && value.Item.Count > 0 && value.Item.Count <= 1000000 &&
                     value.Item.IsQuestItem == (value.Role == QuestGrantItem::Key);
-            });
+            }) && (Shared() || std::none_of(Items.begin(), Items.end(), [](const auto& value) { return value.Role == QuestGrantItem::Shared; }));
     }
     bool operator==(const QuestGrantPlan&) const noexcept = default;
 };
@@ -53,7 +59,7 @@ struct QuestGrantReceipt
         if (acRecipient != Participants.Players[0] && acRecipient != Participants.Players[1])
             return inventory;
         for (const auto& value : Plan.Items)
-            if (value.Role == QuestGrantItem::Reward || acRecipient == Participants.Initiator)
+            if (value.Role == QuestGrantItem::Shared || value.Role == QuestGrantItem::Reward || acRecipient == Participants.Initiator)
             {
                 auto item = value.Item;
                 item.ExtraWorn = item.ExtraWornLeft = false;
@@ -64,4 +70,6 @@ struct QuestGrantReceipt
 };
 bool Encode(const QuestGrantReceipt& acReceipt, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept;
 bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, QuestGrantReceipt& aReceipt) noexcept;
+bool Encode(const QuestGrantPlan& acPlan, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept;
+bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, QuestGrantPlan& aPlan) noexcept;
 }

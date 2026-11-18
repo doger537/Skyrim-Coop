@@ -115,6 +115,14 @@ void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acPacke
         return;
     }
     auto* party = m_world.GetPartyService().GetPlayerParty(&initiator);
+    if (party && !m_world.GetPartyService().IsPlayerLeader(&initiator))
+    {
+        const auto preview = m_world.GetCampaign().PreviewQuest(change.Id, change.Epoch, change.Status, change.Stage, change.ClientQuestType, AllowsMisc());
+        if (preview == Campaign::State::QuestResult::Duplicate || preview == Campaign::State::QuestResult::Ignored)
+        { Commit(initiator, change, nullptr); return; }
+        GameServer::Get()->RejectCampaign(initiator.GetConnectionId(), "Accelerated co-op: shared quests are advanced by the host. Load the matching paired save");
+        return;
+    }
     Campaign::QuestRunParticipants participants;
     participants.Initiator = initiator.GetPersistentCharacterId();
     if (party && party->Members.size() == 2)

@@ -37,6 +37,7 @@ public:
     static void DebugDumpQuests();
     static bool StopQuest(uint32_t aformId);
     bool ConfirmCampaign(String& aError, const NotifyCampaignCheckpoint* apAccepted = nullptr) noexcept;
+    bool SharedRun(uint32_t aFormId, GameId& aQuest, uint32_t& aRun) const noexcept;
 
     struct HeldStages
     {

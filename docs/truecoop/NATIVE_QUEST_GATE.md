@@ -43,7 +43,12 @@ sticky failure remains, with no live operation.
 
 ## Boundaries
 
-**No policy is configured yet.** Unknown/unclassified AddItem calls keep their
+**Historical classified-policy status:** no Key/Reward semantic policy was
+configured at this checkpoint. The later accelerated Shared policy now handles
+standard base-form AddItem/RemoveItem from shared quests; see
+`ACCELERATED_QUESTS_RU.md`. It preserves a separate complete native Remove table
+and destructor. Unknown/unsupported source paths keep their original behavior.
+The older description below applies to the classified producer. Unknown/unclassified AddItem calls keep their
 original behavior. The gate is not evidence that vanilla rewards are already
 intercepted, classified or distributed. The gate and receipt service still need
 the admitted broker, verified adapter call sites, actual-effect collection,

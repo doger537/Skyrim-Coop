@@ -38,8 +38,8 @@ Policy s_policy;
 // MCP 1419A7F40: preserve the MSVC COL at vtable[-1] and all seven methods.
 // Only destructor, Run and WantsRequeue are substituted. Type 14 and native
 // save/load methods remain unchanged; a pending operation prevents native save.
-std::array<uintptr_t, 8> s_clone;
-uintptr_t* s_originalTable{};
+struct Family { std::array<uintptr_t, 8> Clone; uintptr_t* Original{}; };
+std::array<Family, 2> s_families;
 using Destructor = void*(__fastcall*)(void*, uint32_t);
 
 Pending* Find(void* apFunctor) noexcept
@@ -70,8 +70,9 @@ bool __fastcall Requeue(void* apFunctor) noexcept
     // cannot wake the VM before Run actually executes or suppresses the effect.
     return call && !call->Done;
 }
-void* __fastcall Destroy(void* apFunctor, uint32_t aFlags) noexcept
+template <bool Remove> void* __fastcall Destroy(void* apFunctor, uint32_t aFlags) noexcept
 {
+    auto* original = s_families[Remove ? 1 : 0].Original;
     {
         const std::lock_guard lock(s_mutex);
         if (auto* call = Find(apFunctor))
@@ -87,11 +88,12 @@ void* __fastcall Destroy(void* apFunctor, uint32_t aFlags) noexcept
             *call = {};
             s_live.fetch_sub(1, std::memory_order_release);
         }
-        *static_cast<uintptr_t**>(apFunctor) = s_originalTable;
+        *static_cast<uintptr_t**>(apFunctor) = original;
     }
-    // MCP 140A4FA30 releases the VM, calls the native base destructor, and
-    // frees exactly 28 bytes iff flags&1. Never replace it with C++ delete.
-    return reinterpret_cast<Destructor>(s_originalTable[0])(apFunctor, aFlags);
+    // MCP Add destructor 140A4FA30 frees 28h bytes; Remove 140A4FC00 releases
+    // its VM at +28 and frees 30h bytes iff flags&1. Preserve each native
+    // destructor/COL family, never substitute a generic C++ delete.
+    return reinterpret_cast<Destructor>(original[0])(apFunctor, aFlags);
 }
 BSScript::Variable* __fastcall Run(void* apFunctor, BSScript::Variable* apResult) noexcept
 {
@@ -145,21 +147,25 @@ BSScript::Variable* __fastcall Run(void* apFunctor, BSScript::Variable* apResult
     if (!success && policy.Failed) policy.Failed(cookie);
     return None(apResult);
 }
-bool Initialize() noexcept
+bool Initialize(bool aRemove) noexcept
 {
-    if (s_originalTable) return true;
+    auto& family = s_families[aRemove ? 1 : 0];
+    if (family.Original) return true;
     if (VersionDb::Get().GetLoadedVersionString() != "1.7.104.0") return false;
     POINTER_SKYRIMSE(uintptr_t, table, 218372);
     POINTER_SKYRIMSE(void, run, 56095);
     POINTER_SKYRIMSE(void, destroy, 56348);
-    auto* original = table.Get();
-    if (!original || original[0] != reinterpret_cast<uintptr_t>(destroy.Get()) || original[1] != reinterpret_cast<uintptr_t>(run.Get()))
+    POINTER_SKYRIMSE(uintptr_t, removeTable, 218376);
+    POINTER_SKYRIMSE(void, removeRun, 56098);
+    POINTER_SKYRIMSE(void, removeDestroy, 56354);
+    auto* original = aRemove ? removeTable.Get() : table.Get();
+    if (!original || original[0] != reinterpret_cast<uintptr_t>(aRemove ? removeDestroy.Get() : destroy.Get()) || original[1] != reinterpret_cast<uintptr_t>(aRemove ? removeRun.Get() : run.Get()))
         return false;
-    std::copy_n(original - 1, s_clone.size(), s_clone.begin());
-    s_clone[1] = reinterpret_cast<uintptr_t>(&Destroy);
-    s_clone[2] = reinterpret_cast<uintptr_t>(&Run);
-    s_clone[4] = reinterpret_cast<uintptr_t>(&Requeue);
-    s_originalTable = original;
+    std::copy_n(original - 1, family.Clone.size(), family.Clone.begin());
+    family.Clone[1] = aRemove ? reinterpret_cast<uintptr_t>(&Destroy<true>) : reinterpret_cast<uintptr_t>(&Destroy<false>);
+    family.Clone[2] = reinterpret_cast<uintptr_t>(&Run);
+    family.Clone[4] = reinterpret_cast<uintptr_t>(&Requeue);
+    family.Original = original;
     return true;
 }
 }
@@ -173,10 +179,11 @@ void Configure(Policy aPolicy) noexcept
 }
 void SetRunnerThread(uint32_t aThread) noexcept { s_runnerThread.store(aThread, std::memory_order_release); }
 BSScript::Variable* Invoke(void* apFunctor, BSScript::Variable* apResult, const QuestItemScriptOrigin& acSource,
-    uint32_t aItemFormId, uint32_t aCount, bool aSilent, Execute aOriginal) noexcept
+    uint32_t aItemFormId, uint32_t aCount, bool aSilent, Execute aOriginal, bool aRemove) noexcept
 {
     Invocation invocation;
     invocation.Source = acSource; invocation.ItemFormId = aItemFormId; invocation.Count = aCount; invocation.Silent = aSilent;
+    invocation.Remove = aRemove;
     Policy policy;
     {
         const std::lock_guard lock(s_mutex);
@@ -196,7 +203,8 @@ BSScript::Variable* Invoke(void* apFunctor, BSScript::Variable* apResult, const 
     bool registered{};
     {
         const std::lock_guard lock(s_mutex);
-        if (Initialize() && *static_cast<uintptr_t**>(apFunctor) == s_originalTable)
+        auto& family = s_families[aRemove ? 1 : 0];
+        if (Initialize(aRemove) && *static_cast<uintptr_t**>(apFunctor) == family.Original)
             for (auto& call : s_calls)
                 if (!call.Used)
                 {
@@ -204,7 +212,7 @@ BSScript::Variable* Invoke(void* apFunctor, BSScript::Variable* apResult, const 
                     call.Functor = apFunctor; call.Call = std::move(invocation); call.Original = aOriginal;
                     call.Used = true; call.Initial = initial;
                     s_live.fetch_add(1, std::memory_order_release);
-                    *static_cast<uintptr_t**>(apFunctor) = s_clone.data() + 1;
+                    *static_cast<uintptr_t**>(apFunctor) = family.Clone.data() + 1;
                     registered = true;
                     break;
                 }
