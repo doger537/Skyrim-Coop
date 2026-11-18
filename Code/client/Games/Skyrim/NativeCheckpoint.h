@@ -16,4 +16,8 @@ bool IsPaused() noexcept;
 void HidePause() noexcept;
 bool ReadToken(uint64_t& aId) noexcept;
 bool WriteToken(uint64_t aId) noexcept;
+// Owned bounded filename only. A regular local load replaces this provenance,
+// even if that save inherited a valid checkpoint token from an earlier save.
+TiltedPhoques::String BaselineName() noexcept;
+void RememberCommittedSave(const TiltedPhoques::String& acName) noexcept;
 }

@@ -5,8 +5,10 @@
 #include <TiltedCore/Stl.hpp>
 #include <TiltedCore/Buffer.hpp>
 #include <Structs/Mods.h>
+#include <Structs/WorldCheckpoint.h>
 
 bool FingerprintPluginFile(const std::filesystem::path& acPath, std::array<uint8_t, 32>& aDigest) noexcept;
+bool FingerprintCheckpointSave(const std::filesystem::path& acPath, bool aWithCoSave, CheckpointPlayer& aPlayer) noexcept;
 // Read only the TES4 header; no engine objects or plugin records cross threads.
 bool ReadPluginMasters(const std::filesystem::path& acPath, bool aExpectedLite, Vector<String>& aMasters) noexcept;
 // Strict profile: all installed top-level BSAs, selected loose asset trees, native plugins,

@@ -3,6 +3,7 @@
 #include "WorldStore.h"
 #include "QuestAdapters.h"
 #include "QuestRunParticipants.h"
+#include "QuestGrant.h"
 #include <optional>
 #include <Structs/CharacterIdentity.h>
 
@@ -49,10 +50,16 @@ public:
     bool SaveObjects(const TiltedPhoques::Vector<ObjectData>& acObjects) noexcept;
     bool ValidForm(GameId aId, bool aOptional = false) const noexcept;
     bool ValidObject(const ObjectData& acObject) const noexcept;
+    bool ValidInventory(const Inventory& acInventory) const noexcept;
     bool BootstrapQuests(const TiltedPhoques::Vector<Quest>& acQuests, bool aAllowMisc) noexcept;
     QuestResult UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
         const QuestRunParticipants* apParticipants = nullptr) noexcept;
+    QuestResult PreviewQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
+        const QuestRunParticipants* apParticipants = nullptr) noexcept;
     bool ReadQuestRunParticipants(GameId aId, uint32_t aEpoch, QuestRunParticipants& aParticipants, bool& aFound) noexcept;
+    enum class GrantResult { Committed, Duplicate, Conflict, Invalid, StorageError };
+    GrantResult CommitQuestGrant(const QuestGrantPlan& acPlan, QuestGrantReceipt& aReceipt) noexcept;
+    bool ReadQuestGrants(const CharacterIdentity& acRecipient, uint64_t aAfterRevision, TiltedPhoques::Vector<QuestGrantReceipt>& aReceipts) noexcept;
     const TiltedPhoques::Vector<SavedQuest>& Quests() const noexcept { return m_quests; }
     const SavedQuest* FindQuest(GameId aId) const noexcept;
     const QuestAdapter* Adapter(GameId aId) const noexcept;
@@ -66,8 +73,12 @@ public:
     bool IsReady() const noexcept { return m_ready; }
 
 private:
+    QuestResult ChangeQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
+        const QuestRunParticipants* apParticipants, bool aCommit) noexcept;
     TiltedPhoques::String Key(const char* apKind, GameId aId) const noexcept;
     bool LoadQuestState(const TiltedPhoques::String& acAdapters) noexcept;
+    bool ReadValidQuestGrant(const WorldStore::Record& acRecord, QuestGrantReceipt& aReceipt) noexcept;
+    bool ValidateQuestGrantIndexes() noexcept;
     WorldStore m_store;
     std::optional<Contract> m_contract;
     TiltedPhoques::String m_error;

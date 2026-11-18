@@ -31,6 +31,7 @@
 #include <Forms/SavedCharacterIdentity.h>
 #include <Services/WorldCheckpointService.h>
 #include <NativeCheckpoint.h>
+#include <NativeQuestContext.h>
 #include <bcrypt.h>
 #include "../../../immersive_launcher/utils/FileVersion.inl"
 #include <Services/DiscordService.h>
@@ -152,6 +153,7 @@ void TransportService::OnConnected()
     m_connected = false;
     m_pendingAuthentication.reset();
     m_campaignNonce = 0;
+    m_queuedCheckpointPath.clear();
     ++m_connectionGeneration;
     AuthenticationRequest request{};
     request.Version = BUILD_COMMIT;
@@ -170,6 +172,27 @@ void TransportService::OnConnected()
         m_dispatcher.trigger(event);
         Close();
         return;
+    }
+
+    if (request.CheckpointToken)
+    {
+        const auto loaded = NativeCheckpoint::BaselineName();
+        uint64_t id{};
+        CharacterIdentity character;
+        if (!CheckpointNames::Parse(std::string_view(loaded.data(), loaded.size()), request.CheckpointProof.WorldId, id, character) ||
+            id != request.CheckpointToken || character != request.CharacterId)
+        {
+            FailCampaign("This local save inherited a checkpoint token but was not loaded from its paired checkpoint file. Load your TrueCoop checkpoint save and reconnect");
+            return;
+        }
+        request.CheckpointProof.Player.Character = character;
+        const auto name = CheckpointNames::Make(std::string_view(request.CheckpointProof.WorldId.data(), request.CheckpointProof.WorldId.size()), id, character);
+        m_queuedCheckpointPath = NativeCheckpoint::Path(name);
+        if (m_queuedCheckpointPath.empty())
+        {
+            FailCampaign("Cannot resolve the loaded paired-save file for verification");
+            return;
+        }
     }
 
     request.Token = m_serverPassword;
@@ -229,6 +252,7 @@ void TransportService::OnConnected()
 
 void TransportService::OnDisconnected(EDisconnectReason aReason)
 {
+    NativeQuestContext::SetEnabled(false);
     m_deferredCheckpointPlayer.reset();
     m_world.GetRunner().InvalidateGameplay();
     DialogueMovement::Reset();
@@ -239,6 +263,7 @@ void TransportService::OnDisconnected(EDisconnectReason aReason)
     m_campaignNonce = 0;
     ++m_connectionGeneration;
     m_queuedAuthentication.reset();
+    m_queuedCheckpointPath.clear();
 
     spdlog::warn("Disconnected from server {}", aReason);
 
@@ -260,6 +285,8 @@ void TransportService::OnUpdate()
                 m_dispatcher.trigger(event);
                 Close();
             }
+            else if (request.CheckpointToken && !request.CheckpointProof.IsValid())
+                FailCampaign("Cannot verify the loaded paired ESS/SKSE files. Preserve your saves and load a complete matching checkpoint");
             else if (result)
                 Send(request);
             else
@@ -281,15 +308,19 @@ void TransportService::OnUpdate()
         std::replace(runtime.begin(), runtime.end(), '.', '-');
         const auto addressLibrary = dataPath / L"SKSE" / L"Plugins" / (std::string("versionlib-") + runtime.c_str() + ".bin");
         const auto scriptExtender = GetScriptExtenderPath();
+        auto checkpointPath = std::move(m_queuedCheckpointPath);
+        m_queuedCheckpointPath.clear();
         // Only file IO and copies of the manifest cross threads; no engine objects do.
         m_manifestTask = std::async(
             std::launch::async,
-            [request = std::move(request), dataPath, addressLibrary, scriptExtender]() mutable
+            [request = std::move(request), dataPath, addressLibrary, scriptExtender, checkpointPath = std::move(checkpointPath)]() mutable
             {
                 if (!request.CharacterId.IsValid() && BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(request.CharacterId.Parts.data()),
                     static_cast<ULONG>(sizeof(request.CharacterId.Parts)), BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0)
                     request.CharacterId = {};
                 FingerprintContent(dataPath, addressLibrary, scriptExtender, request.UserMods);
+                if (request.CheckpointToken)
+                    FingerprintCheckpointSave(checkpointPath, request.SKSEActive, request.CheckpointProof.Player);
                 if (request.SKSEActive && scriptExtender.empty())
                 {
                     auto& missing = request.UserMods.Resources.emplace_back();
@@ -486,7 +517,10 @@ void TransportService::HandleCampaignCheckpoint(const NotifyCampaignCheckpoint& 
         if (m_world.ctx().at<WorldCheckpointService>().AwaitingReconnect())
             m_deferredCheckpointPlayer = player;
         else
+        {
+            NativeQuestContext::SetEnabled(true);
             m_dispatcher.trigger(ConnectedEvent(player));
+        }
         return;
     }
     m_dispatcher.trigger(acMessage);
@@ -511,6 +545,7 @@ void TransportService::CompleteCheckpointConnection() noexcept
     {
         const uint32_t player = *m_deferredCheckpointPlayer;
         m_deferredCheckpointPlayer.reset();
+        NativeQuestContext::SetEnabled(true);
         m_dispatcher.trigger(ConnectedEvent(player));
     }
 }

@@ -5,6 +5,8 @@ void AuthenticationRequest::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter)
     aWriter.WriteBits(ProtocolVersion, 32);
     CharacterId.Serialize(aWriter);
     aWriter.WriteBits(CheckpointToken, 64);
+    if (CheckpointToken)
+        CheckpointProof.Serialize(aWriter);
     Serialization::WriteVarInt(aWriter, DiscordId);
     Serialization::WriteBool(aWriter, SKSEActive);
     Serialization::WriteBool(aWriter, MO2Active);
@@ -31,6 +33,8 @@ void AuthenticationRequest::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReade
     if (ProtocolVersion != kTrueCoopProtocolVersion)
         return;
     if (!CharacterId.Deserialize(aReader) || !aReader.ReadBits(CheckpointToken, 64))
+        return;
+    if (CheckpointToken && (!CheckpointProof.Deserialize(aReader) || CheckpointProof.Player.Character != CharacterId))
         return;
     CharacterIdentityDecoded = true;
 

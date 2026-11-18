@@ -84,6 +84,11 @@ bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) 
     if (epochResult == WorldStore::ReadResult::Found)
         m_worldEpoch = epoch.Revision;
     m_ready = true;
+    if (!ValidateQuestGrantIndexes())
+    {
+        m_ready = false;
+        return false;
+    }
     return true;
 }
 
@@ -199,9 +204,14 @@ String State::Key(const char* apKind, GameId aId) const noexcept
 
 bool State::ValidObject(const ObjectData& acObject) const noexcept
 {
-    if (!ValidForm(acObject.Id) || !ValidForm(acObject.CellId) || !ValidForm(acObject.WorldSpaceId, true) || acObject.CurrentInventory.Entries.size() > 4096)
+    return ValidForm(acObject.Id) && ValidForm(acObject.CellId) && ValidForm(acObject.WorldSpaceId, true) && ValidInventory(acObject.CurrentInventory);
+}
+
+bool State::ValidInventory(const Inventory& acInventory) const noexcept
+{
+    if (acInventory.Entries.size() > 4096)
         return false;
-    for (const auto& entry : acObject.CurrentInventory.Entries)
+    for (const auto& entry : acInventory.Entries)
     {
         if (!ValidForm(entry.BaseId) || entry.Count <= 0 || !ValidForm(entry.ExtraPoisonId, true) || entry.EnchantData.Effects.size() > 256)
             return false;
@@ -217,7 +227,7 @@ bool State::ValidObject(const ObjectData& acObject) const noexcept
             if (!ValidForm(effect.EffectId))
                 return false;
     }
-    const auto& magic = acObject.CurrentInventory.CurrentMagicEquipment;
+    const auto& magic = acInventory.CurrentMagicEquipment;
     return ValidForm(magic.LeftHandSpell, true) && ValidForm(magic.RightHandSpell, true) && ValidForm(magic.Shout, true);
 }
 

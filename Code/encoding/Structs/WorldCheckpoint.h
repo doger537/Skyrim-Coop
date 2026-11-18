@@ -37,6 +37,18 @@ struct WorldCheckpoint
     void Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept;
 };
 
+// Admission must prove the actual last-loaded/committed native file, not only
+// an inherited global token. Fixed-size fields are decoded before strings/mods.
+struct CheckpointAdmissionProof
+{
+    TiltedPhoques::String WorldId;
+    CheckpointPlayer Player;
+    bool IsValid() const noexcept;
+    bool operator==(const CheckpointAdmissionProof&) const noexcept = default;
+    void Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept;
+    bool Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept;
+};
+
 namespace CheckpointNames
 {
 // An opaque engine filename, never a client-selected path. Lower-case ASCII

@@ -26,7 +26,8 @@
 static TESQuest* FindQuestByNameId(const String& name)
 {
     auto& questRegistry = ModManager::Get()->quests;
-    auto it = std::find_if(questRegistry.begin(), questRegistry.end(), [name](auto* it) { return std::strcmp(it->idName.AsAscii(), name.c_str()); });
+    auto it = std::find_if(questRegistry.begin(), questRegistry.end(), [&name](auto* quest)
+    { return quest && quest->idName.AsAscii() && std::strcmp(quest->idName.AsAscii(), name.c_str()) == 0; });
 
     return it != questRegistry.end() ? *it : nullptr;
 }
@@ -46,6 +47,7 @@ QuestService::QuestService(World& aWorld, entt::dispatcher& aDispatcher)
     m_checkpointConnection = aDispatcher.sink<NotifyCampaignCheckpoint>().connect<&QuestService::OnCampaignCheckpoint>(this);
     m_journalConnection = aDispatcher.sink<NotifyQuestJournal>().connect<&QuestService::OnQuestJournal>(this);
     m_questUpdateConnection = aDispatcher.sink<NotifyQuestUpdate>().connect<&QuestService::OnQuestUpdate>(this);
+    m_proposalConnection = aDispatcher.sink<NotifyQuestProposal>().connect<&QuestService::OnQuestProposal>(this);
 
     // Game events:
     // Starts, stops and stages are sent from TESQuestStartStopEvent and TESQuestStageEvent, which fire while the quest
@@ -81,6 +83,7 @@ void QuestService::OnConnected(const ConnectedEvent&) noexcept
 
 void QuestService::OnUpdate(const UpdateEvent&) noexcept
 {
+    TickProposals();
     if (m_heldStages.empty())
         return;
 
@@ -103,6 +106,8 @@ void QuestService::OnUpdate(const UpdateEvent&) noexcept
 
 void QuestService::OnDisconnected(const DisconnectedEvent&) noexcept
 {
+    m_proposals.clear();
+    m_latestProposal = 0;
     m_heldStages.clear();
     m_cursors.clear();
     m_journals.clear();
@@ -112,6 +117,7 @@ void QuestService::OnDisconnected(const DisconnectedEvent&) noexcept
 
 void QuestService::OnPartyLeft(const PartyLeftEvent&) noexcept
 {
+    m_proposals.clear();
     // The campaign continues when a player leaves a party.
 }
 
@@ -491,6 +497,7 @@ HeldStages* QuestService::GetHeldStages(uint32_t aQuestFormId, TESQuest* apQuest
 
 void QuestService::OnQuestUpdate(const NotifyQuestUpdate& aUpdate) noexcept
 {
+    if (!aUpdate.IsValid()) return;
     ModSystem& modSystem = World::Get().GetModSystem();
     uint32_t formId = modSystem.GetGameId(aUpdate.Id);
     if (aUpdate.Revision)
@@ -516,6 +523,8 @@ void QuestService::OnQuestUpdate(const NotifyQuestUpdate& aUpdate) noexcept
         spdlog::info("Remote quest {:X} already reached stage {}, current stage: {}", formId, aUpdate.Stage, pQuest->currentStage);
         return;
     }
+    if (aUpdate.Status == NotifyQuestUpdate::Stopped && pQuest->IsStopped())
+        return;
 
     // A member stage the leader's playing scene checks can push it past its own scripts (a phase ending before its lines
     // and scripts ran), so hold it, and the stages after it, until the scene gets there or reaches it itself.

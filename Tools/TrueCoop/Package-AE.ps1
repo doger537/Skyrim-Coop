@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$NativeRevision = '', [string]$Distribution = '', [string]$Destination = '', [string]$InstallGuide = '')
+param([string]$NativeRevision = '', [string]$Distribution = '', [string]$Destination = '', [string]$InstallGuide = '', [string]$QuestProbePath = '')
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $workspace = (Resolve-Path (Join-Path $repo '../..')).Path
@@ -42,6 +42,19 @@ foreach ($name in @('Play-AE.ps1','Play-AE.cmd','Start-AE-Server.cmd','Restore-A
 $recovery = Join-Path $runtime 'TrueCoop-Recovery'
 New-Item -ItemType Directory -Path $recovery -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'SharedContent.ps1') -Destination $recovery
+if ($QuestProbePath) {
+    $probe = (Resolve-Path -LiteralPath $QuestProbePath).Path
+    foreach ($name in @('TrueCoopQuestProbe.esp','Scripts/TrueCoopQuestGrantProbe.pex')) {
+        $source = Join-Path $probe $name
+        if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing diagnostic fixture: $name" }
+        $target = Join-Path $stage $name
+        New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+        Copy-Item -LiteralPath $source -Destination $target
+    }
+    New-Item -ItemType Directory -Path (Join-Path $runtime 'QuestAudit') -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'QuestProbe/Start-QuestAudit.ps1') -Destination (Join-Path $runtime 'QuestAudit')
+    foreach ($name in @('Start-QuestAudit.cmd','Restore-QuestAudit.cmd')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "QuestProbe/$name") -Destination $runtime }
+}
 if (Test-Path -LiteralPath (Join-Path $runtime 'Play-CommonSE.cmd')) { throw 'AE package must not ship the CommonSE launcher' }
 $info = Join-Path $stage 'TrueCoop-AE-Info'
 New-Item -ItemType Directory -Path $info -Force | Out-Null
@@ -54,7 +67,7 @@ Copy-Item -LiteralPath (Join-Path $repo 'build/BuildInfo.h') -Destination $info
 foreach ($name in @('TiltedConnect','TiltedHooks','TiltedReverse','TiltedUI')) { Copy-Item -LiteralPath (Join-Path $repo "Libraries/$name/LICENSE") -Destination (Join-Path $info "$name-LICENSE.txt") }
 foreach ($name in @('CONNECTION.md','PERSISTENCE.md','QUESTS.md','OBJECTS.md')) { Copy-Item -LiteralPath (Join-Path $repo "docs/truecoop/ae/$name") -Destination $info }
 Copy-Item -LiteralPath (Join-Path $repo 'GameFiles/Server/TrueCoopQuestAdapters.example.json') -Destination $info
-foreach ($name in @('COOP_RESYNC.md','DEEP_COOP_TEST_RU.md','docs/truecoop/HOST_AUTHORITY_DESIGN.md','docs/truecoop/PHYSICS_NPC_AUDIT.md','docs/truecoop/DIALOGUE_LEASE.md','docs/truecoop/PLAYER_MARKERS.md','docs/truecoop/CHARACTER_IDENTITY.md','docs/truecoop/PAIRED_CHECKPOINTS.md')) {
+foreach ($name in @('COOP_RESYNC.md','DEEP_COOP_TEST_RU.md','docs/truecoop/HOST_AUTHORITY_DESIGN.md','docs/truecoop/PHYSICS_NPC_AUDIT.md','docs/truecoop/DIALOGUE_LEASE.md','docs/truecoop/PLAYER_MARKERS.md','docs/truecoop/CHARACTER_IDENTITY.md','docs/truecoop/PAIRED_CHECKPOINTS.md','docs/truecoop/QUEST_GRANTS.md')) {
     $source = Join-Path $repo $name
     if (Test-Path -LiteralPath $source) {
         $target = Join-Path $info $name
@@ -65,7 +78,7 @@ foreach ($name in @('COOP_RESYNC.md','DEEP_COOP_TEST_RU.md','docs/truecoop/HOST_
 $protocolHeader = Get-Content -LiteralPath (Join-Path $repo 'Code/encoding/Structs/ProtocolVersion.h') -Raw
 if ($protocolHeader -notmatch 'kTrueCoopProtocolVersion\s*=\s*(0x[0-9A-Fa-f]+)') { throw 'Cannot read the protocol identity' }
 $protocol = $Matches[1]
-[ordered]@{NativeRevision=$revision;Build=$version;Protocol=$protocol;CorePluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/SkyrimTogether.esp')).Hash;Runtime='1.7.104.0';Profile='Identical active AE content';GameTested=$false;CommonSELauncherIncluded=$false} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $info 'BUILD.json') -Encoding utf8
+[ordered]@{NativeRevision=$revision;Build=$version;Protocol=$protocol;CorePluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/SkyrimTogether.esp')).Hash;Runtime='1.7.104.0';Profile='Identical active AE content';GameTested=$false;CommonSELauncherIncluded=$false;DiagnosticQuestIncluded=[bool]$QuestProbePath} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $info 'BUILD.json') -Encoding utf8
 $records = @(foreach ($file in Get-ChildItem -LiteralPath $stage -File -Recurse) {
     [pscustomobject]@{Path=[IO.Path]::GetRelativePath($stage,$file.FullName).Replace('\','/');Bytes=$file.Length;SHA256=(Get-FileHash -LiteralPath $file.FullName).Hash}
 })

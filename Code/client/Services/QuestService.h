@@ -5,6 +5,8 @@
 #include <Games/Events.h>
 #include <Messages/NotifyQuestJournal.h>
 #include <Messages/NotifyCampaignCheckpoint.h>
+#include <Messages/NotifyQuestProposal.h>
+#include <deque>
 
 struct NotifyQuestUpdate;
 struct DisconnectedEvent;
@@ -59,6 +61,17 @@ private:
     BSTEventResult OnEvent(const TESTopicInfoEvent*, const EventDispatcher<TESTopicInfoEvent>*) override;
 
     void OnQuestUpdate(const NotifyQuestUpdate&) noexcept;
+    void OnQuestProposal(const NotifyQuestProposal& acMessage) noexcept;
+    void TickProposals() noexcept;
+    struct HostProposal
+    {
+        NotifyQuestProposal Change;
+        uint64_t ConnectionGeneration{};
+        uint64_t Deadline{};
+        bool Applied{};
+    };
+    std::deque<HostProposal> m_proposals;
+    uint64_t m_latestProposal{};
     void OnCampaignCheckpoint(const NotifyCampaignCheckpoint&) noexcept;
     void OnQuestJournal(const NotifyQuestJournal&) noexcept;
     bool CheckCampaign(bool aApply, String& aError) noexcept;
@@ -92,4 +105,5 @@ private:
     entt::scoped_connection m_questUpdateConnection;
     entt::scoped_connection m_checkpointConnection;
     entt::scoped_connection m_journalConnection;
+    entt::scoped_connection m_proposalConnection;
 };

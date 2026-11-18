@@ -7,6 +7,7 @@
 #include <Services/PapyrusService.h>
 #include <Events/ActivateEvent.h>
 #include <Events/InventoryChangeEvent.h>
+#include <NativeQuestContext.h>
 #include <Events/ScriptAnimationEvent.h>
 #include <Events/LockChangeEvent.h>
 
@@ -44,6 +45,8 @@ namespace
 void QueueReferenceInventoryChange(InventoryChangeEvent aEvent, TESObjectREFR* apTransferReference)
 {
     aEvent.IsPlayerTransfer = apTransferReference && apTransferReference == PlayerCharacter::Get();
+    if (aEvent.FormId == 0x14 && aEvent.Item.Count > 0)
+        aEvent.ScriptOrigin = NativeQuestContext::Current();
     World::Get().GetRunner().Trigger(std::move(aEvent));
 }
 

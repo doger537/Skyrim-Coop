@@ -38,6 +38,9 @@ public:
     void Close() noexcept;
     ReadResult Read(const TiltedPhoques::String& acKey, Record& aRecord) noexcept;
     bool ReadPrefix(const TiltedPhoques::String& acPrefix, TiltedPhoques::Vector<Record>& aRecords) noexcept;
+    // A revision cursor must not silently drop the remainder of a transaction.
+    // A page that would split one revision is rejected; caller can raise limit.
+    bool ReadPrefixAfterRevision(const TiltedPhoques::String& acPrefix, uint64_t aAfterRevision, size_t aLimit, TiltedPhoques::Vector<Record>& aRecords) noexcept;
     bool VerifyRecords() noexcept;
     struct Checkpoint
     {

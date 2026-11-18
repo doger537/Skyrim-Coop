@@ -60,6 +60,7 @@ enum ClientOpcode : unsigned char
     kRequestCoopSleep,
     kRequestDialogueLease,
     kRequestWorldCheckpoint,
+    kRequestQuestDecision,
     kClientOpcodeMax
 };
 
@@ -127,5 +128,6 @@ enum ServerOpcode : unsigned char
     kNotifyDialogueLease,
     kNotifyPartyLocations,
     kNotifyWorldCheckpoint,
+    kNotifyQuestProposal,
     kServerOpcodeMax
 };

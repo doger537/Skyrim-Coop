@@ -31,6 +31,30 @@ bool FingerprintPluginFile(const std::filesystem::path& acPath, std::array<uint8
     return true;
 }
 
+bool FingerprintCheckpointSave(const std::filesystem::path& acPath, bool aWithCoSave, CheckpointPlayer& aPlayer) noexcept
+{
+    aPlayer.Save = {}; aPlayer.CoSave = {};
+    const auto inspect = [](const std::filesystem::path& acFile, CheckpointFile& aFile)
+    {
+        std::error_code error;
+        const auto bytes = std::filesystem::file_size(acFile, error);
+        if (error || !bytes || bytes > CheckpointFile::kMaxBytes || !FingerprintPluginFile(acFile, aFile.Digest))
+            return false;
+        if (std::filesystem::file_size(acFile, error) != bytes || error)
+            return false;
+        aFile.Bytes = bytes;
+        return aFile.IsValid();
+    };
+    auto companion = acPath;
+    companion.replace_extension(L".skse");
+    if (acPath.empty() || !inspect(acPath, aPlayer.Save) || (aWithCoSave && !inspect(companion, aPlayer.CoSave)))
+    {
+        aPlayer.Save = {}; aPlayer.CoSave = {};
+        return false;
+    }
+    return aPlayer.IsValid();
+}
+
 namespace
 {
 uint32_t Read32(const uint8_t* apBytes) noexcept

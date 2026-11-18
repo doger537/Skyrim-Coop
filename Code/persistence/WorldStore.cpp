@@ -130,7 +130,7 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
             return false;
         }
         const int schema = sqlite3_column_int(version.Value, 0);
-        if (schema != 0 && schema != 1 && schema != 2)
+        if (schema != 0 && schema != 1 && schema != 2 && schema != 3)
         {
             m_error = "Unsupported world database schema; use the matching server build, do not reset the database";
             Close();
@@ -154,7 +154,7 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
                  "CREATE TABLE IF NOT EXISTS checkpoints(id INTEGER PRIMARY KEY CHECK(id>0), captured_revision INTEGER NOT NULL, metadata BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32)) STRICT;"
                  "CREATE TABLE IF NOT EXISTS checkpoint_state(checkpoint_id INTEGER NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32), revision INTEGER NOT NULL CHECK(revision>0), PRIMARY KEY(checkpoint_id,key)) STRICT;"
                  "INSERT OR IGNORE INTO identity VALUES(1,lower(hex(randomblob(16))),0);"
-                 "PRAGMA user_version=2; PRAGMA application_id=1414546256; COMMIT;"))
+                 "PRAGMA user_version=3; PRAGMA application_id=1414546256; COMMIT;"))
     {
         Close();
         return false;
@@ -219,6 +219,43 @@ bool WorldStore::ReadPrefix(const String& acPrefix, Vector<Record>& aRecords) no
         aRecords.push_back(std::move(record));
     }
     return result == SQLITE_DONE || Fail("Cannot enumerate world records");
+}
+
+bool WorldStore::ReadPrefixAfterRevision(const String& acPrefix, uint64_t aAfterRevision, size_t aLimit, Vector<Record>& aRecords) noexcept
+{
+    aRecords.clear();
+    if (!m_db || acPrefix.empty() || acPrefix.back() != '/' || acPrefix.size() > 512 || acPrefix.find('\0') != String::npos ||
+        !aLimit || aLimit > 1024 || aAfterRevision > m_revision)
+        return Fail("Invalid bounded world record cursor");
+    String upper = acPrefix; ++upper.back();
+    Statement rows(m_db, "SELECT key,value,digest,revision FROM state WHERE key>=?1 AND key<?2 AND revision>?3 ORDER BY revision,key LIMIT ?4");
+    if (!rows || sqlite3_bind_text(rows.Value, 1, acPrefix.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK ||
+        sqlite3_bind_text(rows.Value, 2, upper.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK ||
+        sqlite3_bind_int64(rows.Value, 3, static_cast<sqlite3_int64>(aAfterRevision)) != SQLITE_OK ||
+        sqlite3_bind_int(rows.Value, 4, static_cast<int>(aLimit + 1)) != SQLITE_OK)
+        return Fail("Cannot prepare a bounded world record page");
+    size_t bytes{};
+    int result{};
+    while ((result = sqlite3_step(rows.Value)) == SQLITE_ROW)
+    {
+        Record record;
+        if (!ReadRecord(rows.Value, record) || record.Revision > m_revision || bytes + record.Value.size() > 8 * 1024 * 1024 ||
+            (aRecords.size() == aLimit && record.Revision == aRecords.back().Revision))
+        {
+            aRecords.clear();
+            return Fail("World record page is invalid, too large or would split a transaction");
+        }
+        if (aRecords.size() == aLimit)
+            return true;
+        bytes += record.Value.size();
+        aRecords.push_back(std::move(record));
+    }
+    if (result != SQLITE_DONE)
+    {
+        aRecords.clear();
+        return Fail("Cannot complete a bounded world record page");
+    }
+    return true;
 }
 
 WorldStore::WriteResult WorldStore::Commit(const Vector<Record>& acRecords, uint64_t& aRevision) noexcept

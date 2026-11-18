@@ -35,6 +35,31 @@ bool CheckpointPlayer::Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexc
 {
     return Character.Deserialize(aReader) && Save.Deserialize(aReader) && CoSave.Deserialize(aReader) && IsValid();
 }
+bool CheckpointAdmissionProof::IsValid() const noexcept
+{
+    return WorldId.size() == 32 && Player.IsValid() && std::all_of(WorldId.begin(), WorldId.end(), [](char value)
+    { return (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f'); });
+}
+void CheckpointAdmissionProof::Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
+{
+    for (size_t i = 0; i < 32; ++i)
+        aWriter.WriteBits(i < WorldId.size() ? static_cast<uint8_t>(WorldId[i]) : 0, 8);
+    Player.Serialize(aWriter);
+}
+bool CheckpointAdmissionProof::Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept
+{
+    *this = {};
+    std::array<char, 32> world{};
+    for (char& byte : world)
+    {
+        uint64_t value{};
+        if (!aReader.ReadBits(value, 8))
+            return false;
+        byte = static_cast<char>(value);
+    }
+    WorldId.assign(world.data(), world.size());
+    return Player.Deserialize(aReader) && IsValid();
+}
 bool WorldCheckpoint::IsValid() const noexcept
 {
     return Decoded && Id && SavedEpoch && Calendar.IsValid() && Players[0].IsValid() && Players[1].IsValid() && Players[0].Character != Players[1].Character;

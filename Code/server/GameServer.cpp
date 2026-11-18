@@ -965,7 +965,7 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         if (contentError.empty() && !acRequest->PlayerTime.IsValid())
             contentError = "The save's calendar is invalid. Load a save with a valid game date and reconnect";
         if (contentError.empty())
-            m_pWorld->ctx().at<WorldCheckpointService>().CanAuthenticate(acRequest->CharacterId, acRequest->CheckpointToken, contentError);
+            m_pWorld->ctx().at<WorldCheckpointService>().CanAuthenticate(acRequest->CharacterId, acRequest->CheckpointToken, acRequest->CheckpointProof, contentError);
         if (contentError.empty())
             for (const Player* existing : m_pWorld->GetPlayerManager())
                 if (existing->GetPersistentCharacterId() == acRequest->CharacterId)

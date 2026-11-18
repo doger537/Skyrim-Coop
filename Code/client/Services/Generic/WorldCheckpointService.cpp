@@ -124,6 +124,8 @@ void WorldCheckpointService::Apply(const NotifyWorldCheckpoint& acMessage) noexc
     }
     else if (acMessage.State == Phase::Saved && m_control.State == Phase::SaveNow)
     {
+        const auto name = CheckpointNames::Make(std::string_view(m_control.WorldId.data(), m_control.WorldId.size()), m_control.Id, m_control.Members[m_slot]);
+        NativeCheckpoint::RememberCommittedSave(name);
         Notice(fmt::format("Общее сохранение №{} готово. Загрузка лидером: /coop-load {}", m_control.Id, m_control.Id).c_str());
         Finish(true);
     }

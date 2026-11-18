@@ -68,7 +68,7 @@ bool State::RestoreCheckpoint(uint64_t aId) noexcept
         return false;
     }
     m_worldEpoch = epoch;
-    if (!LoadQuestState(adapters))
+    if (!LoadQuestState(adapters) || !ValidateQuestGrantIndexes())
     {
         // Do not continue a live server after the durable restore if rebuilding
         // its derived journal view fails. The committed epoch remains on disk.

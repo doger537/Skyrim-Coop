@@ -30,6 +30,21 @@ struct StoreDirectory
 };
 } // namespace
 
+TEST_CASE("A bounded revision page never silently splits one committed transaction", "[world.store.pagination]")
+{
+    StoreDirectory directory; WorldStore store; REQUIRE(store.Open(directory.File));
+    uint64_t revision{};
+    REQUIRE(store.Commit({{"event/a", {1}, 0}, {"event/b", {2}, 0}, {"event/c", {3}, 0}}, revision) == WorldStore::WriteResult::Committed);
+    TiltedPhoques::Vector<WorldStore::Record> page;
+    REQUIRE_FALSE(store.ReadPrefixAfterRevision("event/", 0, 2, page)); REQUIRE(page.empty());
+    const uint64_t first = revision;
+    REQUIRE(store.Commit({{"event/d", {4}, 0}}, revision) == WorldStore::WriteResult::Committed);
+    REQUIRE(store.ReadPrefixAfterRevision("event/", 0, 3, page)); REQUIRE(page.size() == 3);
+    REQUIRE(store.ReadPrefixAfterRevision("event/", first, 3, page)); REQUIRE(page.size() == 1); REQUIRE(page[0].Key == "event/d");
+    REQUIRE_FALSE(store.ReadPrefixAfterRevision("event/", revision + 1, 3, page)); REQUIRE(page.empty());
+    REQUIRE_FALSE(store.ReadPrefixAfterRevision("event/", 0, 0, page)); REQUIRE_FALSE(store.ReadPrefixAfterRevision("event", 0, 3, page));
+}
+
 TEST_CASE("World records survive closing and reopening with a stable world identity", "[world.store]")
 {
     StoreDirectory directory;
@@ -48,6 +63,33 @@ TEST_CASE("World records survive closing and reopening with a stable world ident
     REQUIRE(store.Read("object/cc-example.esl/2048", record) == WorldStore::ReadResult::Found);
     REQUIRE(record.Value == TiltedPhoques::Vector<uint8_t>{1, 2, 3});
     REQUIRE(record.Revision == 1);
+}
+
+TEST_CASE("Schema two upgrades preserve world records and fence servers without quest grants", "[world.store]")
+{
+    StoreDirectory directory;
+    WorldStore store;
+    REQUIRE(store.Open(directory.File));
+    const auto identity = store.WorldId();
+    uint64_t revision{};
+    REQUIRE(store.Commit({{"quest/migration/1", {7, 17}, 0}}, revision) == WorldStore::WriteResult::Committed);
+    store.Close();
+    directory.Execute("PRAGMA user_version=2;");
+    REQUIRE(store.Open(directory.File));
+    REQUIRE(store.WorldId() == identity);
+    REQUIRE(store.Revision() == revision);
+    WorldStore::Record record;
+    REQUIRE(store.Read("quest/migration/1", record) == WorldStore::ReadResult::Found);
+    REQUIRE(record.Value == TiltedPhoques::Vector<uint8_t>{7, 17});
+    store.Close();
+    sqlite3* db{};
+    REQUIRE(sqlite3_open(directory.File.string().c_str(), &db) == SQLITE_OK);
+    sqlite3_stmt* schema{};
+    REQUIRE(sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &schema, nullptr) == SQLITE_OK);
+    REQUIRE(sqlite3_step(schema) == SQLITE_ROW);
+    REQUIRE(sqlite3_column_int(schema, 0) == 3);
+    sqlite3_finalize(schema);
+    sqlite3_close(db);
 }
 
 TEST_CASE("A stale revision cannot overwrite a newer object and a failed batch rolls back", "[world.store]")

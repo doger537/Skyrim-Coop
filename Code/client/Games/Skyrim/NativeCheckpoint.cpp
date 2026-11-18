@@ -12,6 +12,7 @@
 #include <atomic>
 #include <array>
 #include <cstring>
+#include <mutex>
 
 namespace NativeCheckpoint
 {
@@ -32,6 +33,16 @@ struct SaveResult
     bool Success{};
 };
 thread_local SaveResult* s_saveResult{};
+std::mutex s_nameMutex;
+std::array<char, 260> s_baselineName{};
+void RememberLoad(const char* apName) noexcept
+{
+    const size_t length = apName ? strnlen_s(apName, s_baselineName.size()) : 0;
+    const std::lock_guard lock(s_nameMutex);
+    s_baselineName.fill(0);
+    if (length && length < s_baselineName.size())
+        std::memcpy(s_baselineName.data(), apName, length);
+}
 struct PassThrough
 {
     bool Previous{s_passthrough};
@@ -103,7 +114,11 @@ bool LoadHook(void* apManager, const char* apName, int32_t aDevice, uint32_t aSt
             return false;
         }
     }
-    return s_load(apManager, apName, aDevice, aStats, aCheckMods);
+    RememberLoad(apName);
+    const bool accepted = s_load(apManager, apName, aDevice, aStats, aCheckMods);
+    if (!accepted)
+        RememberLoad(nullptr);
+    return accepted;
 }
 void* ResultHook(void* apResult, const void* apOptions, uint16_t aStatus, uint16_t aDetail, void** apFile)
 {
@@ -141,6 +156,16 @@ void Menu(uint32_t aType) noexcept
 }
 }
 void SetHookMode(HookMode aMode) noexcept { s_mode.store(aMode, std::memory_order_relaxed); }
+String BaselineName() noexcept
+{
+    const std::lock_guard lock(s_nameMutex);
+    return String(s_baselineName.data());
+}
+void RememberCommittedSave(const String& acName) noexcept
+{
+    if (ValidName(acName))
+        RememberLoad(acName.c_str());
+}
 bool ReadToken(uint64_t& aId) noexcept
 {
     if (!Supported())
@@ -211,7 +236,11 @@ bool Load(const String& acName) noexcept
     if (!Supported() || !ValidName(acName) || !s_load || !Manager())
         return false;
     PassThrough pass;
-    return s_load(Manager(), acName.c_str(), -1, 0, true);
+    RememberLoad(acName.c_str());
+    const bool accepted = s_load(Manager(), acName.c_str(), -1, 0, true);
+    if (!accepted)
+        RememberLoad(nullptr);
+    return accepted;
 }
 bool IsPaused() noexcept
 {

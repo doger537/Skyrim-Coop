@@ -1,5 +1,6 @@
 #include "CampaignData.h"
 #include "WorldStore.h"
+#include "QuestGrant.h"
 #include <Structs/ContentCompatibility.h>
 #include <algorithm>
 #include <bit>
@@ -179,6 +180,21 @@ template <class A, class T> bool QuestFields(A& aArchive, T& aQuest) noexcept
            aArchive.List(aQuest.Decisions, 256, [](auto& archive, auto& decision) { return archive.Text(decision.Group, 64) && archive.Number(decision.Stage); });
 }
 
+template <class A, class T> bool GrantFields(A& aArchive, T& aReceipt) noexcept
+{
+    auto& plan = aReceipt.Plan;
+    if (!Form(aArchive, plan.Quest) || !aArchive.Number(plan.Run) || !aArchive.Number(plan.Stage) || !aArchive.Text(plan.Event, 96))
+        return false;
+    for (auto* identity : {&plan.Initiator, &aReceipt.Participants.Initiator, &aReceipt.Participants.Players[0], &aReceipt.Participants.Players[1]})
+        for (auto& part : identity->Parts)
+            if (!aArchive.Number(part))
+                return false;
+    return aArchive.List(plan.Items, QuestGrantPlan::kMaxItems, [](auto& archive, auto& value)
+    {
+        return archive.Number(value.Role) && Entry(archive, value.Item, 64);
+    });
+}
+
 template <class A, class T> bool WorldItemFields(A& aArchive, T& aItem) noexcept
 {
     if (!aArchive.Number(aItem.Id) || !aArchive.Number(aItem.WorldEpoch) || !aArchive.Number(aItem.HostEpoch) ||
@@ -270,6 +286,23 @@ bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, WorldItemState& aItem
     if (acBytes.size() > WorldStore::kMaxRecordBytes || !Header(reader, 4) || !WorldItemFields(reader, candidate) || !reader.End() || !candidate.IsValid())
         return false;
     aItem = std::move(candidate);
+    return true;
+}
+bool Encode(const QuestGrantReceipt& acReceipt, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept
+{
+    Writer writer(aBytes);
+    return acReceipt.Plan.IsValid() && acReceipt.Participants.IsValid() && acReceipt.Plan.Initiator == acReceipt.Participants.Initiator &&
+        Header(writer, 5) && GrantFields(writer, acReceipt);
+}
+
+bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, QuestGrantReceipt& aReceipt) noexcept
+{
+    QuestGrantReceipt candidate;
+    Reader reader(acBytes);
+    if (acBytes.size() > WorldStore::kMaxRecordBytes || !Header(reader, 5) || !GrantFields(reader, candidate) || !reader.End() ||
+        !candidate.Plan.IsValid() || !candidate.Participants.IsValid() || candidate.Plan.Initiator != candidate.Participants.Initiator)
+        return false;
+    aReceipt = std::move(candidate);
     return true;
 }
 } // namespace Campaign

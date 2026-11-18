@@ -4,6 +4,7 @@
 #include <Messages/RequestCoopSleep.h>
 #include <Messages/RequestDialogueLease.h>
 #include <Messages/RequestWorldCheckpoint.h>
+#include <Messages/RequestQuestDecision.h>
 
 #include <Messages/Message.h>
 #include <MetaMessage.h>
@@ -76,7 +77,7 @@ struct ClientMessageFactory
             PartyChangeLeaderRequest, PartyKickRequest, RequestActorValueChanges, RequestActorMaxValueChanges, EnterExteriorCellRequest, RequestHealthChangeBroadcast, ActivateRequest, LockChangeRequest, AssignObjectsRequest, RequestDeathStateChange, ShiftGridCellRequest,
             RequestOwnershipTransfer, RequestOwnershipClaim, RequestObjectInventoryChanges, SpellCastRequest, ProjectileLaunchRequest, InterruptCastRequest, AddTargetRequest, ScriptAnimationRequest, DrawWeaponRequest, MountRequest, NewPackageRequest, RequestRespawn, SyncExperienceRequest,
             RequestEquipmentChanges, SendChatMessageRequest, TeleportCommandRequest, PlayerRespawnRequest, DialogueRequest, SubtitleRequest, PlayerDialogueRequest, PlayerLevelRequest, TeleportRequest, RequestPlayerHealthUpdate, RequestWeatherChange, RequestCurrentWeather, RequestSetWaypoint,
-            RequestRemoveWaypoint, RemoveSpellRequest, SetTimeCommandRequest, RequestActionEvents, RequestCampaignReady, RequestCampaignSeed, RequestCoopSleep, RequestDialogueLease, RequestWorldCheckpoint>;
+            RequestRemoveWaypoint, RemoveSpellRequest, SetTimeCommandRequest, RequestActionEvents, RequestCampaignReady, RequestCampaignSeed, RequestCoopSleep, RequestDialogueLease, RequestWorldCheckpoint, RequestQuestDecision>;
 
         return s_visitor(std::forward<T>(func));
     }

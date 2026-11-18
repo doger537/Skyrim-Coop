@@ -12,7 +12,7 @@ class WorldCheckpointService
 public:
     WorldCheckpointService(World& aWorld, entt::dispatcher& aDispatcher) noexcept;
     bool IsFrozen() const noexcept;
-    bool CanAuthenticate(const CharacterIdentity& acCharacter, uint64_t aToken, String& aError) noexcept;
+    bool CanAuthenticate(const CharacterIdentity& acCharacter, uint64_t aToken, const CheckpointAdmissionProof& acProof, String& aError) noexcept;
 
 private:
     enum class Step { Idle, PrepareSave, Saving, PrepareLoad, WaitingReconnect };

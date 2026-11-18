@@ -4,6 +4,8 @@
 #include <Components.h>
 #include <TiltedCore/ViewBuffer.hpp>
 #include <Messages/PartyCreateRequest.h>
+#include <Services/QuestService.h>
+#include <algorithm>
 #include <cstring>
 
 WorldCheckpointService::WorldCheckpointService(World& aWorld, entt::dispatcher& aDispatcher) noexcept : m_world(aWorld)
@@ -67,7 +69,7 @@ bool WorldCheckpointService::Initialize() noexcept
     m_initialized = true;
     return true;
 }
-bool WorldCheckpointService::CanAuthenticate(const CharacterIdentity& acCharacter, uint64_t aToken, String& aError) noexcept
+bool WorldCheckpointService::CanAuthenticate(const CharacterIdentity& acCharacter, uint64_t aToken, const CheckpointAdmissionProof& acProof, String& aError) noexcept
 {
     if (!Initialize())
     {
@@ -91,15 +93,21 @@ bool WorldCheckpointService::CanAuthenticate(const CharacterIdentity& acCharacte
         aError = "Cannot verify the restored world timeline";
         return false;
     }
-    if (!restored)
-        return true;
     // A native save from an abandoned future has a token below the rollback
     // revision. Only the selected pair or a later committed pair can rejoin.
     WorldCheckpoint manifest;
-    if (!aToken || (aToken != restored && aToken <= epoch) || !ReadManifest(aToken, manifest) ||
-        (manifest.Players[0].Character != acCharacter && manifest.Players[1].Character != acCharacter))
+    if (restored && (!aToken || (aToken != restored && aToken <= epoch)))
     {
         aError = "This save is outside the restored world timeline. Load your matching paired checkpoint save";
+        return false;
+    }
+    if (!aToken)
+        return true;
+    if (!acProof.IsValid() || acProof.WorldId != m_world.GetCampaign().WorldId() || acProof.Player.Character != acCharacter ||
+        !ReadManifest(aToken, manifest) ||
+        std::none_of(manifest.Players.begin(), manifest.Players.end(), [&](const auto& player) { return player == acProof.Player; }))
+    {
+        aError = "The loaded ESS/SKSE files do not match this world's committed paired checkpoint. Load the complete matching checkpoint save";
         return false;
     }
     return true;
@@ -125,6 +133,11 @@ void WorldCheckpointService::Begin(Player& aLeader, uint64_t aLoadId) noexcept
     m_control = {};
     m_control.WorldId = m_world.GetCampaign().WorldId();
     m_control.PreviousEpoch = m_world.GetCampaign().WorldEpoch();
+    if (m_world.ctx().at<QuestService>().HasPendingAuthority())
+    {
+        m_control.State = NotifyWorldCheckpoint::Phase::Cancelled; m_control.Failure = Error::Busy;
+        aLeader.Send(m_control); return;
+    }
     if (!m_world.GetPartyService().IsPlayerLeader(&aLeader))
     {
         m_control.State = NotifyWorldCheckpoint::Phase::Cancelled; m_control.Failure = Error::NotLeader;

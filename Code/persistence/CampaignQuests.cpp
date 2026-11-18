@@ -221,6 +221,16 @@ bool State::ReadQuestRunParticipants(GameId aId, uint32_t aEpoch, QuestRunPartic
 State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
     const QuestRunParticipants* apParticipants) noexcept
 {
+    return ChangeQuest(aId, aEpoch, aStatus, aStage, aType, aAllowMisc, apParticipants, true);
+}
+State::QuestResult State::PreviewQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
+    const QuestRunParticipants* apParticipants) noexcept
+{
+    return ChangeQuest(aId, aEpoch, aStatus, aStage, aType, aAllowMisc, apParticipants, false);
+}
+State::QuestResult State::ChangeQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
+    const QuestRunParticipants* apParticipants, bool aCommit) noexcept
+{
     if (!m_ready || !m_bootstrapped || !ValidForm(aId) || aEpoch == 0 || aStatus > 2 || aType > 11)
     {
         m_error = "Invalid shared quest identity, epoch or state";
@@ -282,6 +292,10 @@ State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
         return QuestResult::Invalid;
     }
     next.Events.push_back({aStatus, aStage, false});
+    // Preview and commit share all policy/state validation. Preview never
+    // changes either the in-memory journal or durable quest ownership.
+    if (!aCommit)
+        return QuestResult::Applied;
     WorldStore::Record state;
     state.Key = Key("quest", aId);
     state.Revision = saved ? saved->Revision : 0;

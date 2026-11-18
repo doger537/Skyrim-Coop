@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <future>
+#include <filesystem>
 #include <Messages/AuthenticationRequest.h>
 #include <Messages/AuthenticationResponse.h>
 #include <Client.hpp>
@@ -91,6 +92,7 @@ private:
     uint32_t m_localPlayerId;
     double m_lastPollTime{};
     std::optional<AuthenticationRequest> m_queuedAuthentication;
+    std::filesystem::path m_queuedCheckpointPath;
     std::future<AuthenticationRequest> m_manifestTask;
     std::atomic<uint64_t> m_connectionGeneration{};
     uint64_t m_manifestGeneration{};

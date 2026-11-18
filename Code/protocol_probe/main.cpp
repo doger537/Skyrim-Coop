@@ -289,7 +289,17 @@ bool ConnectProbe(Probe& aProbe, const std::string& acAddress, ResponseType aExp
         aProbe.Update();
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    return aProbe.Reply && aProbe.Reply->Type == aExpected && (!aRequireReady || aExpected != ResponseType::kAccepted || aProbe.Ready);
+    const bool accepted = aProbe.Reply && aProbe.Reply->Type == aExpected && (!aRequireReady || aExpected != ResponseType::kAccepted || aProbe.Ready);
+    if (!accepted)
+    {
+        std::cerr << "Probe admission failed: expected=" << static_cast<unsigned>(aExpected)
+                  << " received=" << (aProbe.Reply ? static_cast<int>(aProbe.Reply->Type) : -1)
+                  << " ready=" << aProbe.Ready;
+        if (aProbe.Reply)
+            std::cerr << " reason=" << aProbe.Reply->ContentError;
+        std::cerr << std::endl;
+    }
+    return accepted;
 }
 
 bool CheckInventoryReplay(Probe& aOwner, const std::string& acAddress)
