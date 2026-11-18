@@ -20,6 +20,9 @@
 #include <Events/ConnectionErrorEvent.h>
 
 #include <World.h>
+#include <NativeQuestContext.h>
+#include <NativeGrantDelivery.h>
+#include <NativeQuestGate.h>
 #include <BranchInfo.h>
 
 #if (IS_MASTER)
@@ -302,6 +305,9 @@ void DiscoveryService::OnConnected(const ConnectedEvent& acEvent) noexcept
 
 BSTEventResult DiscoveryService::OnEvent(const TESLoadGameEvent*, const EventDispatcher<TESLoadGameEvent>*)
 {
+    NativeQuestContext::SetEnabled(false);
+    NativeQuestGate::AfterLoad();
+    NativeGrantDelivery::AfterLoad();
     // Publish only copied/atomic state here; transport consumes it on its runner
     // before a completed load can reuse the previous admission or hash task.
     m_world.GetTransport().NativeLoadCompleted();

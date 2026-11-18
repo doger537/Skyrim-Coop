@@ -3,6 +3,8 @@
 #include <Services/CalendarService.h>
 #include <World.h>
 #include <NativeCheckpoint.h>
+#include <NativeQuestGate.h>
+#include <NativeGrantDelivery.h>
 #include <Forms/SavedCharacterIdentity.h>
 #include <Systems/ContentFingerprint.h>
 #include <Events/WorldCheckpointIntent.h>
@@ -98,6 +100,17 @@ void WorldCheckpointService::Apply(const NotifyWorldCheckpoint& acMessage) noexc
         m_slot = acMessage.Members[0] == character ? 0 : acMessage.Members[1] == character ? 1 : 2;
         if (m_slot == 2)
             return;
+        const bool grantBusy = acMessage.State == Phase::PrepareLoad ?
+            NativeQuestGate::HasLive() || NativeGrantDelivery::IsActive() : NativeQuestGate::HasPending() || NativeGrantDelivery::HasPending();
+        if (grantBusy)
+        {
+            RequestWorldCheckpoint failed;
+            failed.Action = RequestWorldCheckpoint::Kind::Failed;
+            failed.Id = acMessage.Id; failed.Nonce = acMessage.Nonce;
+            m_transport.Send(failed);
+            Notice("Есть незавершённая квестовая выдача. Дождитесь её завершения или восстановите общий checkpoint.");
+            return;
+        }
         m_control = acMessage;
         m_active = true;
         m_deadline = GetTickCount64() + 85000;

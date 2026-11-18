@@ -10,6 +10,8 @@ struct QuestItemScriptOrigin
     uint32_t QuestFormId{};
     uint32_t StackId{};
     uint32_t InstructionOffset{};
+    // Local operation cookie for the deferred gate; never a durable receipt ID.
+    uint64_t Operation{};
     TiltedPhoques::String Script;
     TiltedPhoques::String Function;
 };

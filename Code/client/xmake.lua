@@ -33,7 +33,7 @@ target(name)
     add_headerfiles("Games/Skyrim/**.h")
     -- rather hacky:
     add_includedirs("Games/Skyrim")
-    add_deps("SkyrimEncoding")
+    add_deps("SkyrimEncoding", "TrueCoopData")
     add_deps(
         "UiProcess",
         "CommonLib",

@@ -687,7 +687,7 @@ Inventory TESObjectREFR::GetInventory(std::function<bool(TESForm&)> aFilter) con
     auto& modSystem = World::Get().GetModSystem();
     Inventory inventory{};
 
-    if (TESContainer* pBaseContainer = GetContainer())
+    if (TESContainer* pBaseContainer = GetContainer(); pBaseContainer && pBaseContainer->entries)
     {
         for (int i = 0; i < pBaseContainer->count; i++)
         {
@@ -711,37 +711,43 @@ Inventory TESObjectREFR::GetInventory(std::function<bool(TESForm&)> aFilter) con
 
     Inventory extraInventory{};
 
-    auto pExtraContChangesEntries = GetContainerChanges()->entries;
-    for (auto pGameEntry : *pExtraContChangesEntries)
+    const auto* changes = GetContainerChanges();
+    if (changes && changes->entries)
     {
-        if (!pGameEntry)
-            continue;
-
-        if (!aFilter(*pGameEntry->form))
-            continue;
-
-        Inventory::Entry entry{};
-        modSystem.GetServerModId(pGameEntry->form->formID, entry.BaseId);
-        entry.Count = pGameEntry->count;
-
-        for (ExtraDataList* pExtraDataList : *pGameEntry->dataList)
+        for (auto pGameEntry : *changes->entries)
         {
-            if (!pExtraDataList)
+            if (!pGameEntry || !pGameEntry->form)
                 continue;
 
-            Inventory::Entry innerEntry;
-            innerEntry.BaseId = entry.BaseId;
-            innerEntry.Count = 1;
+            if (!aFilter(*pGameEntry->form))
+                continue;
 
-            GetItemFromExtraData(innerEntry, pExtraDataList);
+            Inventory::Entry entry{};
+            modSystem.GetServerModId(pGameEntry->form->formID, entry.BaseId);
+            entry.Count = pGameEntry->count;
 
-            entry.Count -= innerEntry.Count;
+            if (pGameEntry->dataList)
+            {
+                for (ExtraDataList* pExtraDataList : *pGameEntry->dataList)
+                {
+                    if (!pExtraDataList)
+                        continue;
 
-            extraInventory.Entries.push_back(std::move(innerEntry));
+                    Inventory::Entry innerEntry;
+                    innerEntry.BaseId = entry.BaseId;
+                    innerEntry.Count = 1;
+
+                    GetItemFromExtraData(innerEntry, pExtraDataList);
+
+                    entry.Count -= innerEntry.Count;
+
+                    extraInventory.Entries.push_back(std::move(innerEntry));
+                }
+            }
+
+            if (entry.Count != 0)
+                extraInventory.Entries.push_back(std::move(entry));
         }
-
-        if (entry.Count != 0)
-            extraInventory.Entries.push_back(std::move(entry));
     }
 
     spdlog::debug("ExtraInventory count: {}", extraInventory.Entries.size());

@@ -48,6 +48,12 @@ struct Player
     bool AcceptInventoryOperation(uint64_t aId) noexcept { return m_inventoryOperations.Accept(aId); }
     bool IsCampaignReady() const noexcept { return m_campaignReady; }
     void SetCampaignReady() noexcept { m_campaignReady = true; }
+    bool AcceptQuestGrantQuery(uint64_t aNow) noexcept
+    {
+        if (aNow < m_nextGrantQuery) return false;
+        m_nextGrantQuery = aNow + 250;
+        return true;
+    }
 
 private:
     uint32_t m_id{0};
@@ -66,4 +72,5 @@ private:
     uint16_t m_level{0};
     OperationWindow m_inventoryOperations;
     bool m_campaignReady{};
+    uint64_t m_nextGrantQuery{};
 };

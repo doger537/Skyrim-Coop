@@ -1,5 +1,6 @@
 #include <TiltedOnlinePCH.h>
 #include "NativeQuestContext.h"
+#include "NativeQuestGate.h"
 #include <Misc/BSScript.h>
 #include <Forms/TESQuest.h>
 #include <ScopedReference.h>
@@ -180,6 +181,16 @@ std::optional<QuestItemScriptOrigin> Read(const AddItemFunctor& acFunctor) noexc
     return {};
 }
 
+BSScript::Variable* ExecuteWithOrigin(void* apFunctor, BSScript::Variable* apResult, const QuestItemScriptOrigin& acSource)
+{
+    struct Restore
+    {
+        const QuestItemScriptOrigin* Previous{s_origin};
+        ~Restore() { s_origin = Previous; }
+    } restore;
+    s_origin = &acSource;
+    return s_execute(static_cast<AddItemFunctor*>(apFunctor), apResult);
+}
 BSScript::Variable* ExecuteHook(AddItemFunctor* apFunctor, BSScript::Variable* apResult)
 {
     const DWORD runner = s_runnerThread.load(std::memory_order_acquire);
@@ -192,14 +203,15 @@ BSScript::Variable* ExecuteHook(AddItemFunctor* apFunctor, BSScript::Variable* a
     if (!target || target.Get()->formID != 0x14)
         return s_execute(apFunctor, apResult);
     const auto origin = Read(*apFunctor);
+    if (origin)
+        return NativeQuestGate::Invoke(apFunctor, apResult, *origin, apFunctor->ItemFormId, apFunctor->Count, apFunctor->Silent, ExecuteWithOrigin);
     struct Restore
     {
         const QuestItemScriptOrigin* Previous{s_origin};
         ~Restore() { s_origin = Previous; }
     } restore;
-    s_origin = origin ? &*origin : nullptr;
-    // Observation only. Preserve native execution, return value, count and VM
-    // scheduling. No reward duplication, suppression or queue/retry guesses.
+    s_origin = nullptr;
+    // An unknown source retains its original engine behavior.
     return s_execute(apFunctor, apResult);
 }
 }
@@ -220,6 +232,8 @@ bool AuditEnabled() noexcept
 void SetEnabled(bool aEnabled) noexcept
 {
     s_runnerThread.store(aEnabled ? GetCurrentThreadId() : 0, std::memory_order_release);
+    NativeQuestGate::SetRunnerThread(aEnabled ? GetCurrentThreadId() : 0);
+    if (!aEnabled) NativeQuestGate::CancelPending();
 }
 std::optional<QuestItemScriptOrigin> Current() noexcept
 {

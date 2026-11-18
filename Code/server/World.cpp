@@ -19,6 +19,7 @@
 #include <Services/DialogueService.h>
 #include <Services/PlayerLocationService.h>
 #include <Services/WorldCheckpointService.h>
+#include <Services/QuestGrantService.h>
 
 #include <es_loader/ESLoader.h>
 
@@ -46,6 +47,7 @@ World::World()
     ctx().emplace<DialogueService>(*this, m_dispatcher);
     ctx().emplace<PlayerLocationService>(*this, m_dispatcher);
     ctx().emplace<WorldCheckpointService>(*this, m_dispatcher);
+    ctx().emplace<QuestGrantService>(*this, m_dispatcher);
 
     ESLoader::ESLoader loader;
     // emplace loaded mods into modscomponent.

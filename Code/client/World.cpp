@@ -25,6 +25,7 @@
 #include <Services/DialogueService.h>
 #include <Services/PlayerMarkerService.h>
 #include <Services/WorldCheckpointService.h>
+#include <Services/QuestGrantService.h>
 
 #include <Events/PreUpdateEvent.h>
 #include <Events/UpdateEvent.h>
@@ -62,6 +63,7 @@ World::World()
     ctx().emplace<DialogueService>(*this, m_dispatcher, m_transport);
     ctx().emplace<PlayerMarkerService>(*this, m_dispatcher, m_transport);
     ctx().emplace<WorldCheckpointService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<QuestGrantService>(*this, m_dispatcher, m_transport);
 
     BehaviorVar::Get()->Init();
 }
