@@ -29,6 +29,17 @@ foreach ($name in @('SkyrimTogether.exe','SkyrimTogetherServer.exe','STServer.dl
     if (!(Test-Path -LiteralPath $installed) -or (Get-FileHash -LiteralPath $built).Hash -ne (Get-FileHash -LiteralPath $installed).Hash) { throw "Stale distribution binary: $name" }
 }
 if (!(Test-Path -LiteralPath (Join-Path $Distribution 'bin/libcef.dll'))) { throw 'CEF runtime missing' }
+# Inspect compiled consumers too. A refreshed header alone does not prove the
+# incremental build recompiled the authentication/version code in each binary.
+foreach ($name in @('SkyrimTogether.exe','STServer.dll','SkyrimTogetherServer.exe')) {
+    $binary = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $Distribution "bin/$name")))
+    if (!$binary.Contains($version)) { throw "Compiled native version differs in $name; rebuild both client and server" }
+    if ($version -match '^(.*)-[0-9]+-g[0-9a-f]+$') {
+        $family = [regex]::Escape($Matches[1]) + '-[0-9]+-g[0-9a-f]+'
+        $tags = @([regex]::Matches($binary, $family) | ForEach-Object Value | Sort-Object -Unique)
+        if ($tags.Count -ne 1 -or $tags[0] -cne $version) { throw "Mixed native revisions in $name; rebuild from one source revision" }
+    }
+}
 $stage = Join-Path $workspace ('work/package-ae-' + [guid]::NewGuid().ToString('N'))
 $runtime = Join-Path $stage 'SkyrimTogetherReborn'
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
