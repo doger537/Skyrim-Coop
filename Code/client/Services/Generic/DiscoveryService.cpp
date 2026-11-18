@@ -22,6 +22,8 @@
 #include <World.h>
 #include <NativeQuestContext.h>
 #include <NativeGrantDelivery.h>
+#include <Havok/PhysicsReplication.h>
+#include <Forms/WorldItemRegistry.h>
 #include <NativeQuestGate.h>
 #include <BranchInfo.h>
 
@@ -308,6 +310,8 @@ BSTEventResult DiscoveryService::OnEvent(const TESLoadGameEvent*, const EventDis
     NativeQuestContext::SetEnabled(false);
     NativeQuestGate::AfterLoad();
     NativeGrantDelivery::AfterLoad();
+    PhysicsReplication::Invalidate();
+    WorldItemRegistry::AfterLoad();
     // Publish only copied/atomic state here; transport consumes it on its runner
     // before a completed load can reuse the previous admission or hash task.
     m_world.GetTransport().NativeLoadCompleted();

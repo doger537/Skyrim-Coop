@@ -130,7 +130,7 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
             return false;
         }
         const int schema = sqlite3_column_int(version.Value, 0);
-        if (schema != 0 && schema != 1 && schema != 2 && schema != 3)
+        if (schema != 0 && schema != 1 && schema != 2 && schema != 3 && schema != 4)
         {
             m_error = "Unsupported world database schema; use the matching server build, do not reset the database";
             Close();
@@ -154,7 +154,7 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
                  "CREATE TABLE IF NOT EXISTS checkpoints(id INTEGER PRIMARY KEY CHECK(id>0), captured_revision INTEGER NOT NULL, metadata BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32)) STRICT;"
                  "CREATE TABLE IF NOT EXISTS checkpoint_state(checkpoint_id INTEGER NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32), revision INTEGER NOT NULL CHECK(revision>0), PRIMARY KEY(checkpoint_id,key)) STRICT;"
                  "INSERT OR IGNORE INTO identity VALUES(1,lower(hex(randomblob(16))),0);"
-                 "PRAGMA user_version=3; PRAGMA application_id=1414546256; COMMIT;"))
+                 "PRAGMA user_version=4; PRAGMA application_id=1414546256; COMMIT;"))
     {
         Close();
         return false;

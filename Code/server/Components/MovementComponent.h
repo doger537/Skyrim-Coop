@@ -5,6 +5,7 @@
 #endif
 
 #include <Structs/AnimationVariables.h>
+#include <Structs/ActorPoseState.h>
 
 struct MovementComponent
 {
@@ -17,4 +18,5 @@ struct MovementComponent
     glm::vec3 Rotation;
     AnimationVariables Variables;
     float Direction;
+    ActorPoseState Pose;
 };

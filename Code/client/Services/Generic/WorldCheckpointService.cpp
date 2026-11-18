@@ -5,6 +5,8 @@
 #include <NativeCheckpoint.h>
 #include <NativeQuestGate.h>
 #include <NativeGrantDelivery.h>
+#include <Havok/PhysicsReplication.h>
+#include <Forms/WorldItemRegistry.h>
 #include <Forms/SavedCharacterIdentity.h>
 #include <Systems/ContentFingerprint.h>
 #include <Events/WorldCheckpointIntent.h>
@@ -101,7 +103,8 @@ void WorldCheckpointService::Apply(const NotifyWorldCheckpoint& acMessage) noexc
         if (m_slot == 2)
             return;
         const bool grantBusy = acMessage.State == Phase::PrepareLoad ?
-            NativeQuestGate::HasLive() || NativeGrantDelivery::IsActive() : NativeQuestGate::HasPending() || NativeGrantDelivery::HasPending();
+            NativeQuestGate::HasLive() || NativeGrantDelivery::IsActive() || WorldItemRegistry::IsWriting() :
+            NativeQuestGate::HasPending() || NativeGrantDelivery::HasPending() || WorldItemRegistry::HasPending();
         if (grantBusy)
         {
             RequestWorldCheckpoint failed;
@@ -112,6 +115,7 @@ void WorldCheckpointService::Apply(const NotifyWorldCheckpoint& acMessage) noexc
             return;
         }
         m_control = acMessage;
+        PhysicsReplication::Invalidate();
         m_active = true;
         m_deadline = GetTickCount64() + 85000;
         m_prepared = m_inspected = m_wroteToken = false;

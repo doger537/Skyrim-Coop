@@ -23,7 +23,10 @@ World rollback preserves original row revisions.
 ## Cursor plugin
 
 `TrueCoopWorldState.esp` is our own standalone plugin, master Skyrim.esm,
-13 new nonconstant globals, zero overrides. `build_grant_cursor.py` produces it
+13 quest-receipt globals, zero overrides. The physics continuation also stages
+64 optional object aliases, 256 object-ID globals and five separate item-receipt
+globals in this same plugin; their dropped-object service is not connected yet.
+`build_grant_cursor.py` produces it
 from `QuestGrantCursorIds.h` and refuses to overwrite unexpected bytes. The
 globals store a 32-digit world UUID as eight 16-bit words, a revision as four
 16-bit words and a version marker. Every 16-bit value is exactly representable

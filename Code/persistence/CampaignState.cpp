@@ -84,7 +84,7 @@ bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) 
     if (epochResult == WorldStore::ReadResult::Found)
         m_worldEpoch = epoch.Revision;
     m_ready = true;
-    if (!ValidateQuestGrantIndexes())
+    if (!ValidateQuestGrantIndexes() || !ValidateItemReceiptIndexes())
     {
         m_ready = false;
         return false;

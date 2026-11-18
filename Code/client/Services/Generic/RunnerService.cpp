@@ -4,6 +4,8 @@
 
 #include <Events/UpdateEvent.h>
 #include <Havok/PhysicsReplication.h>
+#include <AI/NativeActorPose.h>
+#include <Systems/AnimationSystem.h>
 
 RunnerService::RunnerService(entt::dispatcher& aDispatcher) noexcept
     : m_dispatcher(aDispatcher)
@@ -28,5 +30,7 @@ void RunnerService::QueueGameplay(std::function<void()> aFunctor) noexcept
 void RunnerService::OnUpdate(const UpdateEvent& acUpdateEvent) noexcept
 {
     PhysicsReplication::BeginRunnerFrame();
+    NativeActorPose::BeginRunnerFrame();
+    AnimationSystem::BeginRunnerFrame();
     m_runner.Drain();
 }

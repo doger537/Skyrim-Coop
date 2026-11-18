@@ -1,6 +1,7 @@
 #include "CampaignData.h"
 #include "WorldStore.h"
 #include "QuestGrant.h"
+#include "WorldItemReceipt.h"
 #include <Structs/ContentCompatibility.h>
 #include <algorithm>
 #include <bit>
@@ -223,6 +224,14 @@ bool Header(Writer& aWriter, uint8_t aKind) noexcept
 {
     return aWriter.Number(uint32_t{0x53574354}) && aWriter.Number(static_cast<uint16_t>(aKind == 2 ? 1 : 2)) && aWriter.Number(aKind);
 }
+template <class A, class T> bool ItemReceiptFields(A& aArchive, T& aReceipt) noexcept
+{
+    if (!WorldItemFields(aArchive, aReceipt.State) || !aArchive.Number(aReceipt.Operation) || !aArchive.Number(aReceipt.Delta) ||
+        !aArchive.Number(aReceipt.ExpectedRevision)) return false;
+    for (auto* identity : {&aReceipt.Recipient, &aReceipt.Session})
+        for (auto& part : identity->Parts) if (!aArchive.Number(part)) return false;
+    return true;
+}
 
 bool Header(Reader& aReader, uint8_t aKind, bool aLegacyContract = false) noexcept
 {
@@ -302,6 +311,19 @@ bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, QuestGrantReceipt& aR
     if (acBytes.size() > WorldStore::kMaxRecordBytes || !Header(reader, 5) || !GrantFields(reader, candidate) || !reader.End() ||
         !candidate.Plan.IsValid() || !candidate.Participants.IsValid() || candidate.Plan.Initiator != candidate.Participants.Initiator)
         return false;
+    aReceipt = std::move(candidate);
+    return true;
+}
+bool Encode(const WorldItemReceipt& acReceipt, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept
+{
+    Writer writer(aBytes);
+    return acReceipt.IsValid() && Header(writer, 6) && ItemReceiptFields(writer, acReceipt);
+}
+bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, WorldItemReceipt& aReceipt) noexcept
+{
+    WorldItemReceipt candidate;
+    Reader reader(acBytes);
+    if (acBytes.size() > WorldStore::kMaxRecordBytes || !Header(reader, 6) || !ItemReceiptFields(reader, candidate) || !reader.End() || !candidate.IsValid()) return false;
     aReceipt = std::move(candidate);
     return true;
 }

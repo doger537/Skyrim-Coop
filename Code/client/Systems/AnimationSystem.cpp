@@ -11,6 +11,8 @@
 #include <AI/AIProcess.h>
 #include <Camera/PlayerCamera.h>
 #include <Misc/MiddleProcess.h>
+#include <AI/NativeActorPose.h>
+#include <chrono>
 
 #include <Messages/RequestActionEvents.h>
 #include <Structs/Movement.h>
@@ -21,13 +23,37 @@
 #include <Forms/TESObjectCELL.h>
 #include <Forms/TESWorldSpace.h>
 
+namespace
+{
+using AnimationClock = std::chrono::steady_clock;
+AnimationClock::duration s_frameSpent{};
+size_t s_frameActions{};
+}
+void AnimationSystem::BeginRunnerFrame() noexcept
+{
+    if (NativeActorPose::OnRunner()) { s_frameSpent = {}; s_frameActions = 0; }
+}
+bool AnimationSystem::HasBudget() noexcept
+{
+    return NativeActorPose::OnRunner() && s_frameActions < 16 && s_frameSpent < std::chrono::microseconds(1000);
+}
 void AnimationSystem::Update(World& aWorld, Actor* apActor, RemoteAnimationComponent& aAnimationComponent, const uint64_t aTick) noexcept
 {
+    if (!apActor || !HasBudget()) return;
     auto& actions = aAnimationComponent.TimePoints;
 
-    const auto it = std::begin(actions);
-    if (it != std::end(actions) && it->Tick <= aTick)
+    const auto started = std::chrono::steady_clock::now();
+    struct Account
     {
+        AnimationClock::time_point Started;
+        ~Account() { s_frameSpent += AnimationClock::now() - Started; }
+    } account{started};
+    for (size_t processed = 0; processed < 4; ++processed)
+    {
+        const auto it = std::begin(actions);
+        if (it == std::end(actions) || it->Tick > aTick || s_frameActions == 16 ||
+            s_frameSpent + (AnimationClock::now() - started) >= std::chrono::microseconds(1000) ||
+            (processed && std::chrono::steady_clock::now() - started >= std::chrono::microseconds(300))) break;
         // Check if animation graph is ready before attempting to play animations
         if (!apActor->animationGraphHolder.IsReady())
         {
@@ -48,10 +74,18 @@ void AnimationSystem::Update(World& aWorld, Actor* apActor, RemoteAnimationCompo
         const auto pAction = Cast<BGSAction>(TESForm::GetById(actionId));
         const auto pTarget = Cast<TESObjectREFR>(TESForm::GetById(targetId));
 
-        apActor->actorState.flags1 = first.State1;
-        apActor->actorState.flags2 = first.State2;
+        // MCP-verified native life/knock and furniture bits must be changed by
+        // the actual death/physics/furniture path. Replaying an older animation
+        // must not revive a corpse, cancel get-up or fake an occupied seat.
+        constexpr uint32_t managed = 0x1E00000u | 0xE000000u | 0x3C000u;
+        if (VersionDb::Get().GetLoadedVersionString() == "1.7.104.0")
+        {
+            apActor->actorState.flags1 = (first.State1 & ~managed) | (apActor->actorState.flags1 & managed);
+            apActor->actorState.flags2 = (first.State2 & ~0x10u) | (apActor->actorState.flags2 & 0x10u);
+        }
+        else { apActor->actorState.flags1 = first.State1; apActor->actorState.flags2 = first.State2; }
 
-        apActor->LoadAnimationVariables(first.Variables);
+        if (!NativeActorPose::IsRagdoll(apActor)) apActor->LoadAnimationVariables(first.Variables);
 
         aAnimationComponent.LastRanAction = first;
 
@@ -62,6 +96,7 @@ void AnimationSystem::Update(World& aWorld, Actor* apActor, RemoteAnimationCompo
         actionData.someFlag = ((first.Type & 0x4) != 0) ? 1 : 0;
 
         const auto result = ActorMediator::Get()->ForceAction(&actionData);
+        ++s_frameActions;
 
         if (aAnimationComponent.ReplayCount > 0)
             aAnimationComponent.ReplayCount--;
@@ -118,6 +153,7 @@ void AnimationSystem::SerializeMovement(World& aWorld, Actor* apActor, Movement&
         aWorld.GetModSystem().GetServerModId(pWorldSpace->formID, aMovement.WorldSpaceId.ModId, aMovement.WorldSpaceId.BaseId);
 
     aMovement.Position = apActor->position;
+    aMovement.Pose = NativeActorPose::Capture(apActor);
 
     aMovement.Rotation.x = apActor->rotation.x;
     aMovement.Rotation.y = apActor->rotation.z;

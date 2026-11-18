@@ -16,5 +16,6 @@
 #include <Components/ActorValuesComponent.h>
 #include <Components/ObjectComponent.h>
 #include <Components/DialogueLeaseComponent.h>
+#include <Components/RagdollComponent.h>
 
 #undef TP_INTERNAL_COMPONENTS_GUARD

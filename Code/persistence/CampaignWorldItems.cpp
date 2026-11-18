@@ -90,7 +90,7 @@ State::ItemWriteResult State::SaveWorldItem(WorldItemState& aItem, uint64_t aExp
         }
         // Ordinary replication cannot resurrect an acknowledged pickup. Save
         // rollback must use a separate checkpoint/epoch transaction.
-        if (current.Deleted || (current.WorldEpoch == candidate.WorldEpoch &&
+        if (current.Item != candidate.Item || current.Deleted || (current.WorldEpoch == candidate.WorldEpoch &&
             (candidate.HostEpoch < current.HostEpoch || (candidate.HostEpoch == current.HostEpoch &&
              (candidate.Sequence <= current.Sequence || candidate.Tick < current.Tick)))))
             return ItemWriteResult::Conflict;

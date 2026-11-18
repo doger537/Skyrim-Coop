@@ -6,6 +6,7 @@
 
 #include <Structs/AnimationVariables.h>
 #include <Systems/PlaybackClock.h>
+#include <Structs/ActorPoseState.h>
 
 struct InterpolationComponent
 {
@@ -21,6 +22,7 @@ struct InterpolationComponent
         float Direction{};
         bool HasLookAt{};
         glm::vec3 LookOffset{};
+        ActorPoseState Pose{};
 
         TimePoint() = default;
     };
@@ -35,4 +37,6 @@ struct InterpolationComponent
     glm::vec3 PositionError{};
     bool IsExtrapolating{false};
     bool HasNewTimePoint{false};
+    uint64_t FurnitureRetryAt{};
+    uint64_t RecoveryRetryAt{}, RecoveryStableTick{};
 };

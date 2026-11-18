@@ -4,6 +4,7 @@
 #include "QuestAdapters.h"
 #include "QuestRunParticipants.h"
 #include "QuestGrant.h"
+#include "WorldItemReceipt.h"
 #include <optional>
 #include <Structs/CharacterIdentity.h>
 
@@ -43,8 +44,19 @@ public:
     bool ValidWorldItem(const WorldItemState& acItem) const noexcept;
     bool LoadWorldItems(TiltedPhoques::Vector<WorldItemState>& aItems) noexcept;
     // Id == 0 creates a new persistent identity. Existing IDs require the last
-    // committed lifecycle revision, never a motion sample sequence.
+    // committed lifecycle revision, never a motion sample sequence. Inventory
+    // quantity/variant changes belong to TransferWorldItem, not motion writes.
     ItemWriteResult SaveWorldItem(WorldItemState& aItem, uint64_t aExpectedRevision) noexcept;
+    enum class ItemTransferResult { Committed, Duplicate, Conflict, Invalid, StorageError };
+    // Delta < 0: create a drop, Id/expected revision must be zero. Delta > 0:
+    // claim part/all of an existing live stack at its last lifecycle revision.
+    // Commits the lifecycle, immutable receipt, inbox and operation index in
+    // one transaction. It does not mutate an actor's transient inventory.
+    ItemTransferResult TransferWorldItem(WorldItemState& aItem, uint64_t aExpectedRevision,
+        const CharacterIdentity& acRecipient, const CharacterIdentity& acSession, uint64_t aOperation,
+        int32_t aDelta, WorldItemReceipt& aReceipt) noexcept;
+    bool ReadWorldItemReceipts(const CharacterIdentity& acRecipient, uint64_t aAfterRevision,
+        TiltedPhoques::Vector<WorldItemReceipt>& aReceipts) noexcept;
     bool LoadObject(GameId aId, ObjectData& aObject, bool& aFound) noexcept;
     bool SaveObject(const ObjectData& acObject) noexcept;
     bool SaveObjects(const TiltedPhoques::Vector<ObjectData>& acObjects) noexcept;
@@ -79,6 +91,8 @@ private:
     bool LoadQuestState(const TiltedPhoques::String& acAdapters) noexcept;
     bool ReadValidQuestGrant(const WorldStore::Record& acRecord, QuestGrantReceipt& aReceipt) noexcept;
     bool ValidateQuestGrantIndexes() noexcept;
+    bool ReadValidItemReceipt(const WorldStore::Record& acRecord, WorldItemReceipt& aReceipt) noexcept;
+    bool ValidateItemReceiptIndexes() noexcept;
     WorldStore m_store;
     std::optional<Contract> m_contract;
     TiltedPhoques::String m_error;

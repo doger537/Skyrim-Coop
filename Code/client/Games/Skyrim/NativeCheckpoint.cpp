@@ -3,6 +3,7 @@
 #include "NativeQuestGate.h"
 #include "NativeGrantCursor.h"
 #include "NativeGrantDelivery.h"
+#include <Forms/WorldItemRegistry.h>
 #include <Events/WorldCheckpointIntent.h>
 #include <Services/TransportService.h>
 #include <Interface/UI.h>
@@ -84,9 +85,9 @@ void Intent(bool aLoad, uint64_t aId) noexcept
 }
 bool SaveHook(void* apManager, int32_t aKind, uint32_t aStats, const char* apName)
 {
-    if (NativeQuestGate::HasPending() || NativeGrantCursor::IsWriting() || NativeGrantDelivery::HasPending())
+    if (NativeQuestGate::HasPending() || NativeGrantCursor::IsWriting() || NativeGrantDelivery::HasPending() || WorldItemRegistry::HasPending())
     {
-        spdlog::warn("Native save deferred: a co-op quest item operation is unresolved or requires checkpoint reload");
+        spdlog::warn("Native save deferred: a co-op inventory operation is unresolved or requires checkpoint reload");
         return false;
     }
     const auto mode = s_mode.load(std::memory_order_relaxed);
@@ -227,7 +228,7 @@ std::filesystem::path Path(const String& acName) noexcept
 }
 bool Save(const String& acName) noexcept
 {
-    if (NativeQuestGate::HasPending() || NativeGrantCursor::IsWriting() || NativeGrantDelivery::HasPending()) return false;
+    if (NativeQuestGate::HasPending() || NativeGrantCursor::IsWriting() || NativeGrantDelivery::HasPending() || WorldItemRegistry::HasPending()) return false;
     if (!Supported() || !ValidName(acName) || !s_save || !Manager() || s_saveResult)
         return false;
     SaveResult result{&acName};
