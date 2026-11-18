@@ -121,7 +121,8 @@ NativeQuestGate::Decision SharedQuestEffectService::Poll(uint64_t aCookie) noexc
     using D = NativeQuestGate::Decision;
     auto* pending = Find(aCookie);
     if (!pending || pending->Failed || !m_transport.IsConnected() || pending->Guest == m_world.GetPartyService().IsLeader() ||
-        pending->WorldEpoch != m_transport.GetWorldEpoch() || pending->Admission != m_transport.GetCampaignNonce() || GetTickCount64() > pending->Deadline) return D::Reject;
+        pending->WorldEpoch != m_transport.GetWorldEpoch() || pending->Admission != m_transport.GetCampaignNonce() ||
+        (!pending->Delivered && !pending->Empty && GetTickCount64() > pending->Deadline)) return D::Reject;
     if (pending->Empty || pending->Delivered) return D::Complete;
     if (pending->Guest) return D::Wait;
     if (pending->Permitted && !pending->Executed)
@@ -183,7 +184,8 @@ void SharedQuestEffectService::OnUpdate(const UpdateEvent&) noexcept
     const uint64_t now = GetTickCount64();
     for (auto& pending : m_pending)
     {
-        if (pending.Failed || now > pending.Deadline) { m_transport.FailCampaign("Shared quest item delivery failed. Reload the matching paired save"); return; }
+        if (pending.Failed || (!pending.Delivered && !pending.Empty && now > pending.Deadline))
+        { m_transport.FailCampaign("Shared quest item delivery failed. Reload the matching paired save"); return; }
         if (!pending.Guest && now >= pending.Retry && !pending.Empty && !pending.Delivered)
             Send(pending, pending.Executed ? RequestSharedQuestEffect::Commit : RequestSharedQuestEffect::Reserve);
     }
