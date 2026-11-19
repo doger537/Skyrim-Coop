@@ -22,6 +22,7 @@
 #include <World.h>
 #include <NativeQuestContext.h>
 #include <NativeGrantDelivery.h>
+#include <NativeItemDelivery.h>
 #include <Havok/PhysicsReplication.h>
 #include <Forms/WorldItemRegistry.h>
 #include <NativeQuestGate.h>
@@ -310,6 +311,7 @@ BSTEventResult DiscoveryService::OnEvent(const TESLoadGameEvent*, const EventDis
     NativeQuestContext::SetEnabled(false);
     NativeQuestGate::AfterLoad();
     NativeGrantDelivery::AfterLoad();
+    NativeItemDelivery::AfterLoad();
     PhysicsReplication::Invalidate();
     WorldItemRegistry::AfterLoad();
     // Publish only copied/atomic state here; transport consumes it on its runner

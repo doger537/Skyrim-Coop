@@ -206,6 +206,6 @@ void SharedQuestEffectService::GuestApplied(const Campaign::QuestGrantPlan& plan
 {
     const String source = plan.Event.substr(plan.Event.size() - 16);
     for (auto& value : m_pending)
-        if (value.Guest && !value.Delivered && value.Source == source && value.Plan.Quest == plan.Quest && value.Plan.Run == plan.Run &&
+        if (value.Guest && !value.Delivered && !value.Failed && value.Source == source && value.Plan.Quest == plan.Quest && value.Plan.Run == plan.Run &&
             value.Plan.Items[0].Item.BaseId == plan.Items[0].Item.BaseId) { value.Delivered = true; return; }
 }

@@ -1,5 +1,9 @@
 # NPC poses, furniture and ragdoll replication — 18 November 2026
 
+Update 19 November: a bounded ordinary-drop/pickup service now calls the native
+registry and single-body physics adapter. The preparation/remaining-work section
+below is historical; current limits are in `ACCELERATED_BUILD_20261119_RU.md`.
+
 The user requested physics/NPC work before returning to quests and packaging.
 All tests remain deferred. This document describes implemented paths and their
 limits, not observed gameplay results. No Skyrim process was launched and no

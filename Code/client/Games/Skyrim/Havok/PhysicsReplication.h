@@ -13,6 +13,7 @@ enum class Status : uint8_t { Captured, Applied, MissingReference, NotLoaded, Un
 struct Result
 {
     uint64_t Cookie{};
+    uint64_t CapturedAt{};
     uint32_t ReferenceHandle{};
     Pose Transform{};
     uint8_t PreviousMotionType{};
@@ -33,8 +34,10 @@ struct RigResult
 };
 
 void BeginRunnerFrame() noexcept;
-bool QueueCapture(uint32_t aReferenceHandle, uint64_t aCookie) noexcept;
-bool QueueApply(uint32_t aReferenceHandle, uint64_t aCookie, const Pose& acPose, uint8_t aMotionType = 4) noexcept;
+using Validator = bool(*)(uint32_t, uint64_t) noexcept;
+bool QueueCapture(uint32_t aReferenceHandle, uint64_t aCookie, Validator aValidate = nullptr) noexcept;
+// Motion type zero preserves the native dynamic body's mode.
+bool QueueApply(uint32_t aReferenceHandle, uint64_t aCookie, const Pose& acPose, uint8_t aMotionType = 4, Validator aValidate = nullptr) noexcept;
 bool Poll(Result& aResult) noexcept;
 bool QueueRigCapture(uint32_t aReferenceHandle, uint64_t aCookie, uint32_t aEntity, uint32_t aEpoch) noexcept;
 bool QueueRigApply(uint32_t aReferenceHandle, uint64_t aCookie, const RigidBodyRig& acRig, uint32_t aEntity, uint32_t aEpoch, GameId aCell, GameId aWorld) noexcept;

@@ -1,6 +1,8 @@
 # Atomic world-item inventory effects — 18 November 2026
 
-This is an implemented persistence layer, **not an enabled drop/pickup service**.
+Update 19 November: the bounded ordinary-item runtime service is now connected.
+See `ACCELERATED_BUILD_20261119_RU.md` for its active scope and untested limits.
+The implementation notes below describe the preceding persistence-only stage.
 The user deferred all tests; only source inspection and production compilation
 were performed. No installed game, profile, save or world database was changed.
 

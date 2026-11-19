@@ -1,3 +1,12 @@
+# 19 November continuation
+
+The ordinary-drop/pickup service is connected with immutable receipts, saved
+aliases, full live-set snapshots and owner/guest-drag physical replication.
+Read `ACCELERATED_BUILD_20261119_RU.md` for the current scope, deferred checks and
+limits. Earlier status sections below are historical, including claims that the
+item registry has no runtime callers. Full arbitrary-world physics and quest
+coverage are still not complete.
+
 # Implementation checkpoint — 2026-11-18
 
 Current continuation: the user approved an accelerated host-led scope and shared

@@ -17,6 +17,7 @@
 #include <Events/InventoryChangeEvent.h>
 #include <NativeQuestContext.h>
 #include <Services/SharedQuestEffectService.h>
+#include <Services/WorldItemService.h>
 #include <Events/ScopedInventoryEventBatch.h>
 #include <Events/MountEvent.h>
 #include <Events/DialogueEvent.h>
@@ -1085,6 +1086,7 @@ void TP_MAKE_THISCALL(HookAddInventoryItem, Actor, TESBoundObject* apItem, Extra
 
 void TP_MAKE_THISCALL(HookPickUpObject, Actor, TESObjectREFR* apObject, int32_t aCount, bool aUnk1, bool aPlaySound)
 {
+    if (!ScopedInventoryOverride::IsOverriden() && WorldItemService::Pickup(apThis, apObject, aCount)) return;
     if (!ScopedInventoryOverride::IsOverriden())
     {
         auto& modSystem = World::Get().GetModSystem();
@@ -1117,6 +1119,11 @@ void Actor::PickUpObject(TESObjectREFR* apObject, int32_t aCount, bool aUnk1, bo
 
 void* TP_MAKE_THISCALL(HookDropObject, Actor, void* apResult, TESBoundObject* apObject, ExtraDataList* apExtraData, int32_t aCount, NiPoint3* apLocation, NiPoint3* apRotation)
 {
+    if (!ScopedInventoryOverride::IsOverriden() && WorldItemService::Drop(apThis, apObject, apExtraData, aCount, apLocation))
+    {
+        if (apResult) *static_cast<uint32_t*>(apResult) = 0;
+        return apResult;
+    }
     if (ScopedInventoryOverride::IsOverriden() || aCount <= 0)
         return TiltedPhoques::ThisCall(RealDropObject, apThis, apResult, apObject, apExtraData, aCount, apLocation, apRotation);
 

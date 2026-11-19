@@ -87,6 +87,7 @@ constexpr auto kLifetime = std::chrono::seconds(2);
 
 struct Job
 {
+    Validator Validate{};
     Result Data;
     Clock::time_point Queued;
     uint8_t MotionType{4};
@@ -182,6 +183,7 @@ bool SingleBody(NiAVObject* apRoot, NiAVObject*& aNode, BodyWrapperView*& aBody)
 
 bool Execute(Job& aJob, PhysicsWorldView* apLockedWorld) noexcept
 {
+    if (aJob.Validate && !aJob.Validate(aJob.Data.ReferenceHandle, aJob.Data.Cookie)) { aJob.Data.State = Status::Expired; return true; }
     ScopedReference reference(aJob.Data.ReferenceHandle);
     if (!reference || reference.Get()->IsDeleted())
     {
@@ -226,7 +228,7 @@ bool Execute(Job& aJob, PhysicsWorldView* apLockedWorld) noexcept
             aJob.Data.State = Status::FixedBody;
             return true;
         }
-        if (body->MotionType != aJob.MotionType)
+        if (aJob.MotionType && body->MotionType != aJob.MotionType)
         {
             using TSetMotion = bool(NiAVObject*, uint32_t, bool, bool, bool);
             POINTER_SKYRIMSE(TSetMotion, setMotion, 77866);
@@ -272,6 +274,7 @@ bool Execute(Job& aJob, PhysicsWorldView* apLockedWorld) noexcept
             pose.AngularVelocity[i] = body->AngularVelocity[i];
         }
         pose.Rotation = {actualRotation->Values[3], actualRotation->Values[0], actualRotation->Values[1], actualRotation->Values[2]};
+        aJob.Data.CapturedAt = GetTickCount64();
         aJob.Data.State = ValidPose(pose) ? Status::Captured : Status::InvalidPose;
     }
     return true;
@@ -475,15 +478,16 @@ void HookUnmark(PhysicsWorldView* apWorld)
     RealUnmark(apWorld);
 }
 
-bool Queue(uint32_t aHandle, uint64_t aCookie, const Pose& acPose, bool aApply, uint8_t aMotionType) noexcept
+bool Queue(uint32_t aHandle, uint64_t aCookie, const Pose& acPose, bool aApply, uint8_t aMotionType, Validator aValidate) noexcept
 {
     if (!s_enabled.load() || !MainThread() || aHandle == 0 || aCookie == 0 ||
-        (aApply && (!ValidPose(acPose) || aMotionType < 1 || aMotionType > 7)))
+        (aApply && (!ValidPose(acPose) || aMotionType > 7)))
         return false;
     for (auto& job : s_jobs)
         if (!job.Active)
         {
             job = {};
+            job.Validate = aValidate;
             job.Data.Cookie = aCookie;
             job.Data.ReferenceHandle = aHandle;
             job.Data.Transform = acPose;
@@ -511,10 +515,10 @@ void BeginRunnerFrame() noexcept
     s_frameSpent = {};
 }
 
-bool QueueCapture(uint32_t aReferenceHandle, uint64_t aCookie) noexcept { return Queue(aReferenceHandle, aCookie, {}, false, 4); }
-bool QueueApply(uint32_t aReferenceHandle, uint64_t aCookie, const Pose& acPose, uint8_t aMotionType) noexcept
+bool QueueCapture(uint32_t aReferenceHandle, uint64_t aCookie, Validator aValidate) noexcept { return Queue(aReferenceHandle, aCookie, {}, false, 4, aValidate); }
+bool QueueApply(uint32_t aReferenceHandle, uint64_t aCookie, const Pose& acPose, uint8_t aMotionType, Validator aValidate) noexcept
 {
-    return Queue(aReferenceHandle, aCookie, acPose, true, aMotionType);
+    return Queue(aReferenceHandle, aCookie, acPose, true, aMotionType, aValidate);
 }
 bool Poll(Result& aResult) noexcept
 {

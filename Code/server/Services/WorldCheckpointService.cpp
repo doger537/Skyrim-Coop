@@ -1,5 +1,6 @@
 #include <Services/WorldCheckpointService.h>
 #include <World.h>
+#include <Services/WorldItemService.h>
 #include <GameServer.h>
 #include <Components.h>
 #include <TiltedCore/ViewBuffer.hpp>
@@ -134,7 +135,7 @@ void WorldCheckpointService::Begin(Player& aLeader, uint64_t aLoadId) noexcept
     m_control = {};
     m_control.WorldId = m_world.GetCampaign().WorldId();
     m_control.PreviousEpoch = m_world.GetCampaign().WorldEpoch();
-    if (m_world.ctx().at<QuestService>().HasPendingAuthority() || m_world.ctx().at<QuestGrantService>().HasPending())
+    if (m_world.ctx().at<QuestService>().HasPendingAuthority() || m_world.ctx().at<QuestGrantService>().HasPending() || m_world.ctx().at<WorldItemService>().HasPending())
     {
         m_control.State = NotifyWorldCheckpoint::Phase::Cancelled; m_control.Failure = Error::Busy;
         aLeader.Send(m_control); return;
@@ -152,6 +153,7 @@ void WorldCheckpointService::Begin(Player& aLeader, uint64_t aLoadId) noexcept
         aLeader.Send(m_control); return;
     }
     m_control.Members[0] = aLeader.GetPersistentCharacterId();
+    if (!aLoadId && !m_world.ctx().at<WorldItemService>().Flush()) { Cancel(Error::Busy); return; }
     for (const Player* member : party->Members)
         if (member != &aLeader)
             m_control.Members[1] = member->GetPersistentCharacterId();

@@ -18,6 +18,9 @@ public:
     Result Motion(const WorldItemMotion& acMotion) noexcept;
     bool Sample(uint64_t aId, uint64_t aRenderTick, WorldItemMotion& aMotion) const noexcept;
     const WorldItemMotion* Latest(uint64_t aId) const noexcept;
+    // Only after a reliable full live-set snapshot retired this identity.
+    // An unknown motion packet still cannot introduce an item.
+    void Forget(uint64_t aId) noexcept { m_items.erase(aId); }
     size_t Size() const noexcept { return m_items.size(); }
 
 private:

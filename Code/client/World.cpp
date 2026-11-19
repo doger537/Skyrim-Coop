@@ -28,6 +28,7 @@
 #include <Services/QuestGrantService.h>
 #include <Services/RagdollService.h>
 #include <Services/SharedQuestEffectService.h>
+#include <Services/WorldItemService.h>
 
 #include <Events/PreUpdateEvent.h>
 #include <Events/UpdateEvent.h>
@@ -68,6 +69,7 @@ World::World()
     ctx().emplace<QuestGrantService>(*this, m_dispatcher, m_transport);
     ctx().emplace<RagdollService>(*this, m_dispatcher, m_transport);
     ctx().emplace<SharedQuestEffectService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<WorldItemService>(*this, m_dispatcher, m_transport);
 
     BehaviorVar::Get()->Init();
 }

@@ -5,6 +5,7 @@
 #include <NativeCheckpoint.h>
 #include <NativeQuestGate.h>
 #include <NativeGrantDelivery.h>
+#include <NativeItemDelivery.h>
 #include <Havok/PhysicsReplication.h>
 #include <Forms/WorldItemRegistry.h>
 #include <Forms/SavedCharacterIdentity.h>
@@ -103,8 +104,8 @@ void WorldCheckpointService::Apply(const NotifyWorldCheckpoint& acMessage) noexc
         if (m_slot == 2)
             return;
         const bool grantBusy = acMessage.State == Phase::PrepareLoad ?
-            NativeQuestGate::HasLive() || NativeGrantDelivery::IsActive() || WorldItemRegistry::IsWriting() :
-            NativeQuestGate::HasPending() || NativeGrantDelivery::HasPending() || WorldItemRegistry::HasPending();
+            NativeQuestGate::HasLive() || NativeGrantDelivery::IsActive() || NativeItemDelivery::IsActive() || WorldItemRegistry::IsWriting() :
+            NativeQuestGate::HasPending() || NativeGrantDelivery::HasPending() || NativeItemDelivery::HasPending() || WorldItemRegistry::HasPending();
         if (grantBusy)
         {
             RequestWorldCheckpoint failed;

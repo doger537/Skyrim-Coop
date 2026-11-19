@@ -21,6 +21,7 @@
 #include <Services/WorldCheckpointService.h>
 #include <Services/QuestGrantService.h>
 #include <Services/RagdollService.h>
+#include <Services/WorldItemService.h>
 
 #include <es_loader/ESLoader.h>
 
@@ -50,6 +51,7 @@ World::World()
     ctx().emplace<WorldCheckpointService>(*this, m_dispatcher);
     ctx().emplace<QuestGrantService>(*this, m_dispatcher);
     ctx().emplace<RagdollService>(*this, m_dispatcher);
+    ctx().emplace<WorldItemService>(*this, m_dispatcher);
 
     ESLoader::ESLoader loader;
     // emplace loaded mods into modscomponent.

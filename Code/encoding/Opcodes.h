@@ -64,6 +64,9 @@ enum ClientOpcode : unsigned char
     kRequestQuestGrants,
     kRequestRagdollPose,
     kRequestSharedQuestEffect,
+    kRequestWorldItems,
+    kRequestWorldItemTransfer,
+    kRequestWorldItemMotion,
     kClientOpcodeMax
 };
 
@@ -135,5 +138,8 @@ enum ServerOpcode : unsigned char
     kNotifyQuestGrant,
     kNotifyRagdollPose,
     kNotifySharedQuestEffect,
+    kNotifyWorldItems,
+    kNotifyWorldItemTransfer,
+    kNotifyWorldItemMotion,
     kServerOpcodeMax
 };
