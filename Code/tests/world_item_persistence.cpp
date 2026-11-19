@@ -147,10 +147,20 @@ TEST_CASE("Dropped-object storage rejects stale updates and unloaded content wit
     auto stale = first;
     stale.Position.x = -500.f;
     REQUIRE(state.SaveWorldItem(stale, first.Revision) == Campaign::State::ItemWriteResult::Conflict);
+    // Ordinary motion updates cannot replace the persisted item payload.
+    auto changed = item;
+    ++changed.Sequence;
+    changed.Item.BaseId.ModId = 99;
+    REQUIRE(state.SaveWorldItem(changed, item.Revision) == Campaign::State::ItemWriteResult::Conflict);
     auto invalid = item;
     ++invalid.Sequence;
-    invalid.Item.BaseId.ModId = 99;
+    invalid.CellId.ModId = 99;
     REQUIRE(state.SaveWorldItem(invalid, item.Revision) == Campaign::State::ItemWriteResult::Invalid);
+    // A new item still validates its base form against the content contract.
+    invalid = item;
+    invalid.Id = 0;
+    invalid.Item.BaseId.ModId = 99;
+    REQUIRE(state.SaveWorldItem(invalid, 0) == Campaign::State::ItemWriteResult::Invalid);
     invalid = item;
     ++invalid.Sequence;
     ++invalid.WorldEpoch;

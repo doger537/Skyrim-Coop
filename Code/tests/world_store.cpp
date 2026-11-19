@@ -65,8 +65,10 @@ TEST_CASE("World records survive closing and reopening with a stable world ident
     REQUIRE(record.Revision == 1);
 }
 
-TEST_CASE("Schema two upgrades preserve world records and fence servers without quest grants", "[world.store]")
+TEST_CASE("Older schemas upgrade to schema five while preserving world records", "[world.store]")
 {
+    const char* previousSchema = GENERATE("PRAGMA user_version=2;", "PRAGMA user_version=3;", "PRAGMA user_version=4;");
+    CAPTURE(previousSchema);
     StoreDirectory directory;
     WorldStore store;
     REQUIRE(store.Open(directory.File));
@@ -74,7 +76,7 @@ TEST_CASE("Schema two upgrades preserve world records and fence servers without 
     uint64_t revision{};
     REQUIRE(store.Commit({{"quest/migration/1", {7, 17}, 0}}, revision) == WorldStore::WriteResult::Committed);
     store.Close();
-    directory.Execute("PRAGMA user_version=2;");
+    directory.Execute(previousSchema);
     REQUIRE(store.Open(directory.File));
     REQUIRE(store.WorldId() == identity);
     REQUIRE(store.Revision() == revision);
@@ -87,7 +89,7 @@ TEST_CASE("Schema two upgrades preserve world records and fence servers without 
     sqlite3_stmt* schema{};
     REQUIRE(sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &schema, nullptr) == SQLITE_OK);
     REQUIRE(sqlite3_step(schema) == SQLITE_ROW);
-    REQUIRE(sqlite3_column_int(schema, 0) == 3);
+    REQUIRE(sqlite3_column_int(schema, 0) == 5);
     sqlite3_finalize(schema);
     sqlite3_close(db);
 }
