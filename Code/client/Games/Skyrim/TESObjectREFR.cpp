@@ -441,13 +441,17 @@ const float TESObjectREFR::GetHeight() noexcept
     return boundMax.z - GetBoundMin().z;
 }
 
-TESObjectREFR::OpenState TESObjectREFR::GetOpenState() noexcept
+std::optional<TESObjectREFR::OpenState> TESObjectREFR::TryGetOpenState() noexcept
 {
-    using ObjectReference = TESObjectREFR;
+    const auto* pAddress = World::Get().ctx().at<PapyrusService>().GetDoorOpenStateFunction();
+    if (!pAddress)
+        return std::nullopt;
+    const auto* pVM = GameVM::Get();
+    if (!pVM || !pVM->virtualMachine)
+        return std::nullopt;
 
-    PAPYRUS_FUNCTION(TESObjectREFR::OpenState, ObjectReference, GetOpenState);
-
-    return s_pGetOpenState(this);
+    const auto pGetOpenState = reinterpret_cast<PapyrusFunction<OpenState, TESObjectREFR>::TFunction>(pAddress);
+    return pGetOpenState(pVM->virtualMachine, 0, this);
 }
 
 ExtraContainerChanges::Data* TESObjectREFR::GetContainerChanges() const noexcept
@@ -1022,17 +1026,14 @@ bool TP_MAKE_THISCALL(HookActivate, TESObjectREFR, TESObjectREFR* apActivator, u
 {
     Actor* pActivator = Cast<Actor>(apActivator);
 
-    // Exclude books from activation since only reading them removes them from the cell
-    // Note: Books are now unsynced 
-    if (pActivator && apThis->baseForm->formType != FormType::Book)
+    // Books are removed from the cell only when read.
+    if (pActivator && apThis->baseForm && apThis->baseForm->formType != FormType::Book)
     {
-        auto openState = TESObjectREFR::kNone;
-        if (apThis->baseForm->formType == FormType::Door)
-            openState = apThis->GetOpenState();
-
-        World::Get().GetRunner().Trigger(
-            ActivateEvent(apThis, pActivator, apObjectToGet, aCount, aDefaultProcessing, aUnk1, openState)
-        );
+        const auto openState = apThis->baseForm->formType == FormType::Door
+            ? apThis->TryGetOpenState()
+            : std::optional<TESObjectREFR::OpenState>{TESObjectREFR::kNone};
+        if (openState)
+            World::Get().GetRunner().Trigger(ActivateEvent(apThis, pActivator, apObjectToGet, aCount, aDefaultProcessing, aUnk1, *openState));
     }
 
     return TiltedPhoques::ThisCall(RealActivate, apThis, apActivator, aUnk1, apObjectToGet, aCount, aDefaultProcessing);

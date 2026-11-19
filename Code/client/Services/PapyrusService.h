@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Misc/GameVM.h>
+#include <atomic>
 
 struct TESForm;
 struct TESObjectREFR;
@@ -18,10 +19,14 @@ struct PapyrusService
 
     const void* Get(const String& acNamespace, const String& acFunction) const noexcept;
 
+    const void* GetDoorOpenStateFunction() const noexcept { return m_doorOpenState.load(std::memory_order_acquire); }
     void HandlePapyrusFunctionEvent(const PapyrusFunctionRegisterEvent&) noexcept;
 
 private:
     Map<String, void*> m_functions;
+    // Door activation can run on an AI worker. Publish the callback without
+    // exposing the runner's registration map to that thread.
+    std::atomic<const void*> m_doorOpenState{};
 
     entt::scoped_connection m_papyrusFunctionRegisterConnection;
 };

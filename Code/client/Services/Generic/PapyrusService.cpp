@@ -21,4 +21,6 @@ const void* PapyrusService::Get(const String& acNamespace, const String& acFunct
 void PapyrusService::HandlePapyrusFunctionEvent(const PapyrusFunctionRegisterEvent& acEvent) noexcept
 {
     m_functions[acEvent.Namespace + "::" + acEvent.Name] = acEvent.Function;
+    if (acEvent.Namespace == "ObjectReference" && acEvent.Name == "GetOpenState")
+        m_doorOpenState.store(acEvent.Function, std::memory_order_release);
 }
