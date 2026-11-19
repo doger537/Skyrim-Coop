@@ -94,9 +94,17 @@ bool ReadSlot(uint32_t aSlot, Mapping& aMapping) noexcept
     if (!GetAlias(quest, aSlot) || !Id(aSlot, aMapping.Id)) return false;
     auto* reference = quest->GetAliasedRef(aSlot);
     if (!aMapping.Id) return !reference;
-    if (!reference || !reference->IsTemporary() || !reference->baseForm) return false;
+    if (!reference || reference->IsDeleted() || !reference->IsTemporary() || !reference->baseForm) return false;
     aMapping.Handle = reference->GetHandle().handle.iBits; aMapping.FormId = reference->formID;
     return aMapping.Handle != 0;
+}
+bool ContainsReference(TESObjectREFR* apReference) noexcept
+{
+    auto* quest = Quest();
+    if (!quest || !apReference || !apReference->IsTemporary()) return false;
+    for (uint32_t i = 0; i < WorldItemRegistryIds::kSlots; ++i)
+        if (quest->GetAliasedRef(i) == apReference) return true;
+    return false;
 }
 bool Bind(uint32_t aSlot, uint64_t aId, TESObjectREFR* apReference) noexcept
 {

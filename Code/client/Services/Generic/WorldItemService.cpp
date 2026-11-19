@@ -218,9 +218,21 @@ bool WorldItemService::Drop(Actor* actor, TESBoundObject* item, ExtraDataList* e
 bool WorldItemService::Pickup(Actor* actor, TESObjectREFR* ref, int32_t count) noexcept
 {
     auto* service = s_instance;
-    if (!service || !Supported() || !actor || actor->formID != 0x14 || !ref || !ref->IsTemporary() || !service->m_transport.IsConnected() || !NativeActorPose::OnRunner() ||
-        !service->m_world.GetPartyService().IsInParty() || service->m_world.GetPartyService().GetPartyMembers().size() != 2)
+    if (!service || !Supported() || !actor || !ref || !ref->IsTemporary() || !NativeActorPose::OnRunner())
         return false;
+    bool managed = std::any_of(service->m_slots.begin(), service->m_slots.end(), [&](const auto& slot) { return slot.Map.Id && slot.Map.FormId == ref->formID; });
+    if (!managed && !service->m_ready)
+        managed = WorldItemRegistry::ContainsReference(ref);
+    // A saved alias outlives the socket and the party. Letting the engine pick
+    // it up offline (or through an NPC) bypasses the authoritative claim ledger.
+    if (actor->formID != 0x14)
+        return managed;
+    if (!service->m_transport.IsConnected() || !service->m_world.GetPartyService().IsInParty() || service->m_world.GetPartyService().GetPartyMembers().size() != 2)
+    {
+        if (managed)
+            service->m_world.GetOverlayService().SendSystemMessage("Для подбора сетевого предмета подключитесь к своему миру и восстановите группу из двух игроков.");
+        return managed;
+    }
     if (!service->m_ready)
         return true; // Saved aliases have not yet been scanned.
     for (const auto& slot : service->m_slots)
@@ -633,7 +645,11 @@ void WorldItemService::OnUpdate(const UpdateEvent&) noexcept
         return;
     }
     if (!m_world.GetPartyService().IsInParty() || m_world.GetPartyService().GetPartyMembers().size() != 2)
+    {
+        if (m_intent || m_barrier)
+            Fail("The party changed during an item transfer; reload the paired checkpoint");
         return;
+    }
     const uint64_t now = GetTickCount64();
     if (!m_ready)
     {
