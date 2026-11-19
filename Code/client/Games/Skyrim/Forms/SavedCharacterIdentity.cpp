@@ -2,9 +2,7 @@
 #include "SavedCharacterIdentity.h"
 #include <Forms/TESGlobal.h>
 #include <Games/TES.h>
-#include <Services/PapyrusService.h>
 #include <common/CharacterIdentityIds.h>
-#include <cstring>
 
 namespace SavedCharacterIdentity
 {
@@ -58,17 +56,15 @@ bool Commit(const CharacterIdentity& acIdentity) noexcept
         return current == acIdentity;
     if (result != Result::Unassigned)
         return false;
-    const auto* function = World::Get().ctx().at<PapyrusService>().Get("GlobalVariable", "SetValue");
-    if (!function)
-        return false;
-    // MCP registration/callback 140A39F10/140A39EC0: void(VM*,stack,TESGlobal*,float).
-    // The callback writes +34 without MarkChanged. Native 14061DDA0 saves ALL
-    // nonconstant globals by form ID; 14061DE80 restores them. Do not invent a
-    // per-form change flag or modify the user's .ess files ourselves.
-    const PapyrusFunction<void, TESGlobal, float> setValue{function};
     for (uint32_t part = 0; part < acIdentity.Parts.size(); ++part)
-        setValue(Global(part), float(acIdentity.Parts[part]));
-    setValue(Global(8), float(CharacterIdentityIds::kVersion)); // Commit marker last.
+    {
+        auto* pWord = Global(part);
+        if (!pWord || !pWord->SetSavedWord(acIdentity.Parts[part]))
+            return false;
+    }
+    auto* pVersion = Global(8);
+    if (!pVersion || !pVersion->SetSavedWord(CharacterIdentityIds::kVersion))
+        return false;
     return Read(current) == Result::Found && current == acIdentity;
 }
 }

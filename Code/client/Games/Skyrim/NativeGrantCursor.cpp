@@ -3,7 +3,6 @@
 #include <common/QuestGrantCursorIds.h>
 #include <Forms/TESGlobal.h>
 #include <Games/TES.h>
-#include <Services/PapyrusService.h>
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -78,12 +77,16 @@ bool Bind(const String& acWorld) noexcept
     if (state != Result::Unbound) return false;
     std::array<uint16_t, QuestGrantCursorIds::kWorldWords> world{};
     if (!Parse(acWorld, world)) return false;
-    const auto* function = World::Get().ctx().at<PapyrusService>().Get("GlobalVariable", "SetValue");
-    if (!function) return false;
-    const PapyrusFunction<void, TESGlobal, float> set{function};
     const Writing writing;
-    for (uint32_t i = 0; i < world.size(); ++i) set(Global(i), float(world[i]));
-    set(Global(QuestGrantCursorIds::kVersionWord), float(QuestGrantCursorIds::kVersion));
+    for (uint32_t i = 0; i < world.size(); ++i)
+    {
+        auto* pWord = Global(i);
+        if (!pWord || !pWord->SetSavedWord(world[i]))
+            return false;
+    }
+    auto* pVersion = Global(QuestGrantCursorIds::kVersionWord);
+    if (!pVersion || !pVersion->SetSavedWord(QuestGrantCursorIds::kVersion))
+        return false;
     return Read(current, revision) == Result::Bound && current == acWorld && !revision;
 }
 bool Advance(const String& acWorld, uint64_t aExpected, uint64_t aNext) noexcept
@@ -93,12 +96,13 @@ bool Advance(const String& acWorld, uint64_t aExpected, uint64_t aNext) noexcept
     if (aNext < aExpected || aNext > uint64_t(std::numeric_limits<int64_t>::max()) || Read(current, revision) != Result::Bound ||
         current != acWorld || revision != aExpected) return false;
     if (aNext == aExpected) return true;
-    const auto* function = World::Get().ctx().at<PapyrusService>().Get("GlobalVariable", "SetValue");
-    if (!function) return false;
-    const PapyrusFunction<void, TESGlobal, float> set{function};
     const Writing writing;
     for (uint32_t i = 0; i < QuestGrantCursorIds::kCursorWords; ++i)
-        set(Global(QuestGrantCursorIds::kWorldWords + i), float((aNext >> (i * 16)) & 0xFFFF));
+    {
+        auto* pWord = Global(QuestGrantCursorIds::kWorldWords + i);
+        if (!pWord || !pWord->SetSavedWord(static_cast<uint16_t>(aNext >> (i * 16))))
+            return false;
+    }
     return Read(current, revision) == Result::Bound && current == acWorld && revision == aNext;
 }
 bool IsWriting() noexcept { return s_writing.load(std::memory_order_acquire); }

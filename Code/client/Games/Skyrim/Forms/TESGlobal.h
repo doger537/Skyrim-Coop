@@ -5,6 +5,9 @@
 
 struct TESGlobal : TESForm
 {
+    // Runner thread only, after resolving a validated TrueCoop-owned global.
+    bool SetSavedWord(uint16_t aValue) noexcept;
+
     BSString unk14;
     uint8_t unk1C;
     uint8_t pad[3];

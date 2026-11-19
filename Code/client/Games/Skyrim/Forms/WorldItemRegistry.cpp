@@ -67,13 +67,9 @@ TESGlobal* ReceiptWord(uint32_t aWord) noexcept
     return aWord < WorldItemRegistryIds::kWords ? Global(WorldItemRegistryIds::kReceiptFirstLocalId + aWord,
         String("TrueCoopItemReceiptWord") + std::to_string(aWord).c_str()) : nullptr;
 }
-bool Set(TESGlobal* apGlobal, float aValue) noexcept
+bool Set(TESGlobal* apGlobal, uint16_t aValue) noexcept
 {
-    const auto* function = World::Get().ctx().at<PapyrusService>().Get("GlobalVariable", "SetValue");
-    if (!function || !apGlobal) return false;
-    const PapyrusFunction<void, TESGlobal, float> set{function};
-    set(apGlobal, aValue);
-    return apGlobal->f == aValue;
+    return apGlobal && apGlobal->SetSavedWord(aValue);
 }
 bool Id(uint32_t aSlot, uint64_t& aId) noexcept
 {
@@ -123,7 +119,7 @@ bool Bind(uint32_t aSlot, uint64_t aId, TESObjectREFR* apReference) noexcept
     TiltedPhoques::ThisCall(forceAlias, quest, aSlot, apReference);
     if (quest->GetAliasedRef(aSlot) != apReference) return false;
     for (uint32_t i = 0; i < WorldItemRegistryIds::kWords; ++i)
-        if (!Set(Word(aSlot, i), float((aId >> (16 * i)) & 65535))) return false;
+        if (!Set(Word(aSlot, i), static_cast<uint16_t>(aId >> (16 * i)))) return false;
     Mapping after;
     writing.Committed = ReadSlot(aSlot, after) && after.Id == aId && after.FormId == apReference->formID;
     return writing.Committed;
@@ -140,7 +136,7 @@ bool Clear(uint32_t aSlot, uint64_t aExpectedId) noexcept
     ScopedQuestOverride override;
     const PapyrusFunction<void, Alias> clear{function}; clear(alias);
     if (quest->GetAliasedRef(aSlot)) return false;
-    for (uint32_t i = 0; i < WorldItemRegistryIds::kWords; ++i) if (!Set(Word(aSlot, i), 0.f)) return false;
+    for (uint32_t i = 0; i < WorldItemRegistryIds::kWords; ++i) if (!Set(Word(aSlot, i), 0)) return false;
     Mapping after;
     writing.Committed = ReadSlot(aSlot, after) && !after.Id;
     return writing.Committed;
@@ -167,7 +163,7 @@ bool BindReceipt() noexcept
     if (HasPending() || !ReadReceipt(cursor, bound)) return false;
     if (bound) return true;
     WriteScope writing;
-    writing.Committed = Set(Global(WorldItemRegistryIds::kReceiptVersionLocalId, "TrueCoopItemReceiptVersion"), float(WorldItemRegistryIds::kVersion));
+    writing.Committed = Set(Global(WorldItemRegistryIds::kReceiptVersionLocalId, "TrueCoopItemReceiptVersion"), WorldItemRegistryIds::kVersion);
     return writing.Committed;
 }
 bool AdvanceReceipt(uint64_t aExpected, uint64_t aNext) noexcept
@@ -176,7 +172,7 @@ bool AdvanceReceipt(uint64_t aExpected, uint64_t aNext) noexcept
     if (HasPending() || aNext < aExpected || aNext > uint64_t(std::numeric_limits<int64_t>::max()) || !ReadReceipt(cursor, bound) || !bound || cursor != aExpected) return false;
     if (aNext == aExpected) return true;
     WriteScope writing;
-    for (uint32_t i = 0; i < WorldItemRegistryIds::kWords; ++i) if (!Set(ReceiptWord(i), float((aNext >> (16 * i)) & 65535))) return false;
+    for (uint32_t i = 0; i < WorldItemRegistryIds::kWords; ++i) if (!Set(ReceiptWord(i), static_cast<uint16_t>(aNext >> (16 * i)))) return false;
     writing.Committed = ReadReceipt(cursor, bound) && bound && cursor == aNext;
     return writing.Committed;
 }

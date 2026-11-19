@@ -165,14 +165,34 @@ void TransportService::OnConnected()
         FailCampaign("The paired-save globals are missing. Deploy the complete matching True Coop package and reload your character");
         return;
     }
-    if (SavedCharacterIdentity::Read(request.CharacterId) == SavedCharacterIdentity::Result::Invalid)
+    const auto identity = SavedCharacterIdentity::Read(request.CharacterId);
+    if (identity == SavedCharacterIdentity::Result::Invalid)
     {
-        ConnectionErrorEvent event;
-        event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"Cannot read the character identity. Deploy the complete matching True Coop package, load a "
-                            "save and reconnect\"}}";
-        m_dispatcher.trigger(event);
-        Close();
+        spdlog::warn("Authentication stopped: unreadable saved character identity");
+        FailCampaign("Cannot read the character identity. Deploy the complete matching True Coop package, load a save and reconnect");
         return;
+    }
+    if (identity == SavedCharacterIdentity::Result::Unassigned)
+    {
+        if (request.CheckpointToken)
+        {
+            FailCampaign("The paired save is missing its character identity. Load your complete matching checkpoint");
+            return;
+        }
+        auto& words = request.CharacterId.Parts;
+        if (BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(words.data()), static_cast<ULONG>(sizeof(words)), BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0 ||
+            !request.CharacterId.IsValid())
+        {
+            spdlog::warn("Authentication stopped: cannot generate a character identity");
+            FailCampaign("Cannot generate a character identity. Restart Skyrim and reconnect");
+            return;
+        }
+        if (!SavedCharacterIdentity::Commit(request.CharacterId))
+        {
+            spdlog::warn("Authentication stopped: native character identity write failed");
+            FailCampaign("Cannot initialize the character identity in Skyrim. Reload your character and reconnect");
+            return;
+        }
     }
 
     if (request.CheckpointToken)
@@ -279,13 +299,11 @@ void TransportService::OnUpdate()
         if (m_manifestGeneration == m_connectionGeneration && Client::IsConnected())
         {
             const auto result = ContentCompatibility::Validate(request.UserMods);
-            if (!request.CharacterId.IsValid() || !SavedCharacterIdentity::Commit(request.CharacterId))
+            CharacterIdentity current;
+            if (SavedCharacterIdentity::Read(current) != SavedCharacterIdentity::Result::Found || current != request.CharacterId)
             {
-                ConnectionErrorEvent event;
-                event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"The loaded character changed during connection or its identity is invalid. Reconnect "
-                                    "after loading finishes\"}}";
-                m_dispatcher.trigger(event);
-                Close();
+                spdlog::warn("Authentication stopped: character identity changed while checking game files");
+                FailCampaign("The loaded character changed while checking game files. Reconnect after loading finishes");
             }
             else if (request.CheckpointToken && !request.CheckpointProof.IsValid())
                 FailCampaign("Cannot verify the loaded paired ESS/SKSE files. Preserve your saves and load a complete matching checkpoint");
@@ -317,10 +335,6 @@ void TransportService::OnUpdate()
             std::launch::async,
             [request = std::move(request), dataPath, addressLibrary, scriptExtender, checkpointPath = std::move(checkpointPath)]() mutable
             {
-                if (!request.CharacterId.IsValid() && BCryptGenRandom(
-                                                          nullptr, reinterpret_cast<PUCHAR>(request.CharacterId.Parts.data()),
-                                                          static_cast<ULONG>(sizeof(request.CharacterId.Parts)), BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0)
-                    request.CharacterId = {};
                 FingerprintContent(dataPath, addressLibrary, scriptExtender, request.UserMods);
                 if (request.CheckpointToken)
                     FingerprintCheckpointSave(checkpointPath, request.SKSEActive, request.CheckpointProof.Player);

@@ -12,7 +12,6 @@
 #include <Structs/WorldCheckpoint.h>
 #include <Forms/TESGlobal.h>
 #include <Games/TES.h>
-#include <Services/PapyrusService.h>
 #include <cmath>
 #include <atomic>
 #include <array>
@@ -196,12 +195,12 @@ bool WriteToken(uint64_t aId) noexcept
     uint64_t current{};
     if (!ReadToken(current))
         return false;
-    const auto* function = World::Get().ctx().at<PapyrusService>().Get("GlobalVariable", "SetValue");
-    if (!function)
-        return false;
-    const PapyrusFunction<void, TESGlobal, float> set{function};
     for (uint32_t part = 0; part < 4; ++part)
-        set(TokenGlobal(part), float((aId >> (part * 16)) & 0xFFFF));
+    {
+        auto* pWord = TokenGlobal(part);
+        if (!pWord || !pWord->SetSavedWord(static_cast<uint16_t>(aId >> (part * 16))))
+            return false;
+    }
     return ReadToken(current) && current == aId;
 }
 std::filesystem::path Path(const String& acName) noexcept
