@@ -175,6 +175,67 @@ TEST_CASE("An empty baseline stays initialized and a different adapter file cann
     REQUIRE(restored.Quests().empty());
 }
 
+TEST_CASE("A legacy Helgen dragon scene stays on disk and out of the shared journal", "[quest.migration]")
+{
+    QuestDirectory directory;
+    using Result = Campaign::State::QuestResult;
+
+    Campaign::Quest scene;
+    scene.Id = GameId(0, 0x000D0593);
+    scene.Type = 1;
+    scene.Started = true;
+    scene.Stopped = true;
+    scene.Events = {{1, 0, true}, {0, 200, true}, {2, 200, true}};
+
+    Campaign::Quest story;
+    story.Id = GameId(0, 0x0003372B);
+    story.Type = 1;
+    story.Started = true;
+    story.Events = {{1, 0, true}, {0, 10, true}};
+    {
+        Campaign::State state;
+        REQUIRE(state.Open(directory.File));
+        REQUIRE(state.Bind("1.7.104.0", QuestContent()));
+        REQUIRE_FALSE(state.BootstrapQuests({story, scene}, false));
+        REQUIRE_FALSE(state.IsBootstrapped());
+        REQUIRE(state.Quests().empty());
+        REQUIRE(state.BootstrapQuests({story}, false));
+    }
+
+    WorldStore::Record legacy;
+    legacy.Key = "quest/skyrim.esm/853395";
+    REQUIRE(Campaign::Encode(scene, legacy.Value));
+    uint64_t legacyRevision{};
+    {
+        WorldStore raw;
+        REQUIRE(raw.Open(directory.File));
+        REQUIRE(raw.Commit({legacy}, legacyRevision) == WorldStore::WriteResult::Committed);
+    }
+    {
+        Campaign::State restored;
+        REQUIRE(restored.Open(directory.File));
+        REQUIRE(restored.IsBootstrapped());
+        REQUIRE(restored.QuestRevision() == legacyRevision);
+        REQUIRE(restored.Quests().size() == 1);
+        REQUIRE(restored.Quests().front().Data.Id == story.Id);
+        REQUIRE(restored.Quests().front().Data.Events == story.Events);
+        REQUIRE(restored.FindQuest(scene.Id) == nullptr);
+
+        REQUIRE(restored.PreviewQuest(scene.Id, 1, 0, 10, 1, true) == Result::Ignored);
+        REQUIRE(restored.UpdateQuest(scene.Id, 1, 0, 10, 1, true) == Result::Ignored);
+        REQUIRE(restored.Revision() == legacyRevision);
+        REQUIRE(restored.UpdateQuest(story.Id, 1, 0, 20, 1, false) == Result::Applied);
+        REQUIRE(restored.QuestRevision() > legacyRevision);
+    }
+
+    WorldStore raw;
+    REQUIRE(raw.Open(directory.File));
+    WorldStore::Record persisted;
+    REQUIRE(raw.Read(legacy.Key, persisted) == WorldStore::ReadResult::Found);
+    REQUIRE(persisted.Revision == legacyRevision);
+    REQUIRE(persisted.Value == legacy.Value);
+}
+
 TEST_CASE("A failed quest audit write rolls back the snapshot and leaves the cache unchanged", "[quest.durable]")
 {
     QuestDirectory directory;

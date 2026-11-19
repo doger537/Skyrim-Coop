@@ -1,6 +1,7 @@
 #include "CampaignState.h"
 #include <Structs/AlternateStartPolicy.h>
 #include <Structs/ContentCompatibility.h>
+#include <Structs/QuestSyncPolicy.h>
 #include <algorithm>
 #include <limits>
 #include <set>
@@ -12,6 +13,8 @@ namespace Campaign
 {
 namespace
 {
+constexpr size_t kMaxSharedQuests = 4095;
+
 bool HasStage(const Quest& acQuest, uint16_t aStage) noexcept
 {
     return std::any_of(acQuest.Events.begin(), acQuest.Events.end(), [&](const auto& event) { return event.Status == 0 && event.Stage == aStage; });
@@ -101,7 +104,7 @@ bool State::LoadQuestState(const String& acAdapters) noexcept
         }
     }
     Vector<WorldStore::Record> records;
-    if (!m_store.ReadPrefix("quest/", records) || records.size() > 4095)
+    if (!m_store.ReadPrefix("quest/", records) || records.size() > kMaxSharedQuests + 1)
     {
         m_error = "Shared quest journal is unreadable or exceeds the supported quest count";
         return false;
@@ -115,12 +118,21 @@ bool State::LoadQuestState(const String& acAdapters) noexcept
             return false;
         }
         m_questRevision = std::max(m_questRevision, record.Revision);
+        // Older campaigns may contain the Helgen scene. Keep its stored
+        // history intact while omitting it from the shared journal.
+        if (QuestSyncPolicy::IsLocalScene(quest.Id.ModId, quest.Id.BaseId))
+            continue;
+        if (m_quests.size() >= kMaxSharedQuests)
+        {
+            m_error = "Shared quest journal exceeds the supported quest count";
+            return false;
+        }
         m_quests.push_back({std::move(quest), record.Revision});
     }
     WorldStore::Record seeded;
     const auto seedRead = m_store.Read("$seeded", seeded);
     if (seedRead == WorldStore::ReadResult::Failed || (seedRead == WorldStore::ReadResult::Found && seeded.Value != Vector<uint8_t>{1}) ||
-        (seedRead == WorldStore::ReadResult::Missing && !m_quests.empty()))
+        (seedRead == WorldStore::ReadResult::Missing && !records.empty()))
     {
         m_error = "Shared campaign baseline is incomplete or invalid";
         return false;
@@ -133,7 +145,7 @@ bool State::LoadQuestState(const String& acAdapters) noexcept
 
 bool State::BootstrapQuests(const Vector<Quest>& acQuests, bool aAllowMisc) noexcept
 {
-    if (!m_ready || !m_contract || m_bootstrapped || acQuests.size() > 4095)
+    if (!m_ready || !m_contract || m_bootstrapped || acQuests.size() > kMaxSharedQuests)
     {
         m_error = "The shared campaign can be initialized only once";
         return false;
@@ -145,6 +157,7 @@ bool State::BootstrapQuests(const Vector<Quest>& acQuests, bool aAllowMisc) noex
     {
         const auto* adapter = Adapter(quest.Id);
         if (!quest.IsValid() || !ValidForm(quest.Id) || quest.Epoch != 1 || !ids.insert(quest.Id.LogFormat()).second || !quest.Decisions.empty() ||
+            QuestSyncPolicy::IsLocalScene(quest.Id.ModId, quest.Id.BaseId) ||
             ContentCompatibility::NormalizeName(m_contract->Content.ModList[quest.Id.ModId].Filename) == AlternateStartPolicy::cPlugin ||
             ((quest.Type == 0 || quest.Type == 6) && !aAllowMisc && !(adapter && adapter->AllowMisc)))
         {
@@ -250,7 +263,8 @@ State::QuestResult State::ChangeQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
         m_error = "Invalid shared quest identity, epoch or state";
         return QuestResult::Invalid;
     }
-    if (ContentCompatibility::NormalizeName(m_contract->Content.ModList[aId.ModId].Filename) == AlternateStartPolicy::cPlugin)
+    if (QuestSyncPolicy::IsLocalScene(aId.ModId, aId.BaseId) ||
+        ContentCompatibility::NormalizeName(m_contract->Content.ModList[aId.ModId].Filename) == AlternateStartPolicy::cPlugin)
         return QuestResult::Ignored;
     const auto* adapter = Adapter(aId);
     if ((aType == 0 || aType == 6) && !aAllowMisc && !(adapter && adapter->AllowMisc))
@@ -300,7 +314,7 @@ State::QuestResult State::ChangeQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
         next.Started = true;
     if (aStatus == 2)
         next.Stopped = true;
-    if (next.Events.size() >= QuestJournal::kMaxEvents || (!saved && m_quests.size() >= 4095))
+    if (next.Events.size() >= QuestJournal::kMaxEvents || (!saved && m_quests.size() >= kMaxSharedQuests))
     {
         m_error = "Shared quest journal exceeded its bounded event/quest count";
         return QuestResult::Invalid;

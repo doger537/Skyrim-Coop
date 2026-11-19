@@ -22,6 +22,7 @@
 
 #include <Messages/RequestQuestUpdate.h>
 #include <Messages/NotifyQuestUpdate.h>
+#include <Structs/QuestSyncPolicy.h>
 
 static TESQuest* FindQuestByNameId(const String& name)
 {
@@ -500,6 +501,9 @@ void QuestService::OnQuestUpdate(const NotifyQuestUpdate& aUpdate) noexcept
     if (!aUpdate.IsValid()) return;
     ModSystem& modSystem = World::Get().GetModSystem();
     uint32_t formId = modSystem.GetGameId(aUpdate.Id);
+    if (formId == QuestSyncPolicy::kHelgenDragonAttack)
+        return;
+
     if (aUpdate.Revision)
     {
         auto& cursor = m_cursors[formId];
@@ -619,6 +623,7 @@ static constexpr std::array kNonSyncableQuestIds = std::to_array<uint32_t>({
     0x2BA16,   // Werewolf transformation quest
     0x20071D0, // Vampire transformation quest
     0x3AC44,   // MS13BleakFallsBarrowLeverScene
+    QuestSyncPolicy::kHelgenDragonAttack,
     // 0xFE014801,  // Unknown dynamic ID, kept as note, maybe lookup correct ID this game?
     0xF2593 // Skill experience quest
 });
