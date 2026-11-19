@@ -192,11 +192,17 @@ bool FingerprintContent(
     for (const auto& file : looseFiles)
     {
         std::array<uint8_t, 32> digest{};
-        if (file.Name == previous || !FingerprintPluginFile(file.Path, digest))
+        // Engine Fixes writes each player's sound sliders into this file.
+        // Keep the shipped empty file's digest for existing campaign manifests.
+        const bool cLocalVolumeSettings = file.Name == "skse/plugins/enginefixes_snct.ini";
+        if (file.Name == previous || (!cLocalVolumeSettings && !FingerprintPluginFile(file.Path, digest)))
         {
             complete = false;
             break;
         }
+        if (cLocalVolumeSettings)
+            CryptoPP::SHA256{}.Final(digest.data());
+
         previous = file.Name;
         const uint32_t size = static_cast<uint32_t>(file.Name.size());
         const std::array<uint8_t, 4> length{static_cast<uint8_t>(size), static_cast<uint8_t>(size >> 8), static_cast<uint8_t>(size >> 16), static_cast<uint8_t>(size >> 24)};

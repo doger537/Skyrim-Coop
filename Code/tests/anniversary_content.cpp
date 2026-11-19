@@ -6,6 +6,7 @@
 #include <Structs/ContentCompatibility.h>
 #include <Messages/AuthenticationRequest.h>
 #include "../client/Systems/ContentFingerprint.h"
+#include <algorithm>
 #include <fstream>
 #include <set>
 
@@ -283,6 +284,47 @@ TEST_CASE("Fingerprinting detects BSA, loose asset and native library changes", 
     std::filesystem::remove(profile.Path / "SKSE/Plugins/versionlib-test.bin", error);
     REQUIRE_FALSE(collect());
     REQUIRE(ContentCompatibility::Validate(mods).Reason == ContentCompatibility::Issue::UnreadableResource);
+}
+
+TEST_CASE("Engine Fixes volume preferences preserve the installed empty-file fingerprint", "[content.files]")
+{
+    TempProfile profile;
+    profile.Write("Skyrim.esm", PluginHeader(false));
+    profile.Write("library.bin", "addresses");
+    const auto collect = [&]
+    {
+        Mods mods;
+        mods.ModList = {{"Skyrim.esm", 0, false}};
+        REQUIRE(FingerprintContent(profile.Path, profile.Path / "library.bin", {}, mods));
+        REQUIRE(ContentCompatibility::Validate(mods));
+        return mods;
+    };
+    const auto absent = collect();
+    constexpr auto kVolumePreferences = "SKSE/Plugins/EngineFixes_SNCT.InI";
+    profile.Write(kVolumePreferences, "");
+    const auto installed = collect();
+    // Legacy aggregate for the canonical path and a SHA-256 of zero file bytes.
+    const std::array<uint8_t, 32> legacyDigest{0x30, 0xd5, 0x34, 0x17, 0x8f, 0xef, 0x66, 0x89, 0x80, 0xc0, 0x73, 0xd0, 0x73, 0xbc, 0x18, 0xe5,
+                                                0x08, 0xdc, 0x94, 0x3a, 0xe9, 0x98, 0x72, 0x40, 0xdf, 0x44, 0x06, 0x14, 0x0f, 0x12, 0xb4, 0x4d};
+    const auto loose = std::find_if(installed.Resources.begin(), installed.Resources.end(), [](const auto& resource) { return resource.Filename == "data/loose-files"; });
+    REQUIRE(loose != installed.Resources.end());
+    REQUIRE(loose->Digest == legacyDigest);
+    REQUIRE(ContentCompatibility::Compare(installed, absent).Reason == ContentCompatibility::Issue::DifferentResource);
+
+    profile.Write(kVolumePreferences, "[Skyrim.esm]\n000172A1 = 0.45\n");
+    const auto firstVolumes = collect();
+    REQUIRE(ContentCompatibility::Compare(installed, firstVolumes));
+    profile.Write(kVolumePreferences, "[Skyrim.esm]\n000172A1 = 0.8\n");
+    REQUIRE(ContentCompatibility::Compare(firstVolumes, collect()));
+
+    for (const char* name : {"SKSE/Plugins/EngineFixes.toml", "SKSE/Plugins/Other/EngineFixes_SNCT.ini"})
+    {
+        INFO(name);
+        profile.Write(name, "value = 1");
+        const auto before = collect();
+        profile.Write(name, "value = 2");
+        REQUIRE(ContentCompatibility::Compare(before, collect()).Reason == ContentCompatibility::Issue::DifferentResource);
+    }
 }
 
 #ifdef _WIN32
