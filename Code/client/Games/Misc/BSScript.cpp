@@ -2,7 +2,7 @@
 #include <Misc/NativeFunction.h>
 
 #include <World.h>
-#include <Events/PapyrusFunctionRegisterEvent.h>
+#include <Services/PapyrusService.h>
 #include <Forms/TESForm.h>
 #include <Misc/GameVM.h>
 #include <Actor.h>
@@ -10,7 +10,7 @@
 #include <Games/ActorExtension.h>
 #include <Games/PapyrusFunctions.h>
 
-TP_THIS_FUNCTION(TRegisterPapyrusFunction, void, BSScript::IVirtualMachine, NativeFunction*);
+TP_THIS_FUNCTION(TRegisterPapyrusFunction, bool, BSScript::IVirtualMachine, NativeFunction*);
 TP_THIS_FUNCTION(TBindEverythingToScript, void, BSScript::IVirtualMachine*);
 TP_THIS_FUNCTION(TSignaturesMatch, bool, BSScript::NativeFunction, BSScript::NativeFunction*);
 TP_THIS_FUNCTION(TCompareVariables, int64_t, void, BSScript::Variable*, BSScript::Variable*);
@@ -20,15 +20,13 @@ TBindEverythingToScript* RealBindEverythingToScript = nullptr;
 TSignaturesMatch* RealSignaturesMatch = nullptr;
 TCompareVariables* RealCompareVariables = nullptr;
 
-void TP_MAKE_THISCALL(HookRegisterPapyrusFunction, BSScript::IVirtualMachine, NativeFunction* apFunction)
+bool TP_MAKE_THISCALL(HookRegisterPapyrusFunction, BSScript::IVirtualMachine, NativeFunction* apFunction)
 {
-    auto& runner = World::Get().GetRunner();
+    // Native bindings live with the VM across load and network session changes.
+    if (apFunction)
+        World::Get().ctx().at<PapyrusService>().Register(apFunction->typeName.AsAscii(), apFunction->functionName.AsAscii(), apFunction->functionAddress);
 
-    PapyrusFunctionRegisterEvent event(apFunction->functionName.AsAscii(), apFunction->typeName.AsAscii(), apFunction->functionAddress);
-
-    runner.Trigger(std::move(event));
-
-    TiltedPhoques::ThisCall(RealRegisterPapyrusFunction, apThis, apFunction);
+    return TiltedPhoques::ThisCall(RealRegisterPapyrusFunction, apThis, apFunction);
 }
 
 void TP_MAKE_THISCALL(HookBindEverythingToScript, BSScript::IVirtualMachine*)

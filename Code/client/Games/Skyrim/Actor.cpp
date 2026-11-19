@@ -816,8 +816,15 @@ void Actor::GenerateMagicCasters() noexcept
 
 bool Actor::IsDead() const noexcept
 {
-    PAPYRUS_FUNCTION(bool, Actor, IsDead);
+    if (VersionDb::Get().GetLoadedVersionString() == "1.7.104.0")
+    {
+        // The game binds this callback to Actor.IsDead. It reads the actor's
+        // native life state, even when the mod has yet to observe a VM binding.
+        static const PapyrusFunction<bool, Actor> isDead(VersionDb::Get().FindAddressById(54705));
+        return isDead(this);
+    }
 
+    PAPYRUS_FUNCTION(bool, Actor, IsDead);
     return s_pIsDead(this);
 }
 

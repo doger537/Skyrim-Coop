@@ -1,26 +1,47 @@
 #include <TiltedOnlinePCH.h>
 
-#include <Events/PapyrusFunctionRegisterEvent.h>
-
 #include <Services/PapyrusService.h>
+#include <World.h>
 
-PapyrusService::PapyrusService(entt::dispatcher& aDispatcher) noexcept
+namespace
 {
-    m_papyrusFunctionRegisterConnection = aDispatcher.sink<PapyrusFunctionRegisterEvent>().connect<&PapyrusService::HandlePapyrusFunctionEvent>(this);
+String MakeFunctionKey(std::string_view acNamespace, std::string_view acFunction) noexcept
+{
+    String key;
+    key.reserve(acNamespace.size() + 2 + acFunction.size());
+    key.append(acNamespace);
+    key.append("::");
+    key.append(acFunction);
+    for (char& c : key)
+    {
+        if (c >= 'A' && c <= 'Z')
+            c += 'a' - 'A';
+    }
+    return key;
+}
 }
 
-const void* PapyrusService::Get(const String& acNamespace, const String& acFunction) const noexcept
+const void* PapyrusService::Get(std::string_view acNamespace, std::string_view acFunction) const noexcept
 {
-    const auto itor = m_functions.find(acNamespace + "::" + acFunction);
-    if (itor != std::end(m_functions))
-        return itor->second;
-
-    return nullptr;
+    const auto key = MakeFunctionKey(acNamespace, acFunction);
+    const std::scoped_lock lock(m_functionsLock);
+    const auto iterator = m_functions.find(key);
+    return iterator == m_functions.end() ? nullptr : iterator->second;
 }
 
-void PapyrusService::HandlePapyrusFunctionEvent(const PapyrusFunctionRegisterEvent& acEvent) noexcept
+const void* PapyrusService::Find(std::string_view acNamespace, std::string_view acFunction) noexcept
 {
-    m_functions[acEvent.Namespace + "::" + acEvent.Name] = acEvent.Function;
-    if (acEvent.Namespace == "ObjectReference" && acEvent.Name == "GetOpenState")
-        m_doorOpenState.store(acEvent.Function, std::memory_order_release);
+    return World::Get().ctx().at<PapyrusService>().Get(acNamespace, acFunction);
+}
+
+void PapyrusService::Register(const char* acpNamespace, const char* acpFunction, const void* apAddress) noexcept
+{
+    if (!acpNamespace || !acpFunction || !apAddress)
+        return;
+
+    const auto key = MakeFunctionKey(acpNamespace, acpFunction);
+    const std::scoped_lock lock(m_functionsLock);
+    m_functions[key] = apAddress;
+    if (key == "objectreference::getopenstate")
+        m_doorOpenState.store(apAddress, std::memory_order_release);
 }
