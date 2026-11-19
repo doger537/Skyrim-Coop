@@ -28,6 +28,17 @@
 #include <limits>
 
 WorldItemService* WorldItemService::s_instance{};
+bool WorldItemService::PhysicsIdentity(uint32_t handle, uint64_t& id, uint64_t& epoch) const noexcept
+{
+    for (const auto& slot : m_slots)
+        if (slot.Map.Handle == handle && slot.Map.Id)
+        {
+            id = slot.Map.Id;
+            epoch = slot.State.HostEpoch;
+            return true;
+        }
+    return false;
+}
 namespace
 {
 bool Supported() noexcept

@@ -87,7 +87,7 @@ TransportService::TransportService(World& aWorld, entt::dispatcher& aDispatcher)
 
 bool TransportService::Send(const ClientMessage& acMessage, const TiltedPhoques::EPacketFlags aPacketFlags) const noexcept
 {
-    if (m_world.ctx().at<WorldCheckpointService>().IsFrozen() && acMessage.GetOpcode() != kRequestWorldCheckpoint &&
+    if (m_world.ctx().at<WorldCheckpointService>().IsFrozen() && acMessage.GetOpcode() != kRequestWorldCheckpoint && acMessage.GetOpcode() != kRequestPhysicsFrame &&
         acMessage.GetOpcode() != kAuthenticationRequest && acMessage.GetOpcode() != kRequestCampaignReady && acMessage.GetOpcode() != kRequestCampaignSeed)
     {
         m_world.ctx().at<WorldCheckpointService>().UnexpectedGameplay();
@@ -136,9 +136,9 @@ void TransportService::OnConsume(const void* apData, uint32_t aSize)
     if (m_world.ctx().at<WorldCheckpointService>().IsFrozen())
     {
         const auto opcode = pMessage->GetOpcode();
-        if (opcode != kNotifyWorldCheckpoint && opcode != kAuthenticationResponse && opcode != kNotifyCampaignCheckpoint &&
-            opcode != kNotifyQuestJournal && opcode != kStringCacheUpdate && opcode != kServerTimeSettings && opcode != kNotifySettingsChange &&
-            opcode != kNotifyPartyJoined && opcode != kNotifyPartyInfo && opcode != kNotifyPlayerList)
+        if (opcode != kNotifyWorldCheckpoint && opcode != kNotifyPhysicsFrame && opcode != kAuthenticationResponse && opcode != kNotifyCampaignCheckpoint &&
+            opcode != kNotifyQuestJournal && opcode != kStringCacheUpdate && opcode != kServerTimeSettings && opcode != kNotifySettingsChange && opcode != kNotifyPartyJoined &&
+            opcode != kNotifyPartyInfo && opcode != kNotifyPlayerList)
             return;
     }
     m_messageHandlers[pMessage->GetOpcode()](pMessage);
@@ -168,7 +168,8 @@ void TransportService::OnConnected()
     if (SavedCharacterIdentity::Read(request.CharacterId) == SavedCharacterIdentity::Result::Invalid)
     {
         ConnectionErrorEvent event;
-        event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"Cannot read the character identity. Deploy the complete matching True Coop package, load a save and reconnect\"}}";
+        event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"Cannot read the character identity. Deploy the complete matching True Coop package, load a "
+                            "save and reconnect\"}}";
         m_dispatcher.trigger(event);
         Close();
         return;
@@ -179,8 +180,8 @@ void TransportService::OnConnected()
         const auto loaded = NativeCheckpoint::BaselineName();
         uint64_t id{};
         CharacterIdentity character;
-        if (!CheckpointNames::Parse(std::string_view(loaded.data(), loaded.size()), request.CheckpointProof.WorldId, id, character) ||
-            id != request.CheckpointToken || character != request.CharacterId)
+        if (!CheckpointNames::Parse(std::string_view(loaded.data(), loaded.size()), request.CheckpointProof.WorldId, id, character) || id != request.CheckpointToken ||
+            character != request.CharacterId)
         {
             FailCampaign("This local save inherited a checkpoint token but was not loaded from its paired checkpoint file. Load your TrueCoop checkpoint save and reconnect");
             return;
@@ -281,7 +282,8 @@ void TransportService::OnUpdate()
             if (!request.CharacterId.IsValid() || !SavedCharacterIdentity::Commit(request.CharacterId))
             {
                 ConnectionErrorEvent event;
-                event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"The loaded character changed during connection or its identity is invalid. Reconnect after loading finishes\"}}";
+                event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"The loaded character changed during connection or its identity is invalid. Reconnect "
+                                    "after loading finishes\"}}";
                 m_dispatcher.trigger(event);
                 Close();
             }
@@ -315,8 +317,9 @@ void TransportService::OnUpdate()
             std::launch::async,
             [request = std::move(request), dataPath, addressLibrary, scriptExtender, checkpointPath = std::move(checkpointPath)]() mutable
             {
-                if (!request.CharacterId.IsValid() && BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(request.CharacterId.Parts.data()),
-                    static_cast<ULONG>(sizeof(request.CharacterId.Parts)), BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0)
+                if (!request.CharacterId.IsValid() && BCryptGenRandom(
+                                                          nullptr, reinterpret_cast<PUCHAR>(request.CharacterId.Parts.data()),
+                                                          static_cast<ULONG>(sizeof(request.CharacterId.Parts)), BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0)
                     request.CharacterId = {};
                 FingerprintContent(dataPath, addressLibrary, scriptExtender, request.UserMods);
                 if (request.CheckpointToken)
@@ -348,7 +351,8 @@ void TransportService::HandleUpdate(const UpdateEvent& acEvent) noexcept
             // A local .ess load is not a coordinated server rollback. Never
             // continue applying the old session to the newly loaded world.
             ConnectionErrorEvent event;
-            event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"A local save outside the paired checkpoint was loaded. Reconnect after loading finishes\"}}";
+            event.ErrorDetail =
+                "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"A local save outside the paired checkpoint was loaded. Reconnect after loading finishes\"}}";
             m_dispatcher.trigger(event);
             Close();
         }

@@ -9,16 +9,21 @@ namespace
 WorldCheckpoint Manifest()
 {
     WorldCheckpoint manifest;
-    manifest.Id = 5; manifest.SavedEpoch = 3;
+    manifest.Id = 5;
+    manifest.SavedEpoch = 3;
+    manifest.PhysicsDigest.fill(17);
     for (size_t i = 0; i < 2; ++i)
     {
         auto& player = manifest.Players[i];
         player.Character.Parts[0] = static_cast<uint16_t>(i + 1);
-        player.Save.Bytes = 100; player.Save.Digest.fill(static_cast<uint8_t>(i + 1));
+        player.Save.Bytes = 100;
+        player.Save.Digest.fill(static_cast<uint8_t>(i + 1));
+        player.Physics.Bytes = 100;
+        player.Physics.Digest.fill(static_cast<uint8_t>(i + 3));
     }
     return manifest;
 }
-}
+} // namespace
 
 TEST_CASE("Paired checkpoint names round trip full-width identities without accepting arbitrary paths", "[checkpoint.names]")
 {
@@ -50,9 +55,12 @@ TEST_CASE("Paired checkpoint control is bounded and rejects every truncated rest
 {
     NotifyWorldCheckpoint source;
     source.State = NotifyWorldCheckpoint::Phase::PrepareLoad;
-    source.Id = 5; source.Nonce = 8; source.PreviousEpoch = 3;
+    source.Id = 5;
+    source.Nonce = 8;
+    source.PreviousEpoch = 3;
     source.WorldId = "0123456789abcdef0123456789abcdef";
     source.Manifest = Manifest();
+    source.PhysicsDigest = source.Manifest.PhysicsDigest;
     for (size_t i = 0; i < 2; ++i)
         source.Members[i] = source.Manifest.Players[i].Character;
     REQUIRE(source.IsValid());
@@ -77,6 +85,7 @@ TEST_CASE("Paired checkpoint control is bounded and rejects every truncated rest
     source.Manifest.Players[1].Character = source.Manifest.Players[0].Character;
     REQUIRE_FALSE(source.IsValid());
     source.Manifest = Manifest();
+    source.PhysicsDigest = source.Manifest.PhysicsDigest;
     source.Manifest.Players[0].Save.Bytes = CheckpointFile::kMaxBytes + 1;
     REQUIRE_FALSE(source.IsValid());
 }
@@ -85,7 +94,8 @@ TEST_CASE("A saved-file contribution cannot be empty, oversized or truncated", "
 {
     RequestWorldCheckpoint request;
     request.Action = RequestWorldCheckpoint::Kind::Saved;
-    request.Id = 5; request.Nonce = 8;
+    request.Id = 5;
+    request.Nonce = 8;
     request.Contribution = Manifest().Players[0];
     REQUIRE(request.IsValid());
     TiltedPhoques::Buffer buffer(4096);
@@ -110,9 +120,12 @@ TEST_CASE("Only a valid directed load advances the checkpoint message epoch", "[
 {
     NotifyWorldCheckpoint source;
     source.State = NotifyWorldCheckpoint::Phase::LoadNow;
-    source.Id = 5; source.Nonce = 8; source.PreviousEpoch = 3;
+    source.Id = 5;
+    source.Nonce = 8;
+    source.PreviousEpoch = 3;
     source.WorldId = "0123456789abcdef0123456789abcdef";
     source.Manifest = Manifest();
+    source.PhysicsDigest = source.Manifest.PhysicsDigest;
     for (size_t i = 0; i < 2; ++i)
         source.Members[i] = source.Manifest.Players[i].Character;
     const auto extract = [&](uint64_t epoch, uint64_t expected)

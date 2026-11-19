@@ -30,15 +30,16 @@ void CheckpointPlayer::Serialize(TiltedPhoques::Buffer::Writer& aWriter) const n
     Character.Serialize(aWriter);
     Save.Serialize(aWriter);
     CoSave.Serialize(aWriter);
+    Physics.Serialize(aWriter);
 }
 bool CheckpointPlayer::Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept
 {
-    return Character.Deserialize(aReader) && Save.Deserialize(aReader) && CoSave.Deserialize(aReader) && IsValid();
+    return Character.Deserialize(aReader) && Save.Deserialize(aReader) && CoSave.Deserialize(aReader) && Physics.Deserialize(aReader) && IsValid();
 }
 bool CheckpointAdmissionProof::IsValid() const noexcept
 {
-    return WorldId.size() == 32 && Player.IsValid() && std::all_of(WorldId.begin(), WorldId.end(), [](char value)
-    { return (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f'); });
+    return WorldId.size() == 32 && Player.IsValid() &&
+           std::all_of(WorldId.begin(), WorldId.end(), [](char value) { return (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f'); });
 }
 void CheckpointAdmissionProof::Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
 {
@@ -62,14 +63,18 @@ bool CheckpointAdmissionProof::Deserialize(TiltedPhoques::Buffer::Reader& aReade
 }
 bool WorldCheckpoint::IsValid() const noexcept
 {
-    return Decoded && Id && SavedEpoch && Calendar.IsValid() && Players[0].IsValid() && Players[1].IsValid() && Players[0].Character != Players[1].Character;
+    return Decoded && Id && SavedEpoch && PhysicsEntries <= 8192 && std::any_of(PhysicsDigest.begin(), PhysicsDigest.end(), [](uint8_t b) { return b != 0; }) &&
+           Calendar.IsValid() && Players[0].IsValid() && Players[1].IsValid() && Players[0].Character != Players[1].Character;
 }
 void WorldCheckpoint::Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
 {
-    aWriter.WriteBits(1, 16); // Manifest schema.
+    aWriter.WriteBits(2, 16); // Manifest schema.
     aWriter.WriteBits(Id, 64);
     aWriter.WriteBits(SavedEpoch, 64);
     Calendar.Serialize(aWriter);
+    for (auto b : PhysicsDigest)
+        aWriter.WriteBits(b, 8);
+    aWriter.WriteBits(PhysicsEntries, 32);
     for (const auto& player : Players)
         player.Serialize(aWriter);
 }
@@ -77,9 +82,19 @@ void WorldCheckpoint::Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexce
 {
     Decoded = false;
     uint64_t schema{};
-    if (!aReader.ReadBits(schema, 16) || schema != 1 || !aReader.ReadBits(Id, 64) || !aReader.ReadBits(SavedEpoch, 64))
+    if (!aReader.ReadBits(schema, 16) || schema != 2 || !aReader.ReadBits(Id, 64) || !aReader.ReadBits(SavedEpoch, 64))
         return;
     Calendar.Deserialize(aReader);
+    uint64_t value{};
+    for (auto& b : PhysicsDigest)
+    {
+        if (!aReader.ReadBits(value, 8))
+            return;
+        b = static_cast<uint8_t>(value);
+    }
+    if (!aReader.ReadBits(value, 32) || value > 8192)
+        return;
+    PhysicsEntries = static_cast<uint32_t>(value);
     for (auto& player : Players)
         if (!player.Deserialize(aReader))
             return;
@@ -92,9 +107,15 @@ namespace CheckpointNames
 namespace
 {
 constexpr char hex[] = "0123456789abcdef";
-bool Hex(char value) noexcept { return (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f'); }
-uint8_t Nibble(char value) noexcept { return static_cast<uint8_t>(value <= '9' ? value - '0' : value - 'a' + 10); }
+bool Hex(char value) noexcept
+{
+    return (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f');
 }
+uint8_t Nibble(char value) noexcept
+{
+    return static_cast<uint8_t>(value <= '9' ? value - '0' : value - 'a' + 10);
+}
+} // namespace
 TiltedPhoques::String Make(std::string_view acWorld, uint64_t aId, const CharacterIdentity& acCharacter) noexcept
 {
     if (acWorld.size() != 32 || !aId || !acCharacter.IsValid() || !std::all_of(acWorld.begin(), acWorld.end(), Hex))
@@ -133,4 +154,4 @@ bool Parse(std::string_view acName, TiltedPhoques::String& aWorld, uint64_t& aId
     aCharacter = character;
     return true;
 }
-}
+} // namespace CheckpointNames

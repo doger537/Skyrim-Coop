@@ -1,5 +1,7 @@
 #pragma once
 #include <Messages/WorldItemMessages.h>
+#include <Messages/PlacedPhysicsMessages.h>
+#include <Messages/PhysicsFrameMessages.h>
 #include <Messages/RequestCampaignReady.h>
 #include <Messages/RequestCampaignSeed.h>
 #include <Messages/RequestCoopSleep.h>
@@ -77,11 +79,16 @@ struct ClientMessageFactory
     template <class T> static auto Visit(T&& func)
     {
         auto s_visitor = CreateMessageVisitor<
-            AuthenticationRequest, AssignCharacterRequest, ClientReferencesMoveRequest, EnterInteriorCellRequest, RequestInventoryChanges, RequestInventorySnapshot, RequestFactionsChanges, RequestQuestUpdate, PartyInviteRequest, PartyAcceptInviteRequest, PartyLeaveRequest, PartyCreateRequest,
-            PartyChangeLeaderRequest, PartyKickRequest, RequestActorValueChanges, RequestActorMaxValueChanges, EnterExteriorCellRequest, RequestHealthChangeBroadcast, ActivateRequest, LockChangeRequest, AssignObjectsRequest, RequestDeathStateChange, ShiftGridCellRequest,
-            RequestOwnershipTransfer, RequestOwnershipClaim, RequestObjectInventoryChanges, SpellCastRequest, ProjectileLaunchRequest, InterruptCastRequest, AddTargetRequest, ScriptAnimationRequest, DrawWeaponRequest, MountRequest, NewPackageRequest, RequestRespawn, SyncExperienceRequest,
-            RequestEquipmentChanges, SendChatMessageRequest, TeleportCommandRequest, PlayerRespawnRequest, DialogueRequest, SubtitleRequest, PlayerDialogueRequest, PlayerLevelRequest, TeleportRequest, RequestPlayerHealthUpdate, RequestWeatherChange, RequestCurrentWeather, RequestSetWaypoint,
-            RequestRemoveWaypoint, RemoveSpellRequest, SetTimeCommandRequest, RequestActionEvents, RequestCampaignReady, RequestCampaignSeed, RequestCoopSleep, RequestDialogueLease, RequestWorldCheckpoint, RequestQuestDecision, RequestQuestGrants, RequestRagdollPose, RequestSharedQuestEffect, RequestWorldItems, RequestWorldItemTransfer, RequestWorldItemMotion>;
+            AuthenticationRequest, AssignCharacterRequest, ClientReferencesMoveRequest, EnterInteriorCellRequest, RequestInventoryChanges, RequestInventorySnapshot,
+            RequestFactionsChanges, RequestQuestUpdate, PartyInviteRequest, PartyAcceptInviteRequest, PartyLeaveRequest, PartyCreateRequest, PartyChangeLeaderRequest,
+            PartyKickRequest, RequestActorValueChanges, RequestActorMaxValueChanges, EnterExteriorCellRequest, RequestHealthChangeBroadcast, ActivateRequest, LockChangeRequest,
+            AssignObjectsRequest, RequestDeathStateChange, ShiftGridCellRequest, RequestOwnershipTransfer, RequestOwnershipClaim, RequestObjectInventoryChanges, SpellCastRequest,
+            ProjectileLaunchRequest, InterruptCastRequest, AddTargetRequest, ScriptAnimationRequest, DrawWeaponRequest, MountRequest, NewPackageRequest, RequestRespawn,
+            SyncExperienceRequest, RequestEquipmentChanges, SendChatMessageRequest, TeleportCommandRequest, PlayerRespawnRequest, DialogueRequest, SubtitleRequest,
+            PlayerDialogueRequest, PlayerLevelRequest, TeleportRequest, RequestPlayerHealthUpdate, RequestWeatherChange, RequestCurrentWeather, RequestSetWaypoint,
+            RequestRemoveWaypoint, RemoveSpellRequest, SetTimeCommandRequest, RequestActionEvents, RequestCampaignReady, RequestCampaignSeed, RequestCoopSleep,
+            RequestDialogueLease, RequestWorldCheckpoint, RequestQuestDecision, RequestQuestGrants, RequestRagdollPose, RequestSharedQuestEffect, RequestWorldItems,
+            RequestWorldItemTransfer, RequestWorldItemMotion, RequestPhysicsFrame, RequestPlacedPhysics>;
 
         return s_visitor(std::forward<T>(func));
     }

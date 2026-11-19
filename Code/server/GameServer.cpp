@@ -1,4 +1,4 @@
-﻿#include <Components.h>
+#include <Components.h>
 #include <GameServer.h>
 #include <BuildInfo.h>
 #include <Messages/RequestCampaignReady.h>
@@ -46,8 +46,7 @@ Console::Setting bSyncPlayerHomes{"Gameplay:bSyncPlayerHomes", "Sync chests and 
 Console::Setting bEnableDeathSystem{"Gameplay:bEnableDeathSystem", "Enables the custom multiplayer death system. Only disable it if you use another mod that replaces death", true};
 Console::Setting uTimeScale{"Gameplay:uTimeScale", "How many seconds pass ingame for every real second (0 to 1000). Changing this can make the game unstable", 20u};
 Console::Setting bSyncPlayerCalendar{
-    "Gameplay:bSyncPlayerCalendar",
-    "Legacy setting; the shared world date and elapsed days are always synchronized", true, Console::SettingsFlags::kLocked};
+    "Gameplay:bSyncPlayerCalendar", "Legacy setting; the shared world date and elapsed days are always synchronized", true, Console::SettingsFlags::kLocked};
 Console::Setting bAutoPartyJoin{"Gameplay:bAutoPartyJoin", "Join parties automatically, as long as there is only one party in the server", true};
 Console::Setting bAllowConsoleCommands{
     "Gameplay:bAllowConsoleCommands",
@@ -57,7 +56,8 @@ Console::Setting bAllowConsoleCommands{
 // ModPolicy Stuff
 Console::Setting bEnableModCheck{"ModPolicy:bEnableModCheck", "Refuse clients whose mods do not match Data/loadorder.txt", false, Console::SettingsFlags::kLocked};
 Console::Setting bEnableContentCheck{"ModPolicy:bEnableContentCheck", "Legacy setting; strict content compatibility is always enforced", true, Console::SettingsFlags::kLocked};
-Console::StringSetting sQuestAdaptersPath{"Persistence:sQuestAdaptersPath", "Pinned quest adapter JSON; absent means no automatic script replay", "config/TrueCoopQuestAdapters.json"};
+Console::StringSetting sQuestAdaptersPath{
+    "Persistence:sQuestAdaptersPath", "Pinned quest adapter JSON; absent means no automatic script replay", "config/TrueCoopQuestAdapters.json"};
 Console::StringSetting sWorldPath{"Persistence:sWorldPath", "Persistent campaign database path; use a separate file for each world", "Data/TrueCoop/world.sqlite3"};
 Console::Setting bAllowSKSE{"ModPolicy:bAllowSKSE", "Allow players using SKSE to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 Console::Setting bAllowMO2{"ModPolicy:bAllowMO2", "Allow players using Mod Organizer 2 to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
@@ -342,7 +342,7 @@ void GameServer::BindMessageHandlers()
 
             if (!pPlayer->IsCampaignReady() || m_rejectedCampaigns.contains(aConnectionId))
                 return;
-            if (m_pWorld->ctx().at<WorldCheckpointService>().IsFrozen() && T::Opcode != kRequestWorldCheckpoint)
+            if (m_pWorld->ctx().at<WorldCheckpointService>().IsFrozen() && T::Opcode != kRequestWorldCheckpoint && T::Opcode != kRequestPhysicsFrame)
                 return;
             const auto pRealMessage = CastUnique<T>(std::move(apMessage));
 
@@ -727,8 +727,8 @@ void GameServer::Send(const ConnectionId_t aConnectionId, const ServerMessage& a
 {
     const auto* player = m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId);
     const auto opcode = acServerMessage.GetOpcode();
-    if (opcode != kAuthenticationResponse && (m_rejectedCampaigns.contains(aConnectionId) ||
-        (player && !player->IsCampaignReady() && opcode != kNotifyCampaignCheckpoint && opcode != kNotifyQuestJournal && opcode != kStringCacheUpdate)))
+    if (opcode != kAuthenticationResponse && (m_rejectedCampaigns.contains(aConnectionId) || (player && !player->IsCampaignReady() && opcode != kNotifyCampaignCheckpoint &&
+                                                                                              opcode != kNotifyQuestJournal && opcode != kStringCacheUpdate)))
         return;
 
     static thread_local TiltedPhoques::ScratchAllocator s_allocator{1 << 18};

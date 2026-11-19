@@ -67,6 +67,7 @@ if ($QuestProbePath) {
     foreach ($name in @('Start-QuestAudit.cmd','Restore-QuestAudit.cmd')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "QuestProbe/$name") -Destination $runtime }
 }
 if (Test-Path -LiteralPath (Join-Path $runtime 'Play-CommonSE.cmd')) { throw 'AE package must not ship the CommonSE launcher' }
+if (@(Get-ChildItem -LiteralPath $stage -Recurse -File | Where-Object { $_.Name -match '\.(ess|skse|tcphys|sqlite3)(-|\.|$)' }).Count) { throw 'Package contains private save/campaign state' }
 $info = Join-Path $stage 'TrueCoop-AE-Info'
 New-Item -ItemType Directory -Path $info -Force | Out-Null
 if (!$InstallGuide) { $InstallGuide = Join-Path $repo 'AE_INSTALL_RU.md' }
@@ -89,7 +90,10 @@ foreach ($name in @('COOP_RESYNC.md','DEEP_COOP_TEST_RU.md','docs/truecoop/HOST_
 $protocolHeader = Get-Content -LiteralPath (Join-Path $repo 'Code/encoding/Structs/ProtocolVersion.h') -Raw
 if ($protocolHeader -notmatch 'kTrueCoopProtocolVersion\s*=\s*(0x[0-9A-Fa-f]+)') { throw 'Cannot read the protocol identity' }
 $protocol = $Matches[1]
-[ordered]@{NativeRevision=$revision;Build=$version;Protocol=$protocol;CorePluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/SkyrimTogether.esp')).Hash;GrantCursorPluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/TrueCoopWorldState.esp')).Hash;AutomaticQuestGrantPolicyEnabled=$false;AcceleratedQuestStageEffectsEnabled=$true;OrdinaryWorldItemReplicationEnabled=$true;MaxLiveWorldItems=64;TestsRun=$false;Runtime='1.7.104.0';Profile='Identical active AE content';GameTested=$false;CommonSELauncherIncluded=$false;DiagnosticQuestIncluded=[bool]$QuestProbePath} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $info 'BUILD.json') -Encoding utf8
+foreach ($name in @('PLACED_PHYSICS_INSTALL_RU.md','PLACED_PHYSICS_CHECKPOINTS.md')) {
+    Copy-Item -LiteralPath (Join-Path $repo "docs/truecoop/$name") -Destination $info
+}
+[ordered]@{NativeRevision=$revision;Build=$version;Protocol=$protocol;CorePluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/SkyrimTogether.esp')).Hash;GrantCursorPluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/TrueCoopWorldState.esp')).Hash;AutomaticQuestGrantPolicyEnabled=$false;AcceleratedQuestStageEffectsEnabled=$true;OrdinaryWorldItemReplicationEnabled=$true;PlacedPhysicsReplicationEnabled=$true;PhysicalCheckpointAlignmentEnabled=$true;WorldSchema=6;CheckpointManifestSchema=2;MaxLiveWorldItems=64;TestsRun=$false;Runtime='1.7.104.0';Profile='Identical active AE content';GameTested=$false;CommonSELauncherIncluded=$false;DiagnosticQuestIncluded=[bool]$QuestProbePath} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $info 'BUILD.json') -Encoding utf8
 $records = @(foreach ($file in Get-ChildItem -LiteralPath $stage -File -Recurse) {
     [pscustomobject]@{Path=[IO.Path]::GetRelativePath($stage,$file.FullName).Replace('\','/');Bytes=$file.Length;SHA256=(Get-FileHash -LiteralPath $file.FullName).Hash}
 })

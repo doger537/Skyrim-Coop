@@ -5,6 +5,40 @@
 #include <Services/WorldCheckpointService.h>
 #include <algorithm>
 
+const WorldItemState* WorldItemService::Find(uint64_t id) const noexcept
+{
+    for (const auto& item : m_items)
+        if (item.State.Id == id)
+            return &item.State;
+    return nullptr;
+}
+bool WorldItemService::CommitPhysics(const PhysicsFrame& frame) noexcept
+{
+    for (const auto& entry : frame.Entries)
+        if (entry.Type == PhysicsFrameEntry::Drop)
+        {
+            auto found = std::find_if(m_items.begin(), m_items.end(), [&](const auto& item) { return item.State.Id == entry.Id; });
+            if (found == m_items.end() || found->State.Deleted || entry.Rig.Count != 1 || found->State.Sequence == UINT64_MAX)
+                return false;
+            const auto& pose = entry.Rig.Bodies[0].Pose;
+            auto& state = found->State;
+            state.CellId = entry.Cell;
+            state.WorldSpaceId = entry.WorldSpace;
+            for (int i = 0; i < 3; ++i)
+            {
+                state.Position[i] = pose.Position[i] * frame.NativeToWorld;
+                state.LinearVelocity[i] = pose.LinearVelocity[i] * frame.NativeToWorld;
+            }
+            state.Rotation = pose.Rotation;
+            state.AngularVelocity = pose.AngularVelocity;
+            ++state.Sequence;
+            if (!state.IsValid())
+                return false;
+            found->Dirty = true;
+        }
+    return Flush();
+}
+
 WorldItemService::WorldItemService(World& w, entt::dispatcher& d) noexcept
     : m_world(w)
 {

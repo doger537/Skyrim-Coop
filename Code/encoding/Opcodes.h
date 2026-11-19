@@ -67,6 +67,8 @@ enum ClientOpcode : unsigned char
     kRequestWorldItems,
     kRequestWorldItemTransfer,
     kRequestWorldItemMotion,
+    kRequestPlacedPhysics,
+    kRequestPhysicsFrame,
     kClientOpcodeMax
 };
 
@@ -141,5 +143,7 @@ enum ServerOpcode : unsigned char
     kNotifyWorldItems,
     kNotifyWorldItemTransfer,
     kNotifyWorldItemMotion,
+    kNotifyPlacedPhysics,
+    kNotifyPhysicsFrame,
     kServerOpcodeMax
 };

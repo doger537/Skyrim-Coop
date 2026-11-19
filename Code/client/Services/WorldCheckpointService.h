@@ -20,6 +20,7 @@ public:
     bool NativeLoadCompleted() noexcept;
     void UnexpectedGameplay() noexcept;
     void Tick(const UpdateEvent&) noexcept;
+    void PhysicsFailed(const char*) noexcept;
 
 private:
     struct Inspection

@@ -8,8 +8,12 @@ bool NotifyWorldCheckpoint::IsValid() const noexcept
         return false;
     if (State == Phase::Cancelled)
         return Failure != Error::None;
+    if ((State == Phase::SaveNow || State == Phase::AlignLoad || State == Phase::Resume) &&
+        !std::any_of(PhysicsDigest.begin(), PhysicsDigest.end(), [](uint8_t b) { return b != 0; }))
+        return false;
     return Failure == Error::None && Id && Nonce && Calendar.IsValid() && Members[0].IsValid() && Members[1].IsValid() && Members[0] != Members[1] &&
-        (!HasManifest() || (Manifest.IsValid() && Manifest.Id == Id && Manifest.Players[0].Character == Members[0] && Manifest.Players[1].Character == Members[1]));
+           (!HasManifest() || (Manifest.IsValid() && Manifest.PhysicsDigest == PhysicsDigest && Manifest.Id == Id && Manifest.Players[0].Character == Members[0] &&
+                               Manifest.Players[1].Character == Members[1]));
 }
 void NotifyWorldCheckpoint::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
 {
@@ -23,6 +27,8 @@ void NotifyWorldCheckpoint::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter)
     if (State != Phase::Cancelled)
     {
         Calendar.Serialize(aWriter);
+        for (auto b : PhysicsDigest)
+            aWriter.WriteBits(b, 8);
         for (const auto& member : Members)
             member.Serialize(aWriter);
         if (HasManifest())
@@ -51,6 +57,12 @@ void NotifyWorldCheckpoint::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReade
     if (State != Phase::Cancelled)
     {
         Calendar.Deserialize(aReader);
+        for (auto& b : PhysicsDigest)
+        {
+            if (!aReader.ReadBits(value, 8))
+                return;
+            b = static_cast<uint8_t>(value);
+        }
         for (auto& member : Members)
             if (!member.Deserialize(aReader))
                 return;

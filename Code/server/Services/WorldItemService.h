@@ -1,6 +1,7 @@
 #pragma once
 #include <Events/PacketEvent.h>
 #include <Messages/WorldItemMessages.h>
+#include <Structs/PhysicsFrame.h>
 struct World;
 class WorldItemService
 {
@@ -8,6 +9,8 @@ public:
     WorldItemService(World&, entt::dispatcher&) noexcept;
     bool HasPending() const noexcept;
     bool Flush() noexcept;
+    const WorldItemState* Find(uint64_t) const noexcept;
+    bool CommitPhysics(const PhysicsFrame&) noexcept;
 
 private:
     struct Client

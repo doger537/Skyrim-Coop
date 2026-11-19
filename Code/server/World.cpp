@@ -22,6 +22,8 @@
 #include <Services/QuestGrantService.h>
 #include <Services/RagdollService.h>
 #include <Services/WorldItemService.h>
+#include <Services/PlacedPhysicsService.h>
+#include <Services/PhysicsCheckpointService.h>
 
 #include <es_loader/ESLoader.h>
 
@@ -52,6 +54,8 @@ World::World()
     ctx().emplace<QuestGrantService>(*this, m_dispatcher);
     ctx().emplace<RagdollService>(*this, m_dispatcher);
     ctx().emplace<WorldItemService>(*this, m_dispatcher);
+    ctx().emplace<PlacedPhysicsService>(*this, m_dispatcher);
+    ctx().emplace<PhysicsCheckpointService>(*this, m_dispatcher);
 
     ESLoader::ESLoader loader;
     // emplace loaded mods into modscomponent.

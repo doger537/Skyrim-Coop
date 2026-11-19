@@ -15,7 +15,16 @@ public:
     bool CanAuthenticate(const CharacterIdentity& acCharacter, uint64_t aToken, const CheckpointAdmissionProof& acProof, String& aError) noexcept;
 
 private:
-    enum class Step { Idle, PrepareSave, Saving, PrepareLoad, WaitingReconnect };
+    enum class Step
+    {
+        Idle,
+        PrepareSave,
+        PhysicsSave,
+        Saving,
+        PrepareLoad,
+        WaitingReconnect,
+        PhysicsLoad
+    };
     bool Initialize() noexcept;
     bool ReadManifest(uint64_t aId, WorldCheckpoint& aManifest) noexcept;
     void OnRequest(const PacketEvent<RequestWorldCheckpoint>& acPacket) noexcept;

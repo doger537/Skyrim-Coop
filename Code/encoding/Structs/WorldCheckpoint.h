@@ -20,7 +20,8 @@ struct CheckpointPlayer
     CharacterIdentity Character;
     CheckpointFile Save;
     CheckpointFile CoSave;
-    bool IsValid() const noexcept { return Character.IsValid() && Save.IsValid() && CoSave.IsValid(true); }
+    CheckpointFile Physics;
+    bool IsValid() const noexcept { return Character.IsValid() && Save.IsValid() && CoSave.IsValid(true) && Physics.IsValid(); }
     bool operator==(const CheckpointPlayer&) const noexcept = default;
     void Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept;
     bool Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept;
@@ -30,6 +31,8 @@ struct WorldCheckpoint
     uint64_t Id{};
     uint64_t SavedEpoch{};
     TimeModel Calendar;
+    std::array<uint8_t, 32> PhysicsDigest{};
+    uint32_t PhysicsEntries{};
     std::array<CheckpointPlayer, 2> Players; // Host first, guest second.
     bool Decoded{true};
     bool IsValid() const noexcept;
@@ -55,4 +58,4 @@ namespace CheckpointNames
 // tokens and fixed lengths prohibit separators, traversal and alternate streams.
 TiltedPhoques::String Make(std::string_view acWorld, uint64_t aId, const CharacterIdentity& acCharacter) noexcept;
 bool Parse(std::string_view acName, TiltedPhoques::String& aWorld, uint64_t& aId, CharacterIdentity& aCharacter) noexcept;
-}
+} // namespace CheckpointNames

@@ -11,6 +11,7 @@
 #include <World.h>
 #include <Forms/TESObjectCELL.h>
 #include <Forms/TESWorldSpace.h>
+#include <NativeCheckpoint.h>
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -71,7 +72,10 @@ static_assert(offsetof(NiNode, children) == 0x110);
 static_assert(offsetof(NiTObjectArray<NiAVObject*>, data) == 8);
 static_assert(offsetof(NiTObjectArray<NiAVObject*>, unk1) == 0x12);
 
-struct alignas(16) Vector4 { std::array<float, 4> Values{}; };
+struct alignas(16) Vector4
+{
+    std::array<float, 4> Values{};
+};
 using Clock = std::chrono::steady_clock;
 using TUnmark = void(PhysicsWorldView*);
 TUnmark* RealUnmark{};
@@ -98,7 +102,15 @@ struct Job
 std::array<Job, kCapacity> s_jobs{};
 std::array<Result, kCapacity> s_results{};
 constexpr size_t kRigCapacity = 8;
-struct RigJob { RigResult Data; Clock::time_point Queued; uint64_t Generation{}; bool Apply{}; bool Active{}; };
+struct RigJob
+{
+    RigResult Data;
+    Clock::time_point Queued;
+    uint64_t Generation{};
+    bool Apply{};
+    bool Active{};
+    Validator Validate{};
+};
 std::array<RigJob, kRigCapacity> s_rigJobs{};
 std::array<RigResult, kRigCapacity> s_rigResults{};
 size_t s_rigHead{}, s_rigCount{}, s_nextRig{};
@@ -106,13 +118,17 @@ size_t s_resultHead{};
 size_t s_resultCount{};
 size_t s_nextJob{};
 Clock::duration s_frameSpent{};
+uint64_t s_observedGeneration{1};
 
 template <class T> T Virtual(void* apObject, size_t aSlot) noexcept
 {
     return reinterpret_cast<T>((*reinterpret_cast<void***>(apObject))[aSlot]);
 }
 
-bool MainThread() noexcept { return s_mainThread.load() == GetCurrentThreadId(); }
+bool MainThread() noexcept
+{
+    return s_mainThread.load() == GetCurrentThreadId();
+}
 
 bool ValidPose(const Pose& acPose) noexcept
 {
@@ -126,9 +142,8 @@ bool ValidPose(const Pose& acPose) noexcept
     if (std::abs(norm - 1.0) > 0.01)
         return false;
     for (size_t i = 0; i < 3; ++i)
-        if (!std::isfinite(acPose.Position[i]) || std::abs(acPose.Position[i]) > 1048575.f ||
-            !std::isfinite(acPose.LinearVelocity[i]) || std::abs(acPose.LinearVelocity[i]) > 65536.f ||
-            !std::isfinite(acPose.AngularVelocity[i]) || std::abs(acPose.AngularVelocity[i]) > 65536.f)
+        if (!std::isfinite(acPose.Position[i]) || std::abs(acPose.Position[i]) > 1048575.f || !std::isfinite(acPose.LinearVelocity[i]) ||
+            std::abs(acPose.LinearVelocity[i]) > 65536.f || !std::isfinite(acPose.AngularVelocity[i]) || std::abs(acPose.AngularVelocity[i]) > 65536.f)
             return false;
     return true;
 }
@@ -183,7 +198,11 @@ bool SingleBody(NiAVObject* apRoot, NiAVObject*& aNode, BodyWrapperView*& aBody)
 
 bool Execute(Job& aJob, PhysicsWorldView* apLockedWorld) noexcept
 {
-    if (aJob.Validate && !aJob.Validate(aJob.Data.ReferenceHandle, aJob.Data.Cookie)) { aJob.Data.State = Status::Expired; return true; }
+    if (aJob.Validate && !aJob.Validate(aJob.Data.ReferenceHandle, aJob.Data.Cookie))
+    {
+        aJob.Data.State = Status::Expired;
+        return true;
+    }
     ScopedReference reference(aJob.Data.ReferenceHandle);
     if (!reference || reference.Get()->IsDeleted())
     {
@@ -202,7 +221,11 @@ bool Execute(Job& aJob, PhysicsWorldView* apLockedWorld) noexcept
         return true;
     }
     root->IncRef();
-    struct Release { NiAVObject* Object; ~Release() { Object->DecRef(); } } release{root};
+    struct Release
+    {
+        NiAVObject* Object;
+        ~Release() { Object->DecRef(); }
+    } release{root};
     NiAVObject* node{};
     BodyWrapperView* wrapper{};
     if (!SingleBody(root, node, wrapper))
@@ -232,8 +255,7 @@ bool Execute(Job& aJob, PhysicsWorldView* apLockedWorld) noexcept
         {
             using TSetMotion = bool(NiAVObject*, uint32_t, bool, bool, bool);
             POINTER_SKYRIMSE(TSetMotion, setMotion, 77866);
-            if (!setMotion.Get()(node, aJob.MotionType, false, true, false) || !wrapper->Body ||
-                wrapper->Body->MotionType != aJob.MotionType)
+            if (!setMotion.Get()(node, aJob.MotionType, false, true, false) || !wrapper->Body || wrapper->Body->MotionType != aJob.MotionType)
             {
                 aJob.Data.State = Status::UnsupportedBody;
                 return true;
@@ -280,63 +302,97 @@ bool Execute(Job& aJob, PhysicsWorldView* apLockedWorld) noexcept
     return true;
 }
 
-struct RigNode { uint64_t Key{}; NiAVObject* Node{}; BodyWrapperView* Wrapper{}; };
-struct RigGraph { std::array<RigNode, RigidBodyRig::kMaxBodies> Bodies{}; size_t Count{}; };
-bool CollectRig(NiAVObject* apRoot, RigGraph& aGraph) noexcept
+struct RigNode
 {
-    struct Node { NiAVObject* Object{}; uint64_t Parent{}; uint16_t Index{}; };
+    uint64_t Key{};
+    NiAVObject* Node{};
+    BodyWrapperView* Wrapper{};
+};
+struct RigGraph
+{
+    std::array<RigNode, RigidBodyRig::kMaxBodies> Bodies{};
+    size_t Count{};
+};
+bool CollectRig(NiAVObject* apRoot, RigGraph& aGraph, bool aMovableOnly = false) noexcept
+{
+    struct Node
+    {
+        NiAVObject* Object{};
+        uint64_t Parent{};
+        uint16_t Index{};
+    };
     std::array<Node, 512> stack{};
     size_t pending = 1, visited{};
     stack[0] = {apRoot, 14695981039346656037ull, 0};
     while (pending)
     {
-        if (++visited > stack.size()) return false;
+        if (++visited > stack.size())
+            return false;
         const auto current = stack[--pending];
         uint64_t key = current.Parent;
         // MCP NiNode::GetByName 140EE23A0 -> 140EE0A40 compares Name at +10.
         const auto* name = reinterpret_cast<const BSFixedString*>(reinterpret_cast<const uint8_t*>(current.Object) + 0x10)->AsAscii();
         size_t length{};
-        if (name) for (; length < 128 && name[length]; ++length) { key ^= static_cast<uint8_t>(name[length]); key *= 1099511628211ull; }
-        if (length == 128) return false;
-        if (!length) { key ^= current.Index; key *= 1099511628211ull; }
-        key ^= 0xFF; key *= 1099511628211ull; // path separator
+        if (name)
+            for (; length < 128 && name[length]; ++length)
+            {
+                key ^= static_cast<uint8_t>(name[length]);
+                key *= 1099511628211ull;
+            }
+        if (length == 128)
+            return false;
+        if (!length)
+        {
+            key ^= current.Index;
+            key *= 1099511628211ull;
+        }
+        key ^= 0xFF;
+        key *= 1099511628211ull; // path separator
         auto* collision = reinterpret_cast<SceneView*>(current.Object)->Collision;
         if (collision)
         {
             using TCast = void*(void*);
             auto* view = static_cast<CollisionView*>(Virtual<TCast*>(collision, 0x12)(collision));
             auto* body = view && view->Body ? static_cast<BodyWrapperView*>(Virtual<TCast*>(view->Body, 0x15)(view->Body)) : nullptr;
-            if (body && body->Body && std::none_of(aGraph.Bodies.begin(), aGraph.Bodies.begin() + aGraph.Count,
-                [body](const auto& value) { return value.Wrapper == body; }))
+            if (body && body->Body && (!aMovableOnly || body->Body->MotionType != 5) &&
+                std::none_of(aGraph.Bodies.begin(), aGraph.Bodies.begin() + aGraph.Count, [body](const auto& value) { return value.Wrapper == body; }))
             {
-                if (!key || aGraph.Count == aGraph.Bodies.size()) return false;
+                if (!key || aGraph.Count == aGraph.Bodies.size())
+                    return false;
                 aGraph.Bodies[aGraph.Count++] = {key, current.Object, body};
             }
         }
         using TAsNode = NiNode*(NiAVObject*);
         auto* node = Virtual<TAsNode*>(current.Object, 3)(current.Object);
-        if (!node) continue;
+        if (!node)
+            continue;
         const auto& children = node->children;
-        if (children.unk1 > children.length || children.unk1 > stack.size() || (children.unk1 && !children.data)) return false;
-        for (size_t i = 0; i < children.unk1; ++i) if (children.data[i])
-        {
-            if (pending == stack.size()) return false;
-            stack[pending++] = {children.data[i], key, static_cast<uint16_t>(i)};
-        }
+        if (children.unk1 > children.length || children.unk1 > stack.size() || (children.unk1 && !children.data))
+            return false;
+        for (size_t i = 0; i < children.unk1; ++i)
+            if (children.data[i])
+            {
+                if (pending == stack.size())
+                    return false;
+                stack[pending++] = {children.data[i], key, static_cast<uint16_t>(i)};
+            }
     }
     std::sort(aGraph.Bodies.begin(), aGraph.Bodies.begin() + aGraph.Count, [](const auto& a, const auto& b) { return a.Key < b.Key; });
-    for (size_t i = 1; i < aGraph.Count; ++i) if (aGraph.Bodies[i - 1].Key == aGraph.Bodies[i].Key) return false;
-    return aGraph.Count > 0;
+    for (size_t i = 1; i < aGraph.Count; ++i)
+        if (aGraph.Bodies[i - 1].Key == aGraph.Bodies[i].Key)
+            return false;
+    return aMovableOnly || aGraph.Count > 0;
 }
-bool ReadBody(BodyWrapperView* apWrapper, Pose& aPose) noexcept
+bool ReadBody(BodyWrapperView* apWrapper, Pose& aPose, bool aNativeUnits = false) noexcept
 {
     Vector4 position, rotation;
     using TGet = const Vector4*(BodyWrapperView*, Vector4*);
     const auto* p = Virtual<TGet*>(apWrapper, 0x33)(apWrapper, &position);
     const auto* q = Virtual<TGet*>(apWrapper, 0x34)(apWrapper, &rotation);
-    if (!p || !q) return false;
+    if (!p || !q)
+        return false;
     POINTER_SKYRIMSE(float, inverseScale, 187407);
-    const float scale = *inverseScale.Get();
+    const float scale = aNativeUnits ? 1.f : *inverseScale.Get();
     for (size_t i = 0; i < 3; ++i)
     {
         aPose.Position[i] = p->Values[i] * scale;
@@ -346,10 +402,10 @@ bool ReadBody(BodyWrapperView* apWrapper, Pose& aPose) noexcept
     aPose.Rotation = {q->Values[3], q->Values[0], q->Values[1], q->Values[2]};
     return aPose.IsValid();
 }
-void WriteBody(BodyWrapperView* apWrapper, const Pose& acPose) noexcept
+void WriteBody(BodyWrapperView* apWrapper, const Pose& acPose, bool aNativeUnits = false) noexcept
 {
     POINTER_SKYRIMSE(float, worldScale, 188105);
-    const float scale = *worldScale.Get();
+    const float scale = aNativeUnits ? 1.f : *worldScale.Get();
     Vector4 position{{acPose.Position[0] * scale, acPose.Position[1] * scale, acPose.Position[2] * scale, 0.f}};
     Vector4 rotation{{acPose.Rotation[1], acPose.Rotation[2], acPose.Rotation[3], acPose.Rotation[0]}};
     using TSetPose = void(BodyWrapperView*, const Vector4*, const Vector4*);
@@ -359,57 +415,226 @@ void WriteBody(BodyWrapperView* apWrapper, const Pose& acPose) noexcept
     using TSetVelocity = void(BodyWrapperView*, const Vector4*);
     POINTER_SKYRIMSE(TSetVelocity, setLinear, 78089);
     POINTER_SKYRIMSE(TSetVelocity, setAngular, 78090);
-    setLinear.Get()(apWrapper, &linear); setAngular.Get()(apWrapper, &angular);
+    setLinear.Get()(apWrapper, &linear);
+    setAngular.Get()(apWrapper, &angular);
+}
+bool ExecuteObject(RigJob& aJob, PhysicsWorldView* apLockedWorld) noexcept
+{
+    if (!aJob.Validate || !aJob.Validate(aJob.Data.ReferenceHandle, aJob.Data.Cookie))
+    {
+        aJob.Data.State = Status::Expired;
+        return true;
+    }
+    ScopedReference reference(aJob.Data.ReferenceHandle);
+    auto* ref = reference.Get();
+    if (!ref || ref->IsDeleted() || (ref->flags & TESForm::DISABLED))
+    {
+        aJob.Data.State = Status::MissingReference;
+        return true;
+    }
+    auto* actor = Cast<Actor>(ref);
+    if (actor && (aJob.Data.Channel != 2 || !NativeActorPose::IsRagdoll(actor)))
+    {
+        aJob.Data.State = Status::UnsupportedBody;
+        return true;
+    }
+    auto& mods = World::Get().GetModSystem();
+    GameId cell, world;
+    if (!ref->parentCell || !mods.GetServerModId(ref->parentCell->formID, cell) || (ref->GetWorldSpace() && !mods.GetServerModId(ref->GetWorldSpace()->formID, world)))
+    {
+        aJob.Data.State = Status::NotLoaded;
+        return true;
+    }
+    if (aJob.Apply && (world != aJob.Data.WorldSpace || (!world && cell != aJob.Data.Cell)))
+    {
+        aJob.Data.State = Status::Expired;
+        return true;
+    }
+    aJob.Data.Cell = cell;
+    aJob.Data.WorldSpace = world;
+    auto* root = ref->GetNiNode();
+    if (!root)
+    {
+        aJob.Data.State = Status::NotLoaded;
+        return true;
+    }
+    root->IncRef();
+    struct Release
+    {
+        NiAVObject* Root;
+        ~Release() { Root->DecRef(); }
+    } release{root};
+    RigGraph graph;
+    if (!CollectRig(root, graph, !actor))
+    {
+        aJob.Data.State = Status::UnsupportedBody;
+        return true;
+    }
+    if (!graph.Count)
+    {
+        aJob.Data.State = Status::FixedBody;
+        return true;
+    }
+    auto* nativeWorld = graph.Bodies[0].Wrapper->Body->World;
+    if (!nativeWorld || nativeWorld->Wrapper != apLockedWorld)
+        return false;
+    for (size_t i = 0; i < graph.Count; ++i)
+    {
+        const auto* body = graph.Bodies[i].Wrapper->Body;
+        if (body->World != nativeWorld || body->MotionType < 1 || body->MotionType > 7 || body->MotionType == 5)
+        {
+            aJob.Data.State = Status::UnsupportedBody;
+            return true;
+        }
+    }
+    const bool native = aJob.Data.Channel == 2;
+    if (aJob.Apply)
+    {
+        if (graph.Count != aJob.Data.Rig.Count)
+        {
+            aJob.Data.State = Status::UnsupportedBody;
+            return true;
+        }
+        for (size_t i = 0; i < graph.Count; ++i)
+            if (graph.Bodies[i].Key != aJob.Data.Rig.Bodies[i].Key)
+            {
+                aJob.Data.State = Status::UnsupportedBody;
+                return true;
+            }
+        for (size_t i = 0; i < graph.Count; ++i)
+            WriteBody(graph.Bodies[i].Wrapper, aJob.Data.Rig.Bodies[i].Pose, native);
+        if (native)
+            for (size_t i = 0; i < graph.Count; ++i)
+            {
+                Pose actual;
+                const auto& wanted = aJob.Data.Rig.Bodies[i].Pose;
+                if (!ReadBody(graph.Bodies[i].Wrapper, actual, true) || actual.Position != wanted.Position || actual.Rotation != wanted.Rotation ||
+                    actual.LinearVelocity != wanted.LinearVelocity || actual.AngularVelocity != wanted.AngularVelocity)
+                {
+                    aJob.Data.State = Status::ReadbackMismatch;
+                    return true;
+                }
+            }
+        aJob.Data.State = Status::Applied;
+    }
+    else
+    {
+        aJob.Data.Rig.Count = static_cast<uint8_t>(graph.Count);
+        for (size_t i = 0; i < graph.Count; ++i)
+        {
+            aJob.Data.Rig.Bodies[i].Key = graph.Bodies[i].Key;
+            if (!ReadBody(graph.Bodies[i].Wrapper, aJob.Data.Rig.Bodies[i].Pose, native))
+            {
+                aJob.Data.State = Status::InvalidPose;
+                return true;
+            }
+        }
+        aJob.Data.CapturedAt = GetTickCount64();
+        aJob.Data.State = Status::Captured;
+    }
+    return true;
 }
 bool ExecuteRig(RigJob& aJob, PhysicsWorldView* apLockedWorld) noexcept
 {
     auto& world = World::Get();
     const auto entity = static_cast<entt::entity>(aJob.Data.Entity);
-    if (!world.valid(entity)) { aJob.Data.State = Status::Expired; return true; }
+    if (!world.valid(entity))
+    {
+        aJob.Data.State = Status::Expired;
+        return true;
+    }
     const auto* form = world.try_get<FormIdComponent>(entity);
     const auto* remote = world.try_get<RemoteComponent>(entity);
     const auto* local = world.try_get<LocalComponent>(entity);
     const bool wantsRemote = aJob.Apply != aJob.Data.Interaction;
     if (!form || (wantsRemote ? !remote || remote->OwnershipEpoch != aJob.Data.OwnershipEpoch : !local || local->OwnershipEpoch != aJob.Data.OwnershipEpoch))
-    { aJob.Data.State = Status::Expired; return true; }
+    {
+        aJob.Data.State = Status::Expired;
+        return true;
+    }
     ScopedReference reference(aJob.Data.ReferenceHandle);
     auto* actor = reference ? Cast<Actor>(reference.Get()) : nullptr;
-    if (!actor || actor->IsDeleted() || actor->formID != form->Id) { aJob.Data.State = Status::MissingReference; return true; }
+    if (!actor || actor->IsDeleted() || actor->formID != form->Id)
+    {
+        aJob.Data.State = Status::MissingReference;
+        return true;
+    }
     if (!NativeActorPose::IsRagdoll(actor) || actor->GetExtension()->IsRemote() != wantsRemote)
-    { aJob.Data.State = Status::UnsupportedBody; return true; }
+    {
+        aJob.Data.State = Status::UnsupportedBody;
+        return true;
+    }
     if (aJob.Data.Interaction && (aJob.Apply ? NativeActorPose::GrabbedHandle() == aJob.Data.ReferenceHandle : NativeActorPose::GrabbedHandle() != aJob.Data.ReferenceHandle))
-    { aJob.Data.State = Status::Expired; return true; }
+    {
+        aJob.Data.State = Status::Expired;
+        return true;
+    }
     if (aJob.Apply && !aJob.Data.Interaction && NativeActorPose::GrabbedHandle() == aJob.Data.ReferenceHandle)
-    { aJob.Data.State = Status::Expired; return true; }
+    {
+        aJob.Data.State = Status::Expired;
+        return true;
+    }
     GameId cell, worldSpace;
     if (!actor->parentCell || !world.GetModSystem().GetServerModId(actor->parentCell->formID, cell) ||
         (actor->GetWorldSpace() && !world.GetModSystem().GetServerModId(actor->GetWorldSpace()->formID, worldSpace)))
-    { aJob.Data.State = Status::NotLoaded; return true; }
+    {
+        aJob.Data.State = Status::NotLoaded;
+        return true;
+    }
     if (aJob.Apply && (cell != aJob.Data.Cell || worldSpace != aJob.Data.WorldSpace))
-    { aJob.Data.State = Status::Expired; return true; }
-    aJob.Data.Cell = cell; aJob.Data.WorldSpace = worldSpace;
+    {
+        aJob.Data.State = Status::Expired;
+        return true;
+    }
+    aJob.Data.Cell = cell;
+    aJob.Data.WorldSpace = worldSpace;
     auto* root = actor->GetNiNode();
-    if (!root) { aJob.Data.State = Status::NotLoaded; return true; }
+    if (!root)
+    {
+        aJob.Data.State = Status::NotLoaded;
+        return true;
+    }
     root->IncRef();
-    struct Release { NiAVObject* Object; ~Release() { Object->DecRef(); } } release{root};
+    struct Release
+    {
+        NiAVObject* Object;
+        ~Release() { Object->DecRef(); }
+    } release{root};
     RigGraph graph;
-    if (!CollectRig(root, graph)) { aJob.Data.State = Status::UnsupportedBody; return true; }
+    if (!CollectRig(root, graph))
+    {
+        aJob.Data.State = Status::UnsupportedBody;
+        return true;
+    }
     auto* firstWorld = graph.Bodies[0].Wrapper->Body->World;
-    if (!firstWorld || firstWorld->Wrapper != apLockedWorld) return false;
+    if (!firstWorld || firstWorld->Wrapper != apLockedWorld)
+        return false;
     // Preflight ALL bodies before the first write. Mixed worlds, a changed
     // graph or a fixed body cannot leave half a corpse in the received pose.
     for (size_t i = 0; i < graph.Count; ++i)
     {
         const auto* body = graph.Bodies[i].Wrapper->Body;
         if (!body->World || body->World != firstWorld || body->MotionType < 1 || body->MotionType > 7 || body->MotionType == 5)
-        { aJob.Data.State = Status::UnsupportedBody; return true; }
+        {
+            aJob.Data.State = Status::UnsupportedBody;
+            return true;
+        }
     }
     if (aJob.Apply)
     {
-        if (graph.Count != aJob.Data.Rig.Count) { aJob.Data.State = Status::UnsupportedBody; return true; }
-        for (size_t i = 0; i < graph.Count; ++i) if (graph.Bodies[i].Key != aJob.Data.Rig.Bodies[i].Key)
-        { aJob.Data.State = Status::UnsupportedBody; return true; }
-        for (size_t i = 0; i < graph.Count; ++i) WriteBody(graph.Bodies[i].Wrapper, aJob.Data.Rig.Bodies[i].Pose);
+        if (graph.Count != aJob.Data.Rig.Count)
+        {
+            aJob.Data.State = Status::UnsupportedBody;
+            return true;
+        }
+        for (size_t i = 0; i < graph.Count; ++i)
+            if (graph.Bodies[i].Key != aJob.Data.Rig.Bodies[i].Key)
+            {
+                aJob.Data.State = Status::UnsupportedBody;
+                return true;
+            }
+        for (size_t i = 0; i < graph.Count; ++i)
+            WriteBody(graph.Bodies[i].Wrapper, aJob.Data.Rig.Bodies[i].Pose);
         aJob.Data.State = Status::Applied;
     }
     else
@@ -419,7 +644,11 @@ bool ExecuteRig(RigJob& aJob, PhysicsWorldView* apLockedWorld) noexcept
         for (size_t i = 0; i < graph.Count; ++i)
         {
             rig.Bodies[i].Key = graph.Bodies[i].Key;
-            if (!ReadBody(graph.Bodies[i].Wrapper, rig.Bodies[i].Pose)) { aJob.Data.State = Status::InvalidPose; return true; }
+            if (!ReadBody(graph.Bodies[i].Wrapper, rig.Bodies[i].Pose))
+            {
+                aJob.Data.State = Status::InvalidPose;
+                return true;
+            }
         }
         aJob.Data.CapturedAt = GetTickCount64();
         aJob.Data.State = rig.IsValid() ? Status::Captured : Status::InvalidPose;
@@ -431,21 +660,33 @@ void HookUnmark(PhysicsWorldView* apWorld)
 {
     // Never acquire/try/spin on an engine lock. Work only at the outermost
     // release of a write lock already held by the runner's engine thread.
-    if (s_enabled.load() && s_pending.load() && MainThread() && !s_flushing && apWorld &&
-        apWorld->Lock.uiWriterThread == GetCurrentThreadId() && apWorld->Lock.uiLock == 0x80000001u && s_frameSpent < kFrameBudget)
+    if (s_enabled.load() && s_pending.load() && MainThread() && !s_flushing && apWorld && apWorld->Lock.uiWriterThread == GetCurrentThreadId() &&
+        apWorld->Lock.uiLock == 0x80000001u && s_frameSpent < kFrameBudget)
     {
         s_flushing = true;
         const auto start = Clock::now();
         // One complete rig per release; shares the existing soft frame budget.
         for (size_t count = 0; count < kRigCapacity && s_rigCount < kRigCapacity; ++count)
         {
-            if (Clock::now() - start + s_frameSpent >= kFrameBudget) break;
-            auto& job = s_rigJobs[s_nextRig]; s_nextRig = (s_nextRig + 1) % kRigCapacity;
-            if (!job.Active) continue;
+            if (Clock::now() - start + s_frameSpent >= kFrameBudget)
+                break;
+            auto& job = s_rigJobs[s_nextRig];
+            s_nextRig = (s_nextRig + 1) % kRigCapacity;
+            if (!job.Active)
+                continue;
             bool done{};
-            if (job.Generation != s_generation.load() || Clock::now() - job.Queued >= std::chrono::milliseconds(150)) { job.Data.State = Status::Expired; done = true; }
-            else done = ExecuteRig(job, apWorld);
-            if (done) { s_rigResults[(s_rigHead + s_rigCount++) % kRigCapacity] = job.Data; job.Active = false; }
+            if (job.Generation != s_generation.load() || Clock::now() - job.Queued >= std::chrono::milliseconds(150))
+            {
+                job.Data.State = Status::Expired;
+                done = true;
+            }
+            else
+                done = job.Data.Channel ? ExecuteObject(job, apWorld) : ExecuteRig(job, apWorld);
+            if (done)
+            {
+                s_rigResults[(s_rigHead + s_rigCount++) % kRigCapacity] = job.Data;
+                job.Active = false;
+            }
             break;
         }
         for (size_t count = 0; count < kCapacity && s_resultCount < kCapacity; ++count)
@@ -471,7 +712,8 @@ void HookUnmark(PhysicsWorldView* apWorld)
             }
         }
         s_frameSpent += Clock::now() - start;
-        s_pending.store(std::any_of(s_jobs.begin(), s_jobs.end(), [](const auto& job) { return job.Active; }) ||
+        s_pending.store(
+            std::any_of(s_jobs.begin(), s_jobs.end(), [](const auto& job) { return job.Active; }) ||
             std::any_of(s_rigJobs.begin(), s_rigJobs.end(), [](const auto& job) { return job.Active; }));
         s_flushing = false;
     }
@@ -480,8 +722,7 @@ void HookUnmark(PhysicsWorldView* apWorld)
 
 bool Queue(uint32_t aHandle, uint64_t aCookie, const Pose& acPose, bool aApply, uint8_t aMotionType, Validator aValidate) noexcept
 {
-    if (!s_enabled.load() || !MainThread() || aHandle == 0 || aCookie == 0 ||
-        (aApply && (!ValidPose(acPose) || aMotionType > 7)))
+    if (!s_enabled.load() || !MainThread() || aHandle == 0 || aCookie == 0 || (aApply && (!ValidPose(acPose) || aMotionType > 7)))
         return false;
     for (auto& job : s_jobs)
         if (!job.Active)
@@ -513,9 +754,23 @@ void BeginRunnerFrame() noexcept
         return;
     }
     s_frameSpent = {};
+    const uint64_t generation = s_generation.load();
+    if (s_observedGeneration != generation)
+    {
+        s_observedGeneration = generation;
+        for (auto& job : s_jobs)
+            job.Active = false;
+        for (auto& job : s_rigJobs)
+            job.Active = false;
+        s_rigHead = s_rigCount = s_nextRig = s_resultHead = s_resultCount = s_nextJob = 0;
+        s_pending.store(false);
+    }
 }
 
-bool QueueCapture(uint32_t aReferenceHandle, uint64_t aCookie, Validator aValidate) noexcept { return Queue(aReferenceHandle, aCookie, {}, false, 4, aValidate); }
+bool QueueCapture(uint32_t aReferenceHandle, uint64_t aCookie, Validator aValidate) noexcept
+{
+    return Queue(aReferenceHandle, aCookie, {}, false, 4, aValidate);
+}
 bool QueueApply(uint32_t aReferenceHandle, uint64_t aCookie, const Pose& acPose, uint8_t aMotionType, Validator aValidate) noexcept
 {
     return Queue(aReferenceHandle, aCookie, acPose, true, aMotionType, aValidate);
@@ -531,35 +786,151 @@ bool Poll(Result& aResult) noexcept
 }
 namespace
 {
-bool QueueRig(uint32_t aHandle, uint64_t aCookie, const RigidBodyRig* apRig, uint32_t aEntity, uint32_t aEpoch, GameId aCell = {}, GameId aWorld = {}, bool aInteraction = false) noexcept
+bool QueueRig(
+    uint32_t aHandle, uint64_t aCookie, const RigidBodyRig* apRig, uint32_t aEntity, uint32_t aEpoch, GameId aCell = {}, GameId aWorld = {}, bool aInteraction = false) noexcept
 {
-    if (!s_enabled.load() || !MainThread() || !aHandle || !aCookie || !aEpoch || (apRig && !apRig->IsValid())) return false;
+    if (!s_enabled.load() || !MainThread() || !aHandle || !aCookie || !aEpoch || (apRig && !apRig->IsValid()))
+        return false;
     RigJob* slot{};
     for (auto& job : s_rigJobs)
     {
-        if (apRig && job.Active && job.Apply && job.Data.ReferenceHandle == aHandle) { slot = &job; break; }
-        if (!job.Active && !slot) slot = &job;
+        if (apRig && job.Active && job.Apply && job.Data.ReferenceHandle == aHandle)
+        {
+            slot = &job;
+            break;
+        }
+        if (!job.Active && !slot)
+            slot = &job;
     }
-    if (!slot) return false;
-    *slot = {}; slot->Data.Cookie = aCookie; slot->Data.ReferenceHandle = aHandle;
-    slot->Data.Entity = aEntity; slot->Data.OwnershipEpoch = aEpoch; slot->Generation = s_generation.load();
-    slot->Data.Cell = aCell; slot->Data.WorldSpace = aWorld;
+    if (!slot)
+        return false;
+    *slot = {};
+    slot->Data.Cookie = aCookie;
+    slot->Data.ReferenceHandle = aHandle;
+    slot->Data.Entity = aEntity;
+    slot->Data.OwnershipEpoch = aEpoch;
+    slot->Generation = s_generation.load();
+    slot->Data.Cell = aCell;
+    slot->Data.WorldSpace = aWorld;
     slot->Data.Interaction = aInteraction;
-    if (apRig) slot->Data.Rig = *apRig;
-    slot->Apply = apRig != nullptr; slot->Active = true; slot->Queued = Clock::now();
+    if (apRig)
+        slot->Data.Rig = *apRig;
+    slot->Apply = apRig != nullptr;
+    slot->Active = true;
+    slot->Queued = Clock::now();
     s_pending.store(true);
     return true;
 }
-}
-bool QueueRigCapture(uint32_t aReferenceHandle, uint64_t aCookie, uint32_t aEntity, uint32_t aEpoch) noexcept { return QueueRig(aReferenceHandle, aCookie, nullptr, aEntity, aEpoch); }
-bool QueueRigApply(uint32_t aReferenceHandle, uint64_t aCookie, const RigidBodyRig& acRig, uint32_t aEntity, uint32_t aEpoch, GameId aCell, GameId aWorld) noexcept { return QueueRig(aReferenceHandle, aCookie, &acRig, aEntity, aEpoch, aCell, aWorld); }
-bool QueueRigInteractionCapture(uint32_t aReferenceHandle, uint64_t aCookie, uint32_t aEntity, uint32_t aEpoch) noexcept { return QueueRig(aReferenceHandle, aCookie, nullptr, aEntity, aEpoch, {}, {}, true); }
-bool QueueRigAuthoritativeInput(uint32_t aReferenceHandle, uint64_t aCookie, const RigidBodyRig& acRig, uint32_t aEntity, uint32_t aEpoch, GameId aCell, GameId aWorld) noexcept { return QueueRig(aReferenceHandle, aCookie, &acRig, aEntity, aEpoch, aCell, aWorld, true); }
-bool PollRig(RigResult& aResult) noexcept
+} // namespace
+bool QueueRigCapture(uint32_t aReferenceHandle, uint64_t aCookie, uint32_t aEntity, uint32_t aEpoch) noexcept
 {
-    if (!MainThread() || !s_rigCount) return false;
-    aResult = s_rigResults[s_rigHead]; s_rigHead = (s_rigHead + 1) % kRigCapacity; --s_rigCount;
-    return true;
+    return QueueRig(aReferenceHandle, aCookie, nullptr, aEntity, aEpoch);
+}
+bool QueueRigApply(uint32_t aReferenceHandle, uint64_t aCookie, const RigidBodyRig& acRig, uint32_t aEntity, uint32_t aEpoch, GameId aCell, GameId aWorld) noexcept
+{
+    return QueueRig(aReferenceHandle, aCookie, &acRig, aEntity, aEpoch, aCell, aWorld);
+}
+bool QueueRigInteractionCapture(uint32_t aReferenceHandle, uint64_t aCookie, uint32_t aEntity, uint32_t aEpoch) noexcept
+{
+    return QueueRig(aReferenceHandle, aCookie, nullptr, aEntity, aEpoch, {}, {}, true);
+}
+bool QueueRigAuthoritativeInput(uint32_t aReferenceHandle, uint64_t aCookie, const RigidBodyRig& acRig, uint32_t aEntity, uint32_t aEpoch, GameId aCell, GameId aWorld) noexcept
+{
+    return QueueRig(aReferenceHandle, aCookie, &acRig, aEntity, aEpoch, aCell, aWorld, true);
+}
+bool PollRig(RigResult& aResult, uint8_t aChannel) noexcept
+{
+    if (!MainThread() || !s_rigCount)
+        return false;
+    for (size_t i = 0; i < s_rigCount; ++i)
+        if (s_rigResults[(s_rigHead + i) % kRigCapacity].Channel == aChannel)
+        {
+            aResult = s_rigResults[(s_rigHead + i) % kRigCapacity];
+            for (size_t j = i + 1; j < s_rigCount; ++j)
+                s_rigResults[(s_rigHead + j - 1) % kRigCapacity] = s_rigResults[(s_rigHead + j) % kRigCapacity];
+            --s_rigCount;
+            return true;
+        }
+    return false;
+}
+bool QueueObject(uint32_t aHandle, uint64_t aCookie, uint8_t aChannel, const RigidBodyRig* apRig, GameId aCell, GameId aWorld, Validator aValidate) noexcept
+{
+    if (!MainThread() || !s_enabled.load() || aChannel < 1 || aChannel > 2 || !aHandle || !aCookie || !aValidate || (apRig && !apRig->IsValid()))
+        return false;
+    for (auto& job : s_rigJobs)
+        if (!job.Active)
+        {
+            job = {};
+            job.Data.ReferenceHandle = aHandle;
+            job.Data.Cookie = aCookie;
+            job.Data.Channel = aChannel;
+            job.Data.Cell = aCell;
+            job.Data.WorldSpace = aWorld;
+            job.Validate = aValidate;
+            job.Generation = s_generation.load();
+            job.Apply = apRig != nullptr;
+            if (apRig)
+                job.Data.Rig = *apRig;
+            job.Queued = Clock::now();
+            job.Active = true;
+            s_pending.store(true);
+            return true;
+        }
+    return false;
+}
+bool QueueObjectCapture(uint32_t aHandle, uint64_t aCookie, uint8_t aChannel, Validator aValidate) noexcept
+{
+    return QueueObject(aHandle, aCookie, aChannel, nullptr, {}, {}, aValidate);
+}
+bool QueueObjectApply(uint32_t aHandle, uint64_t aCookie, uint8_t aChannel, const RigidBodyRig& acRig, GameId aCell, GameId aWorld, Validator aValidate) noexcept
+{
+    return QueueObject(aHandle, aCookie, aChannel, &acRig, aCell, aWorld, aValidate);
+}
+void PumpPaused(GameId aCell) noexcept
+{
+    if (!s_enabled.load() || !MainThread() || !NativeCheckpoint::IsPaused() || s_flushing || s_frameSpent >= kFrameBudget)
+        return;
+    auto* cell = Cast<TESObjectCELL>(TESForm::GetById(World::Get().GetModSystem().GetGameId(aCell)));
+    if (!cell || !cell->IsAttached())
+        return;
+    using TWorld = PhysicsWorldView*(TESObjectCELL*);
+    POINTER_SKYRIMSE(TWorld, getWorld, 18995);
+    auto* world = getWorld.Get()(cell);
+    if (!world)
+        return;
+    // MCP 140CE34C0 / ID68238 is a real native bool TryLockForWrite:
+    // a single CAS, no loop/Sleep. ID18995 resolves this cell's bhkWorld.
+    using TTry = bool(BSReadWriteLock*);
+    POINTER_SKYRIMSE(TTry, tryWrite, 68238);
+    if (!tryWrite.Get()(&world->Lock))
+        return;
+    s_flushing = true;
+    const auto start = Clock::now();
+    for (size_t i = 0; i < kRigCapacity && s_rigCount < kRigCapacity; ++i)
+    {
+        auto& job = s_rigJobs[s_nextRig];
+        s_nextRig = (s_nextRig + 1) % kRigCapacity;
+        if (!job.Active || job.Data.Channel != 2)
+            continue;
+        bool done{};
+        if (job.Generation != s_generation.load() || Clock::now() - job.Queued >= kLifetime)
+        {
+            job.Data.State = Status::Expired;
+            done = true;
+        }
+        else
+            done = ExecuteObject(job, world);
+        if (done)
+        {
+            s_rigResults[(s_rigHead + s_rigCount++) % kRigCapacity] = job.Data;
+            job.Active = false;
+        }
+        if (Clock::now() - start + s_frameSpent >= kFrameBudget)
+            break;
+    }
+    s_frameSpent += Clock::now() - start;
+    world->Lock.UnlockWrite();
+    s_flushing = false;
 }
 void Reset() noexcept
 {
@@ -568,20 +939,25 @@ void Reset() noexcept
         return;
     for (auto& job : s_jobs)
         job.Active = false;
-    for (auto& job : s_rigJobs) job.Active = false;
+    for (auto& job : s_rigJobs)
+        job.Active = false;
     s_rigHead = s_rigCount = s_nextRig = 0;
     s_resultHead = s_resultCount = s_nextJob = 0;
     s_pending.store(false);
 }
-void Invalidate() noexcept { s_generation.fetch_add(1, std::memory_order_release); }
-
-static TiltedPhoques::Initializer s_physicsHooks([]()
+void Invalidate() noexcept
 {
-    if (VersionDb::Get().GetLoadedVersionString() != "1.7.104.0")
-        return;
-    POINTER_SKYRIMSE(TUnmark, unmark, 77929);
-    RealUnmark = unmark.Get();
-    TP_HOOK(&RealUnmark, HookUnmark);
-    s_enabled.store(true);
-});
+    s_generation.fetch_add(1, std::memory_order_release);
+}
+
+static TiltedPhoques::Initializer s_physicsHooks(
+    []()
+    {
+        if (VersionDb::Get().GetLoadedVersionString() != "1.7.104.0")
+            return;
+        POINTER_SKYRIMSE(TUnmark, unmark, 77929);
+        RealUnmark = unmark.Get();
+        TP_HOOK(&RealUnmark, HookUnmark);
+        s_enabled.store(true);
+    });
 } // namespace PhysicsReplication

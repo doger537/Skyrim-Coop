@@ -130,7 +130,7 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
             return false;
         }
         const int schema = sqlite3_column_int(version.Value, 0);
-        if (schema < 0 || schema > 5)
+        if (schema != 0 && schema != 6)
         {
             m_error = "Unsupported world database schema; use the matching server build, do not reset the database";
             Close();
@@ -151,10 +151,12 @@ bool WorldStore::Open(const std::filesystem::path& acPath) noexcept
                  "CREATE TABLE IF NOT EXISTS identity(id INTEGER PRIMARY KEY CHECK(id=1), world_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>=0)) STRICT;"
                  "CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, value BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32), revision INTEGER NOT NULL "
                  "CHECK(revision>0)) STRICT;"
-                 "CREATE TABLE IF NOT EXISTS checkpoints(id INTEGER PRIMARY KEY CHECK(id>0), captured_revision INTEGER NOT NULL, metadata BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32)) STRICT;"
-                 "CREATE TABLE IF NOT EXISTS checkpoint_state(checkpoint_id INTEGER NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, digest BLOB NOT NULL CHECK(length(digest)=32), revision INTEGER NOT NULL CHECK(revision>0), PRIMARY KEY(checkpoint_id,key)) STRICT;"
+                 "CREATE TABLE IF NOT EXISTS checkpoints(id INTEGER PRIMARY KEY CHECK(id>0), captured_revision INTEGER NOT NULL, metadata BLOB NOT NULL, digest BLOB NOT NULL "
+                 "CHECK(length(digest)=32)) STRICT;"
+                 "CREATE TABLE IF NOT EXISTS checkpoint_state(checkpoint_id INTEGER NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, digest BLOB NOT NULL "
+                 "CHECK(length(digest)=32), revision INTEGER NOT NULL CHECK(revision>0), PRIMARY KEY(checkpoint_id,key)) STRICT;"
                  "INSERT OR IGNORE INTO identity VALUES(1,lower(hex(randomblob(16))),0);"
-                 "PRAGMA user_version=5; PRAGMA application_id=1414546256; COMMIT;"))
+                 "PRAGMA user_version=6; PRAGMA application_id=1414546256; COMMIT;"))
     {
         Close();
         return false;
@@ -224,15 +226,15 @@ bool WorldStore::ReadPrefix(const String& acPrefix, Vector<Record>& aRecords) no
 bool WorldStore::ReadPrefixAfterRevision(const String& acPrefix, uint64_t aAfterRevision, size_t aLimit, Vector<Record>& aRecords) noexcept
 {
     aRecords.clear();
-    if (!m_db || acPrefix.empty() || acPrefix.back() != '/' || acPrefix.size() > 512 || acPrefix.find('\0') != String::npos ||
-        !aLimit || aLimit > 1024 || aAfterRevision > m_revision)
+    if (!m_db || acPrefix.empty() || acPrefix.back() != '/' || acPrefix.size() > 512 || acPrefix.find('\0') != String::npos || !aLimit || aLimit > 1024 ||
+        aAfterRevision > m_revision)
         return Fail("Invalid bounded world record cursor");
-    String upper = acPrefix; ++upper.back();
+    String upper = acPrefix;
+    ++upper.back();
     Statement rows(m_db, "SELECT key,value,digest,revision FROM state WHERE key>=?1 AND key<?2 AND revision>?3 ORDER BY revision,key LIMIT ?4");
     if (!rows || sqlite3_bind_text(rows.Value, 1, acPrefix.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK ||
         sqlite3_bind_text(rows.Value, 2, upper.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK ||
-        sqlite3_bind_int64(rows.Value, 3, static_cast<sqlite3_int64>(aAfterRevision)) != SQLITE_OK ||
-        sqlite3_bind_int(rows.Value, 4, static_cast<int>(aLimit + 1)) != SQLITE_OK)
+        sqlite3_bind_int64(rows.Value, 3, static_cast<sqlite3_int64>(aAfterRevision)) != SQLITE_OK || sqlite3_bind_int(rows.Value, 4, static_cast<int>(aLimit + 1)) != SQLITE_OK)
         return Fail("Cannot prepare a bounded world record page");
     size_t bytes{};
     int result{};
@@ -348,7 +350,8 @@ constexpr size_t kMaxCheckpointRecords = 65536;
 constexpr size_t kMaxCheckpointBytes = 64 * 1024 * 1024;
 bool OutsideTimeline(const String& acKey) noexcept
 {
-    return acKey == "$world-epoch" || acKey == "$restored-checkpoint" || acKey == "$restore-pending" || acKey.starts_with("$checkpoint-reservation/") || acKey.starts_with("$participant/");
+    return acKey == "$world-epoch" || acKey == "$restored-checkpoint" || acKey == "$restore-pending" || acKey.starts_with("$checkpoint-reservation/") ||
+           acKey.starts_with("$participant/");
 }
 String ReservationKey(uint64_t aId) noexcept
 {
@@ -368,7 +371,7 @@ std::array<uint8_t, 32> CheckpointDigest(const String& acWorld, const WorldStore
     hash.Final(result.data());
     return result;
 }
-}
+} // namespace
 
 bool WorldStore::ReserveCheckpoint(uint64_t& aId) noexcept
 {
@@ -386,9 +389,8 @@ bool WorldStore::ReserveCheckpoint(uint64_t& aId) noexcept
 bool WorldStore::CaptureCheckpoint(uint64_t aId, const Vector<uint8_t>& acMetadata) noexcept
 {
     Record reservation;
-    if (!m_db || aId == 0 || aId > m_revision || m_revision >= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
-        acMetadata.empty() || acMetadata.size() > 65536 || Read(ReservationKey(aId), reservation) != ReadResult::Found ||
-        reservation.Revision != aId || reservation.Value != Vector<uint8_t>{'T', 'C', 'R', 1})
+    if (!m_db || aId == 0 || aId > m_revision || m_revision >= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) || acMetadata.empty() || acMetadata.size() > 65536 ||
+        Read(ReservationKey(aId), reservation) != ReadResult::Found || reservation.Revision != aId || reservation.Value != Vector<uint8_t>{'T', 'C', 'R', 1})
         return Fail("Checkpoint reservation or metadata is invalid");
     Checkpoint checkpoint{aId, m_revision, acMetadata, {}};
     Statement rows(m_db, "SELECT key,value,digest,revision FROM state ORDER BY key");
@@ -413,13 +415,24 @@ bool WorldStore::CaptureCheckpoint(uint64_t aId, const Vector<uint8_t>& acMetada
     const auto digest = CheckpointDigest(m_worldId, checkpoint);
     if (!Execute("BEGIN IMMEDIATE"))
         return false;
-    struct Rollback { sqlite3* Db; bool Done{}; ~Rollback() { if (!Done) sqlite3_exec(Db, "ROLLBACK", nullptr, nullptr, nullptr); } } rollback{m_db};
+    struct Rollback
+    {
+        sqlite3* Db;
+        bool Done{};
+        ~Rollback()
+        {
+            if (!Done)
+                sqlite3_exec(Db, "ROLLBACK", nullptr, nullptr, nullptr);
+        }
+    } rollback{m_db};
     Statement insert(m_db, "INSERT INTO checkpoints VALUES(?1,?2,?3,?4)");
     if (!insert || sqlite3_bind_int64(insert.Value, 1, aId) != SQLITE_OK || sqlite3_bind_int64(insert.Value, 2, m_revision) != SQLITE_OK ||
         sqlite3_bind_blob(insert.Value, 3, acMetadata.data(), static_cast<int>(acMetadata.size()), SQLITE_TRANSIENT) != SQLITE_OK ||
         sqlite3_bind_blob(insert.Value, 4, digest.data(), 32, SQLITE_TRANSIENT) != SQLITE_OK || sqlite3_step(insert.Value) != SQLITE_DONE)
         return Fail("Cannot commit the checkpoint manifest (existing IDs cannot be replaced)");
-    Statement copy(m_db, "INSERT INTO checkpoint_state SELECT ?1,key,value,digest,revision FROM state WHERE key!='$world-epoch' AND key!='$restored-checkpoint' AND key!='$restore-pending' AND key NOT GLOB '$checkpoint-reservation/*' AND key NOT GLOB '$participant/*'");
+    Statement copy(
+        m_db, "INSERT INTO checkpoint_state SELECT ?1,key,value,digest,revision FROM state WHERE key!='$world-epoch' AND key!='$restored-checkpoint' AND key!='$restore-pending' "
+              "AND key NOT GLOB '$checkpoint-reservation/*' AND key NOT GLOB '$participant/*'");
     if (!copy || sqlite3_bind_int64(copy.Value, 1, aId) != SQLITE_OK || sqlite3_step(copy.Value) != SQLITE_DONE ||
         !Execute("UPDATE identity SET revision=revision+1 WHERE id=1; COMMIT"))
         return Fail("Cannot commit the checkpoint timeline");
@@ -477,8 +490,7 @@ bool WorldStore::RestoreCheckpoint(uint64_t aId, uint64_t& aNewEpoch) noexcept
         const auto saved = std::find_if(checkpoint.Records.begin(), checkpoint.Records.end(), [key](const Record& record) { return record.Key == key; });
         Record current;
         const auto read = Read(key, current);
-        if ((read == ReadResult::Missing) != (saved == checkpoint.Records.end()) || read == ReadResult::Failed ||
-            (read == ReadResult::Found && current.Value != saved->Value))
+        if ((read == ReadResult::Missing) != (saved == checkpoint.Records.end()) || read == ReadResult::Failed || (read == ReadResult::Found && current.Value != saved->Value))
             return Fail("Checkpoint content or adapter policy differs from the current world");
     }
     const uint64_t epoch = m_revision + 1;
@@ -486,32 +498,43 @@ bool WorldStore::RestoreCheckpoint(uint64_t aId, uint64_t& aNewEpoch) noexcept
     const auto markerDigest = Digest("$world-epoch", epoch, marker);
     if (!Execute("BEGIN IMMEDIATE"))
         return false;
-    struct Rollback { sqlite3* Db; bool Done{}; ~Rollback() { if (!Done) sqlite3_exec(Db, "ROLLBACK", nullptr, nullptr, nullptr); } } rollback{m_db};
-    if (!Execute("DELETE FROM state WHERE key!='$world-epoch' AND key!='$restored-checkpoint' AND key!='$restore-pending' AND key NOT GLOB '$checkpoint-reservation/*' AND key NOT GLOB '$participant/*'"))
+    struct Rollback
+    {
+        sqlite3* Db;
+        bool Done{};
+        ~Rollback()
+        {
+            if (!Done)
+                sqlite3_exec(Db, "ROLLBACK", nullptr, nullptr, nullptr);
+        }
+    } rollback{m_db};
+    if (!Execute("DELETE FROM state WHERE key!='$world-epoch' AND key!='$restored-checkpoint' AND key!='$restore-pending' AND key NOT GLOB '$checkpoint-reservation/*' AND key NOT "
+                 "GLOB '$participant/*'"))
         return false;
     Statement copy(m_db, "INSERT INTO state SELECT key,value,digest,revision FROM checkpoint_state WHERE checkpoint_id=?1");
-    Statement writeEpoch(m_db, "INSERT INTO state VALUES('$world-epoch',?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,digest=excluded.digest,revision=excluded.revision");
+    Statement writeEpoch(
+        m_db, "INSERT INTO state VALUES('$world-epoch',?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,digest=excluded.digest,revision=excluded.revision");
     Statement head(m_db, "UPDATE identity SET revision=?1 WHERE id=1");
     Vector<uint8_t> restored;
     for (size_t byte = 0; byte < 8; ++byte)
         restored.push_back(static_cast<uint8_t>(aId >> (byte * 8)));
     const auto restoredDigest = Digest("$restored-checkpoint", epoch, restored);
-    Statement writeRestored(m_db, "INSERT INTO state VALUES('$restored-checkpoint',?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,digest=excluded.digest,revision=excluded.revision");
+    Statement writeRestored(
+        m_db, "INSERT INTO state VALUES('$restored-checkpoint',?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,digest=excluded.digest,revision=excluded.revision");
     const Vector<uint8_t> pending{1};
     const auto pendingDigest = Digest("$restore-pending", epoch, pending);
-    Statement writePending(m_db, "INSERT INTO state VALUES('$restore-pending',?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,digest=excluded.digest,revision=excluded.revision");
-    if (!copy || sqlite3_bind_int64(copy.Value, 1, aId) != SQLITE_OK || sqlite3_step(copy.Value) != SQLITE_DONE ||
-        !writeEpoch || sqlite3_bind_blob(writeEpoch.Value, 1, marker.data(), static_cast<int>(marker.size()), SQLITE_TRANSIENT) != SQLITE_OK ||
+    Statement writePending(
+        m_db, "INSERT INTO state VALUES('$restore-pending',?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,digest=excluded.digest,revision=excluded.revision");
+    if (!copy || sqlite3_bind_int64(copy.Value, 1, aId) != SQLITE_OK || sqlite3_step(copy.Value) != SQLITE_DONE || !writeEpoch ||
+        sqlite3_bind_blob(writeEpoch.Value, 1, marker.data(), static_cast<int>(marker.size()), SQLITE_TRANSIENT) != SQLITE_OK ||
         sqlite3_bind_blob(writeEpoch.Value, 2, markerDigest.data(), 32, SQLITE_TRANSIENT) != SQLITE_OK || sqlite3_bind_int64(writeEpoch.Value, 3, epoch) != SQLITE_OK ||
         sqlite3_step(writeEpoch.Value) != SQLITE_DONE || !writeRestored ||
         sqlite3_bind_blob(writeRestored.Value, 1, restored.data(), static_cast<int>(restored.size()), SQLITE_TRANSIENT) != SQLITE_OK ||
-        sqlite3_bind_blob(writeRestored.Value, 2, restoredDigest.data(), 32, SQLITE_TRANSIENT) != SQLITE_OK ||
-        sqlite3_bind_int64(writeRestored.Value, 3, epoch) != SQLITE_OK || sqlite3_step(writeRestored.Value) != SQLITE_DONE ||
-        !writePending || sqlite3_bind_blob(writePending.Value, 1, pending.data(), 1, SQLITE_TRANSIENT) != SQLITE_OK ||
-        sqlite3_bind_blob(writePending.Value, 2, pendingDigest.data(), 32, SQLITE_TRANSIENT) != SQLITE_OK ||
-        sqlite3_bind_int64(writePending.Value, 3, epoch) != SQLITE_OK || sqlite3_step(writePending.Value) != SQLITE_DONE ||
-        !head || sqlite3_bind_int64(head.Value, 1, epoch) != SQLITE_OK ||
-        sqlite3_step(head.Value) != SQLITE_DONE || sqlite3_changes(m_db) != 1 || !Execute("COMMIT"))
+        sqlite3_bind_blob(writeRestored.Value, 2, restoredDigest.data(), 32, SQLITE_TRANSIENT) != SQLITE_OK || sqlite3_bind_int64(writeRestored.Value, 3, epoch) != SQLITE_OK ||
+        sqlite3_step(writeRestored.Value) != SQLITE_DONE || !writePending || sqlite3_bind_blob(writePending.Value, 1, pending.data(), 1, SQLITE_TRANSIENT) != SQLITE_OK ||
+        sqlite3_bind_blob(writePending.Value, 2, pendingDigest.data(), 32, SQLITE_TRANSIENT) != SQLITE_OK || sqlite3_bind_int64(writePending.Value, 3, epoch) != SQLITE_OK ||
+        sqlite3_step(writePending.Value) != SQLITE_DONE || !head || sqlite3_bind_int64(head.Value, 1, epoch) != SQLITE_OK || sqlite3_step(head.Value) != SQLITE_DONE ||
+        sqlite3_changes(m_db) != 1 || !Execute("COMMIT"))
         return Fail("Cannot atomically restore checkpoint and advance the world epoch");
     rollback.Done = true;
     m_revision = aNewEpoch = epoch;

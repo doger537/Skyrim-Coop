@@ -1,6 +1,8 @@
 #include <Services/WorldCheckpointService.h>
 #include <World.h>
 #include <Services/WorldItemService.h>
+#include <Services/PlacedPhysicsService.h>
+#include <Services/PhysicsCheckpointService.h>
 #include <GameServer.h>
 #include <Components.h>
 #include <TiltedCore/ViewBuffer.hpp>
@@ -10,14 +12,15 @@
 #include <algorithm>
 #include <cstring>
 
-WorldCheckpointService::WorldCheckpointService(World& aWorld, entt::dispatcher& aDispatcher) noexcept : m_world(aWorld)
+WorldCheckpointService::WorldCheckpointService(World& aWorld, entt::dispatcher& aDispatcher) noexcept
+    : m_world(aWorld)
 {
     m_requestConnection = aDispatcher.sink<PacketEvent<RequestWorldCheckpoint>>().connect<&WorldCheckpointService::OnRequest>(this);
     m_updateConnection = aDispatcher.sink<UpdateEvent>().connect<&WorldCheckpointService::OnUpdate>(this);
 }
 bool WorldCheckpointService::IsFrozen() const noexcept
 {
-    return m_step == Step::Saving || m_step == Step::PrepareLoad || m_step == Step::WaitingReconnect;
+    return m_step == Step::PhysicsSave || m_step == Step::Saving || m_step == Step::PrepareLoad || m_step == Step::WaitingReconnect || m_step == Step::PhysicsLoad;
 }
 std::array<Player*, 2> WorldCheckpointService::Players() noexcept
 {
@@ -63,6 +66,7 @@ bool WorldCheckpointService::Initialize() noexcept
         m_control.WorldId = campaign.WorldId();
         m_control.PreviousEpoch = campaign.WorldEpoch();
         m_control.Calendar = m_control.Manifest.Calendar;
+        m_control.PhysicsDigest = m_control.Manifest.PhysicsDigest;
         for (size_t i = 0; i < 2; ++i)
             m_control.Members[i] = m_control.Manifest.Players[i].Character;
         m_step = Step::WaitingReconnect;
@@ -83,8 +87,7 @@ bool WorldCheckpointService::CanAuthenticate(const CharacterIdentity& acCharacte
         aError = "A paired save/load is in progress. Reconnect after it completes";
         return false;
     }
-    if (m_step == Step::WaitingReconnect && (aToken != m_control.Id ||
-        (acCharacter != m_control.Members[0] && acCharacter != m_control.Members[1])))
+    if (m_step == Step::WaitingReconnect && (aToken != m_control.Id || (acCharacter != m_control.Members[0] && acCharacter != m_control.Members[1])))
     {
         aError = "The restored world is waiting for its original two checkpoint characters";
         return false;
@@ -105,11 +108,10 @@ bool WorldCheckpointService::CanAuthenticate(const CharacterIdentity& acCharacte
     }
     if (!aToken)
         return true;
-    if (!acProof.IsValid() || acProof.WorldId != m_world.GetCampaign().WorldId() || acProof.Player.Character != acCharacter ||
-        !ReadManifest(aToken, manifest) ||
+    if (!acProof.IsValid() || acProof.WorldId != m_world.GetCampaign().WorldId() || acProof.Player.Character != acCharacter || !ReadManifest(aToken, manifest) ||
         std::none_of(manifest.Players.begin(), manifest.Players.end(), [&](const auto& player) { return player == acProof.Player; }))
     {
-        aError = "The loaded ESS/SKSE files do not match this world's committed paired checkpoint. Load the complete matching checkpoint save";
+        aError = "The loaded ESS/SKSE/TCPHYS files do not match this world's committed paired checkpoint. Load the complete matching checkpoint save";
         return false;
     }
     return true;
@@ -123,11 +125,15 @@ void WorldCheckpointService::Send(NotifyWorldCheckpoint::Phase aPhase) noexcept
 }
 void WorldCheckpointService::Cancel(NotifyWorldCheckpoint::Error aError) noexcept
 {
+    const bool restoring = m_step == Step::WaitingReconnect || m_step == Step::PhysicsLoad;
+    m_world.ctx().at<PhysicsCheckpointService>().Cancel();
     m_control.Failure = aError;
     Send(NotifyWorldCheckpoint::Phase::Cancelled);
     m_step = Step::Idle;
     m_control = {};
     m_prepared = m_saved = 0;
+    if (restoring)
+        GameServer::Get()->StopForWorldError("Physical restore was not acknowledged by both clients; preserve the pending checkpoint and restart this server to retry");
 }
 void WorldCheckpointService::Begin(Player& aLeader, uint64_t aLoadId) noexcept
 {
@@ -137,44 +143,56 @@ void WorldCheckpointService::Begin(Player& aLeader, uint64_t aLoadId) noexcept
     m_control.PreviousEpoch = m_world.GetCampaign().WorldEpoch();
     if (m_world.ctx().at<QuestService>().HasPendingAuthority() || m_world.ctx().at<QuestGrantService>().HasPending() || m_world.ctx().at<WorldItemService>().HasPending())
     {
-        m_control.State = NotifyWorldCheckpoint::Phase::Cancelled; m_control.Failure = Error::Busy;
-        aLeader.Send(m_control); return;
+        m_control.State = NotifyWorldCheckpoint::Phase::Cancelled;
+        m_control.Failure = Error::Busy;
+        aLeader.Send(m_control);
+        return;
     }
     if (!m_world.GetPartyService().IsPlayerLeader(&aLeader))
     {
-        m_control.State = NotifyWorldCheckpoint::Phase::Cancelled; m_control.Failure = Error::NotLeader;
-        aLeader.Send(m_control); return;
+        m_control.State = NotifyWorldCheckpoint::Phase::Cancelled;
+        m_control.Failure = Error::NotLeader;
+        aLeader.Send(m_control);
+        return;
     }
     auto* party = m_world.GetPartyService().GetPlayerParty(&aLeader);
-    if (!party || party->Members.size() != 2 || m_world.GetPlayerManager().Count() != 2 ||
-        !party->Members[0]->IsCampaignReady() || !party->Members[1]->IsCampaignReady())
+    if (!party || party->Members.size() != 2 || m_world.GetPlayerManager().Count() != 2 || !party->Members[0]->IsCampaignReady() || !party->Members[1]->IsCampaignReady())
     {
-        m_control.State = NotifyWorldCheckpoint::Phase::Cancelled; m_control.Failure = Error::NeedTwoPlayers;
-        aLeader.Send(m_control); return;
+        m_control.State = NotifyWorldCheckpoint::Phase::Cancelled;
+        m_control.Failure = Error::NeedTwoPlayers;
+        aLeader.Send(m_control);
+        return;
     }
     m_control.Members[0] = aLeader.GetPersistentCharacterId();
-    if (!aLoadId && !m_world.ctx().at<WorldItemService>().Flush()) { Cancel(Error::Busy); return; }
     for (const Player* member : party->Members)
         if (member != &aLeader)
             m_control.Members[1] = member->GetPersistentCharacterId();
+    if (!aLoadId && (!m_world.ctx().at<WorldItemService>().Flush() || !m_world.ctx().at<PlacedPhysicsService>().Flush()))
+    {
+        Cancel(Error::Busy);
+        return;
+    }
     if (aLoadId)
     {
         if (!ReadManifest(aLoadId, m_control.Manifest) || m_control.Manifest.Players[0].Character != m_control.Members[0] ||
             m_control.Manifest.Players[1].Character != m_control.Members[1])
         {
-            Cancel(Error::DifferentCharacters); return;
+            Cancel(Error::DifferentCharacters);
+            return;
         }
         m_control.Id = aLoadId;
+        m_control.PhysicsDigest = m_control.Manifest.PhysicsDigest;
     }
     if (!m_world.GetCampaign().ReserveCheckpoint(m_control.Nonce))
     {
-        Cancel(Error::Storage); return;
+        Cancel(Error::Storage);
+        return;
     }
     if (!aLoadId)
         m_control.Id = m_control.Nonce;
     m_control.Calendar = m_world.GetCalendarService().GetModel();
     m_prepared = m_saved = 0;
-    m_deadline = GameServer::Get()->GetTick() + 90000;
+    m_deadline = GameServer::Get()->GetTick() + 240000;
     m_step = aLoadId ? Step::PrepareLoad : Step::PrepareSave;
     Send(aLoadId ? NotifyWorldCheckpoint::Phase::PrepareLoad : NotifyWorldCheckpoint::Phase::PrepareSave);
 }
@@ -189,7 +207,7 @@ void WorldCheckpointService::OnRequest(const PacketEvent<RequestWorldCheckpoint>
             Begin(*acPacket.pPlayer, request.Action == RequestWorldCheckpoint::Kind::Load ? request.Id : 0);
         return;
     }
-    if (m_step == Step::Idle || m_step == Step::WaitingReconnect || request.Nonce != m_control.Nonce || request.Id != m_control.Id)
+    if (m_step == Step::Idle || request.Nonce != m_control.Nonce || request.Id != m_control.Id)
         return;
     const auto players = Players();
     size_t slot = 2;
@@ -200,7 +218,8 @@ void WorldCheckpointService::OnRequest(const PacketEvent<RequestWorldCheckpoint>
         return;
     if (request.Action == RequestWorldCheckpoint::Kind::Failed)
     {
-        Cancel(NotifyWorldCheckpoint::Error::Files); return;
+        Cancel(NotifyWorldCheckpoint::Error::Files);
+        return;
     }
     if (request.Action == RequestWorldCheckpoint::Kind::Prepared && (m_step == Step::PrepareSave || m_step == Step::PrepareLoad))
     {
@@ -209,14 +228,20 @@ void WorldCheckpointService::OnRequest(const PacketEvent<RequestWorldCheckpoint>
             return;
         if (m_step == Step::PrepareLoad)
         {
-            Restore(); return;
+            Restore();
+            return;
         }
-        m_step = Step::Saving;
+        m_step = Step::PhysicsSave;
         m_control.Calendar = m_world.GetCalendarService().GetModel();
         m_control.Manifest.Id = m_control.Id;
         m_control.Manifest.SavedEpoch = m_control.PreviousEpoch;
         m_control.Manifest.Calendar = m_control.Calendar;
-        Send(NotifyWorldCheckpoint::Phase::SaveNow);
+        if (!m_world.ctx().at<PhysicsCheckpointService>().Capture(m_control))
+        {
+            Cancel(NotifyWorldCheckpoint::Error::Storage);
+            return;
+        }
+        Send(NotifyWorldCheckpoint::Phase::CapturePhysics);
     }
     else if (request.Action == RequestWorldCheckpoint::Kind::Saved && m_step == Step::Saving)
     {
@@ -232,9 +257,11 @@ void WorldCheckpointService::OnRequest(const PacketEvent<RequestWorldCheckpoint>
         Vector<uint8_t> metadata(buffer.GetWriteData(), buffer.GetWriteData() + writer.Size());
         if (!m_control.Manifest.IsValid() || !m_world.GetCampaign().CaptureCheckpoint(m_control.Id, metadata))
         {
-            Cancel(NotifyWorldCheckpoint::Error::Storage); return;
+            Cancel(NotifyWorldCheckpoint::Error::Storage);
+            return;
         }
         Send(NotifyWorldCheckpoint::Phase::Saved);
+        m_world.ctx().at<PhysicsCheckpointService>().Cancel();
         m_step = Step::Idle;
         m_control = {};
     }
@@ -244,7 +271,8 @@ void WorldCheckpointService::Restore() noexcept
     const auto players = Players();
     if (!players[0] || !players[1])
     {
-        Cancel(NotifyWorldCheckpoint::Error::Membership); return;
+        Cancel(NotifyWorldCheckpoint::Error::Membership);
+        return;
     }
     const std::array<ConnectionId_t, 2> connections{players[0]->GetConnectionId(), players[1]->GetConnectionId()};
     // Normal departure flushes loaded-object state. Do ALL of it before the
@@ -254,7 +282,8 @@ void WorldCheckpointService::Restore() noexcept
     m_world.clear();
     if (!m_world.GetCampaign().RestoreCheckpoint(m_control.Id))
     {
-        GameServer::Get()->StopForWorldError(m_world.GetCampaign().Error()); return;
+        GameServer::Get()->StopForWorldError(m_world.GetCampaign().Error());
+        return;
     }
     m_control.Calendar = m_control.Manifest.Calendar;
     m_world.GetCalendarService().RestoreCheckpointModel(m_control.Calendar);
@@ -274,19 +303,65 @@ void WorldCheckpointService::OnUpdate(const UpdateEvent&) noexcept
     {
         if (players[0] && players[1])
         {
-            if (!m_world.GetCampaign().CompleteRestore())
-            {
-                GameServer::Get()->StopForWorldError(m_world.GetCampaign().Error()); return;
-            }
             m_world.GetPartyService().RestoreCheckpointLeader(players[0], players[1]);
-            m_control.PreviousEpoch = m_world.GetCampaign().WorldEpoch();
-            Send(NotifyWorldCheckpoint::Phase::Resume);
-            m_step = Step::Idle; m_control = {};
+            if (!m_world.ctx().at<PhysicsCheckpointService>().Load(m_control))
+            {
+                GameServer::Get()->StopForWorldError(m_world.GetCampaign().Error());
+                return;
+            }
+            m_step = Step::PhysicsLoad;
+            m_deadline = GameServer::Get()->GetTick() + 240000;
+            Send(NotifyWorldCheckpoint::Phase::AlignLoad);
         }
         return;
     }
-    if (!players[0] || !players[1] || !m_world.GetPartyService().IsPlayerLeader(players[0]) ||
-        players[0]->GetParty().JoinedPartyId != players[1]->GetParty().JoinedPartyId)
+    if (!players[0] || !players[1] || !m_world.GetPartyService().IsPlayerLeader(players[0]) || players[0]->GetParty().JoinedPartyId != players[1]->GetParty().JoinedPartyId)
+    {
+        Cancel(NotifyWorldCheckpoint::Error::Membership);
+        return;
+    }
+    if (m_step == Step::PhysicsSave || m_step == Step::PhysicsLoad)
+    {
+        auto& physics = m_world.ctx().at<PhysicsCheckpointService>();
+        if (physics.Failed())
+        {
+            Cancel(NotifyWorldCheckpoint::Error::Files);
+            return;
+        }
+        if (physics.Ready())
+        {
+            if (m_step == Step::PhysicsSave)
+            {
+                const auto& frame = physics.Frame();
+                m_control.PhysicsDigest = physics.Digest();
+                m_control.Manifest.PhysicsDigest = physics.Digest();
+                m_control.Manifest.PhysicsEntries = static_cast<uint32_t>(frame.Entries.size());
+                if (!m_world.ctx().at<PlacedPhysicsService>().CommitPhysics(frame) || !m_world.ctx().at<WorldItemService>().CommitPhysics(frame) ||
+                    !m_world.GetCampaign().SavePhysicsFrame(frame, physics.Digest()))
+                {
+                    Cancel(NotifyWorldCheckpoint::Error::Storage);
+                    return;
+                }
+                m_step = Step::Saving;
+                Send(NotifyWorldCheckpoint::Phase::SaveNow);
+            }
+            else
+            {
+                if (!m_world.GetCampaign().CompleteRestore())
+                {
+                    GameServer::Get()->StopForWorldError(m_world.GetCampaign().Error());
+                    return;
+                }
+                m_control.PreviousEpoch = m_world.GetCampaign().WorldEpoch();
+                Send(NotifyWorldCheckpoint::Phase::Resume);
+                physics.Cancel();
+                m_step = Step::Idle;
+                m_control = {};
+                return;
+            }
+        }
+    }
+    if (!players[0] || !players[1] || !m_world.GetPartyService().IsPlayerLeader(players[0]) || players[0]->GetParty().JoinedPartyId != players[1]->GetParty().JoinedPartyId)
         Cancel(NotifyWorldCheckpoint::Error::Membership);
     else if (GameServer::Get()->GetTick() >= m_deadline)
         Cancel(NotifyWorldCheckpoint::Error::Timeout);

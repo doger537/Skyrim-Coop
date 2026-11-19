@@ -1,5 +1,7 @@
 #pragma once
 #include <Messages/WorldItemMessages.h>
+#include <Messages/PlacedPhysicsMessages.h>
+#include <Messages/PhysicsFrameMessages.h>
 #include <Messages/NotifyQuestProposal.h>
 #include <Messages/NotifyWorldCheckpoint.h>
 #include <Messages/NotifyCampaignCheckpoint.h>
@@ -81,11 +83,16 @@ struct ServerMessageFactory
     template <class T> static auto Visit(T&& func)
     {
         auto s_visitor = CreateMessageVisitor<
-            AuthenticationResponse, AssignCharacterResponse, ServerReferencesMoveRequest, ServerTimeSettings, CharacterSpawnRequest, NotifyInventoryChanges, NotifyInventorySnapshot, StringCacheUpdate, NotifyFactionsChanges, NotifyRemoveCharacter, NotifyQuestUpdate, NotifyPlayerList, NotifyPartyInfo, NotifyPartyInvite,
-            NotifyActorValueChanges, NotifyPartyJoined, NotifyPartyLeft, NotifyActorMaxValueChanges, NotifyHealthChangeBroadcast, NotifyActivate, NotifyLockChange, AssignObjectsResponse, NotifyDeathStateChange, NotifyOwnershipTransfer, NotifyObjectInventoryChanges, NotifySpellCast,
-            NotifyProjectileLaunch, NotifyInterruptCast, NotifyAddTarget, NotifyScriptAnimation, NotifyDrawWeapon, NotifyMount, NotifyNewPackage, NotifyRespawn, NotifySyncExperience, NotifyEquipmentChanges, NotifyChatMessageBroadcast, TeleportCommandResponse, NotifyPlayerRespawn, NotifyDialogue,
-            NotifySubtitle, NotifyPlayerDialogue, NotifyActorTeleport, NotifyPlayerLeft, NotifyPlayerJoined, NotifyDialogue, NotifySubtitle, NotifyPlayerDialogue, NotifyPlayerLevel, NotifyPlayerCellChanged, NotifyTeleport, NotifyPlayerHealthUpdate, NotifySettingsChange,
-            NotifyWeatherChange, NotifySetWaypoint, NotifyRemoveWaypoint, NotifySetTimeResult, NotifyRemoveSpell, NotifyActionEvents, NotifyCampaignCheckpoint, NotifyQuestJournal, NotifyCoopSleep, NotifyDialogueLease, NotifyPartyLocations, NotifyWorldCheckpoint, NotifyQuestProposal, NotifyQuestGrant, NotifyRagdollPose, NotifySharedQuestEffect, NotifyWorldItems, NotifyWorldItemTransfer, NotifyWorldItemMotion>;
+            AuthenticationResponse, AssignCharacterResponse, ServerReferencesMoveRequest, ServerTimeSettings, CharacterSpawnRequest, NotifyInventoryChanges,
+            NotifyInventorySnapshot, StringCacheUpdate, NotifyFactionsChanges, NotifyRemoveCharacter, NotifyQuestUpdate, NotifyPlayerList, NotifyPartyInfo, NotifyPartyInvite,
+            NotifyActorValueChanges, NotifyPartyJoined, NotifyPartyLeft, NotifyActorMaxValueChanges, NotifyHealthChangeBroadcast, NotifyActivate, NotifyLockChange,
+            AssignObjectsResponse, NotifyDeathStateChange, NotifyOwnershipTransfer, NotifyObjectInventoryChanges, NotifySpellCast, NotifyProjectileLaunch, NotifyInterruptCast,
+            NotifyAddTarget, NotifyScriptAnimation, NotifyDrawWeapon, NotifyMount, NotifyNewPackage, NotifyRespawn, NotifySyncExperience, NotifyEquipmentChanges,
+            NotifyChatMessageBroadcast, TeleportCommandResponse, NotifyPlayerRespawn, NotifyDialogue, NotifySubtitle, NotifyPlayerDialogue, NotifyActorTeleport, NotifyPlayerLeft,
+            NotifyPlayerJoined, NotifyDialogue, NotifySubtitle, NotifyPlayerDialogue, NotifyPlayerLevel, NotifyPlayerCellChanged, NotifyTeleport, NotifyPlayerHealthUpdate,
+            NotifySettingsChange, NotifyWeatherChange, NotifySetWaypoint, NotifyRemoveWaypoint, NotifySetTimeResult, NotifyRemoveSpell, NotifyActionEvents,
+            NotifyCampaignCheckpoint, NotifyQuestJournal, NotifyCoopSleep, NotifyDialogueLease, NotifyPartyLocations, NotifyWorldCheckpoint, NotifyQuestProposal, NotifyQuestGrant,
+            NotifyRagdollPose, NotifySharedQuestEffect, NotifyWorldItems, NotifyWorldItemTransfer, NotifyWorldItemMotion, NotifyPhysicsFrame, NotifyPlacedPhysics>;
 
         return s_visitor(std::forward<T>(func));
     }

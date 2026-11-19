@@ -33,7 +33,9 @@ bool FingerprintPluginFile(const std::filesystem::path& acPath, std::array<uint8
 
 bool FingerprintCheckpointSave(const std::filesystem::path& acPath, bool aWithCoSave, CheckpointPlayer& aPlayer) noexcept
 {
-    aPlayer.Save = {}; aPlayer.CoSave = {};
+    aPlayer.Save = {};
+    aPlayer.CoSave = {};
+    aPlayer.Physics = {};
     const auto inspect = [](const std::filesystem::path& acFile, CheckpointFile& aFile)
     {
         std::error_code error;
@@ -47,9 +49,13 @@ bool FingerprintCheckpointSave(const std::filesystem::path& acPath, bool aWithCo
     };
     auto companion = acPath;
     companion.replace_extension(L".skse");
-    if (acPath.empty() || !inspect(acPath, aPlayer.Save) || (aWithCoSave && !inspect(companion, aPlayer.CoSave)))
+    auto physics = acPath;
+    physics.replace_extension(L".tcphys");
+    if (acPath.empty() || !inspect(acPath, aPlayer.Save) || !inspect(physics, aPlayer.Physics) || (aWithCoSave && !inspect(companion, aPlayer.CoSave)))
     {
-        aPlayer.Save = {}; aPlayer.CoSave = {};
+        aPlayer.Save = {};
+        aPlayer.CoSave = {};
+        aPlayer.Physics = {};
         return false;
     }
     return aPlayer.IsValid();

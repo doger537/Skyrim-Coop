@@ -29,11 +29,13 @@
 #include <Services/RagdollService.h>
 #include <Services/SharedQuestEffectService.h>
 #include <Services/WorldItemService.h>
+#include <Services/PlacedPhysicsService.h>
+#include <Services/PhysicsCheckpointService.h>
 
 #include <Events/PreUpdateEvent.h>
 #include <Events/UpdateEvent.h>
 
-#include <ModCompat/BehaviorVar.h>  
+#include <ModCompat/BehaviorVar.h>
 
 World::World()
     : m_runner(m_dispatcher)
@@ -70,6 +72,8 @@ World::World()
     ctx().emplace<RagdollService>(*this, m_dispatcher, m_transport);
     ctx().emplace<SharedQuestEffectService>(*this, m_dispatcher, m_transport);
     ctx().emplace<WorldItemService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<PlacedPhysicsService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<PhysicsCheckpointService>(*this, m_dispatcher, m_transport);
 
     BehaviorVar::Get()->Init();
 }

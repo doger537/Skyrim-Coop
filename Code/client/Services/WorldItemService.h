@@ -19,6 +19,7 @@ public:
     WorldItemService(World&, entt::dispatcher&, TransportService&) noexcept;
     static bool Drop(Actor*, TESBoundObject*, ExtraDataList*, int32_t, const NiPoint3*) noexcept;
     static bool Pickup(Actor*, TESObjectREFR*, int32_t) noexcept;
+    bool PhysicsIdentity(uint32_t aHandle, uint64_t& aId, uint64_t& aEpoch) const noexcept;
 
 private:
     struct Slot
