@@ -1,4 +1,5 @@
 #include "ContentFingerprint.h"
+#include "ArchiveFingerprintCache.h"
 #include <cryptopp/sha.h>
 #include <fstream>
 #include <algorithm>
@@ -120,9 +121,12 @@ bool ReadPluginMasters(const std::filesystem::path& acPath, bool aExpectedLite, 
     return true;
 }
 
-bool FingerprintContent(const std::filesystem::path& acDataPath, const std::filesystem::path& acAddressLibrary, const std::filesystem::path& acScriptExtender, Mods& aMods) noexcept
+bool FingerprintContent(
+    const std::filesystem::path& acDataPath, const std::filesystem::path& acAddressLibrary, const std::filesystem::path& acScriptExtender, Mods& aMods,
+    const std::filesystem::path& acArchiveCache, ArchiveFingerprintStats* apStats) noexcept
 {
     aMods.Resources.clear();
+    ArchiveFingerprintCache archiveCache(acArchiveCache);
     bool success = true;
     for (auto& entry : aMods.ModList)
     {
@@ -169,7 +173,12 @@ bool FingerprintContent(const std::filesystem::path& acDataPath, const std::file
         if (cFile)
         {
             if (relative.parent_path().empty() && name.ends_with(".bsa"))
-                addFile("data/" + name, path);
+            {
+                auto& resource = aMods.Resources.emplace_back();
+                resource.Filename = "data/" + name;
+                if (!archiveCache.Fingerprint(path, resource.Digest))
+                    success = false;
+            }
             else if (IsLooseResource(name))
                 looseFiles.push_back({name, path});
         }
@@ -202,5 +211,9 @@ bool FingerprintContent(const std::filesystem::path& acDataPath, const std::file
     else
         success = false;
     std::sort(aMods.Resources.begin(), aMods.Resources.end(), [](const auto& left, const auto& right) { return left.Filename < right.Filename; });
+    if (complete)
+        archiveCache.Save();
+    if (apStats)
+        *apStats = archiveCache.Stats();
     return success;
 }

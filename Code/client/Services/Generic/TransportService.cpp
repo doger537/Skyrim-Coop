@@ -44,6 +44,18 @@
 
 static constexpr wchar_t kMO2DllName[] = L"usvfs_x64.dll";
 
+namespace
+{
+std::filesystem::path ArchiveCachePath() noexcept
+{
+    std::array<wchar_t, MAX_PATH> folder{};
+    const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", folder.data(), static_cast<DWORD>(folder.size()));
+    if (!length || length >= folder.size())
+        return {};
+    return std::filesystem::path(folder.data()) / L"SkyrimTrueCoop" / L"archive-fingerprints-v1.bin";
+}
+}
+
 using TiltedPhoques::Packet;
 
 TransportService::TransportService(World& aWorld, entt::dispatcher& aDispatcher) noexcept
@@ -335,7 +347,13 @@ void TransportService::OnUpdate()
             std::launch::async,
             [request = std::move(request), dataPath, addressLibrary, scriptExtender, checkpointPath = std::move(checkpointPath)]() mutable
             {
-                FingerprintContent(dataPath, addressLibrary, scriptExtender, request.UserMods);
+                const auto started = std::chrono::steady_clock::now();
+                spdlog::info("Checking game content");
+                ArchiveFingerprintStats archives;
+                FingerprintContent(dataPath, addressLibrary, scriptExtender, request.UserMods, ArchiveCachePath(), &archives);
+                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
+                spdlog::info("Game content check finished in {} ms. BSA cache hits: {}, archives read: {}, archive bytes read: {}",
+                    elapsed.count(), archives.Hits, archives.FilesRead, archives.BytesRead);
                 if (request.CheckpointToken)
                     FingerprintCheckpointSave(checkpointPath, request.SKSEActive, request.CheckpointProof.Player);
                 if (request.SKSEActive && scriptExtender.empty())

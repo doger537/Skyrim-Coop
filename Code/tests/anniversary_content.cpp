@@ -284,3 +284,73 @@ TEST_CASE("Fingerprinting detects BSA, loose asset and native library changes", 
     REQUIRE_FALSE(collect());
     REQUIRE(ContentCompatibility::Validate(mods).Reason == ContentCompatibility::Issue::UnreadableResource);
 }
+
+#ifdef _WIN32
+TEST_CASE("An archive cache survives a scan and invalidates same-size edits and corrupt entries", "[content.cache]")
+{
+    TempProfile profile;
+    const auto data = profile.Path / "Data";
+    const auto cache = profile.Path / "archive-cache.bin";
+    profile.Write("Data/Skyrim.esm", PluginHeader(false));
+    profile.Write("Data/primary.bsa", "first");
+    profile.Write("Data/other.bsa", "other");
+    profile.Write("Data/library.bin", "addresses");
+    Mods mods;
+    mods.ModList = {{"Skyrim.esm", 0, false}};
+    const auto scan = [&]
+    {
+        ArchiveFingerprintStats stats;
+        REQUIRE(FingerprintContent(data, data / "library.bin", {}, mods, cache, &stats));
+        REQUIRE(ContentCompatibility::Validate(mods));
+        return stats;
+    };
+
+    const auto cold = scan();
+    const auto original = mods;
+    REQUIRE(cold.Hits == 0);
+    REQUIRE(cold.FilesRead == 2);
+    REQUIRE(cold.BytesRead == 10);
+    REQUIRE(std::filesystem::is_regular_file(cache));
+    const auto warm = scan();
+    REQUIRE(warm.Hits == 2);
+    REQUIRE(warm.FilesRead == 0);
+    REQUIRE(warm.BytesRead == 0);
+    REQUIRE(ContentCompatibility::Compare(original, mods));
+
+    const auto primary = data / "primary.bsa";
+    const auto originalWriteTime = std::filesystem::last_write_time(primary);
+    profile.Write("Data/primary.bsa", "edits");
+    std::filesystem::last_write_time(primary, originalWriteTime);
+    const auto edited = scan();
+    REQUIRE(edited.Hits == 1);
+    REQUIRE(edited.BytesRead == 5);
+    REQUIRE(ContentCompatibility::Compare(original, mods).Reason == ContentCompatibility::Issue::DifferentResource);
+    const auto editedManifest = mods;
+
+    profile.Write("replacement.bsa", "again");
+    std::filesystem::last_write_time(profile.Path / "replacement.bsa", originalWriteTime);
+    std::filesystem::rename(profile.Path / "replacement.bsa", primary);
+    const auto replaced = scan();
+    REQUIRE(replaced.Hits == 1);
+    REQUIRE(replaced.BytesRead == 5);
+    REQUIRE(ContentCompatibility::Compare(editedManifest, mods).Reason == ContentCompatibility::Issue::DifferentResource);
+    const auto replacedManifest = mods;
+
+    // Change a byte within an entry while leaving the header and length intact.
+    {
+        std::fstream file(cache, std::ios::binary | std::ios::in | std::ios::out);
+        REQUIRE(file);
+        file.seekg(-1, std::ios::end);
+        const int byte = file.get();
+        REQUIRE(byte != std::char_traits<char>::eof());
+        file.seekp(-1, std::ios::end);
+        file.put(static_cast<char>(byte ^ 1));
+        REQUIRE(file);
+    }
+    const auto repaired = scan();
+    REQUIRE(repaired.Hits == 0);
+    REQUIRE(repaired.BytesRead == 10);
+    REQUIRE(ContentCompatibility::Compare(replacedManifest, mods));
+    REQUIRE(scan().Hits == 2);
+}
+#endif
