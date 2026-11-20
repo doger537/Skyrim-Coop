@@ -103,3 +103,45 @@ TEST_CASE("Different completed Helgen routes can join without replaying the prol
     REQUIRE_FALSE(PlanQuestReplay(journal, {}, false, local, plan));
     REQUIRE(plan.Apply.empty());
 }
+
+TEST_CASE("The Hadvar route accepts an imported difference in Alduin cleanup", "[quest.replay]")
+{
+    QuestJournal journal;
+    journal.Id = GameId(0, QuestSyncPolicy::kHadvarRoute);
+    journal.Type = 1;
+    journal.Started = true;
+    journal.Events = {{1, 0, true}, {0, 5, true}, {0, 10, true}, {0, 20, true}};
+    LocalQuestState local{true, false, {3, 5, 10, 20}};
+    QuestReplayPlan plan;
+
+    REQUIRE(PlanQuestReplay(journal, {}, false, local, plan));
+    REQUIRE(plan.Apply.empty());
+    journal.Events.push_back({0, 3, true});
+    local.Reached.erase(local.Reached.begin());
+    REQUIRE(PlanQuestReplay(journal, {}, false, local, plan));
+    REQUIRE(plan.Apply.empty());
+
+    SECTION("A missing conversation stage still blocks admission")
+    {
+        local.Reached.pop_back();
+    }
+    SECTION("An extra story stage still blocks admission")
+    {
+        local.Reached.push_back(30);
+    }
+    SECTION("The two players must have reached the Riverwood scene")
+    {
+        journal.Events.erase(journal.Events.begin() + 2);
+        local.Reached.erase(local.Reached.begin() + 1);
+    }
+    SECTION("A live Alduin stage stays in the shared history")
+    {
+        journal.Events.back().Bootstrap = false;
+    }
+    SECTION("A different quest cannot use the exception")
+    {
+        journal.Id.BaseId = 0x0004E50D;
+    }
+    REQUIRE_FALSE(PlanQuestReplay(journal, {}, false, local, plan));
+    REQUIRE(plan.Apply.empty());
+}

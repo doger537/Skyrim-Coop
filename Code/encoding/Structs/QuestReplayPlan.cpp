@@ -22,6 +22,23 @@ bool BothCompletedHelgen(const QuestJournal& acJournal, const LocalQuestState& a
     }
     return true;
 }
+
+bool CanAcceptLocalAlduinCleanup(const QuestJournal& acJournal, const LocalQuestState& acLocal) noexcept
+{
+    using namespace QuestSyncPolicy;
+    if (acJournal.Id.ModId != 0 || acJournal.Id.BaseId != kHadvarRoute || acJournal.Type != 1 ||
+        acJournal.Epoch != 1 || !acJournal.Started || acJournal.Stopped != acLocal.Stopped || !acJournal.Decisions.empty())
+        return false;
+
+    // Stage 3 disables and relocates the prologue's Alduin reference. Once
+    // both saves have reached the Hadvar-to-Riverwood scene, keep that local
+    // setup history without running its Papyrus fragment again.
+    return std::find(acLocal.Reached.begin(), acLocal.Reached.end(), kHadvarRiverwoodSceneStage) != acLocal.Reached.end() &&
+           std::any_of(acJournal.Events.begin(), acJournal.Events.end(),
+                       [](const auto& event) { return event.Status == 0 && event.Stage == kHadvarRiverwoodSceneStage; }) &&
+           std::none_of(acJournal.Events.begin(), acJournal.Events.end(),
+                        [](const auto& event) { return event.Stage == kHadvarAlduinCleanupStage && (event.Status != 0 || !event.Bootstrap); });
+}
 } // namespace
 
 bool PlanQuestReplay(
@@ -46,6 +63,14 @@ bool PlanQuestReplay(
     for (const auto& event : acJournal.Events)
         if (event.Status != 2)
             expected.insert(event.Stage);
+    if (CanAcceptLocalAlduinCleanup(acJournal, acLocal))
+    {
+        const uint16_t cleanup = QuestSyncPolicy::kHadvarAlduinCleanupStage;
+        if (expected.contains(cleanup))
+            reached.insert(cleanup);
+        else
+            reached.erase(cleanup);
+    }
     for (uint16_t stage : reached)
         if (!expected.contains(stage))
             return fail("Local quest contains progress outside the shared campaign; load a matching campaign save");

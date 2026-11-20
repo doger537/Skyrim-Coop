@@ -10,6 +10,9 @@ inline constexpr uint32_t kHelgenDragonAttack = 0x000D0593;
 inline constexpr uint32_t kHelgenPrologue = 0x0003372B; // MQ101
 inline constexpr uint16_t kHelgenEscapeStage = 900;
 inline constexpr uint16_t kHelgenCompletionStage = 1000;
+inline constexpr uint32_t kHadvarRoute = 0x0002BF9C; // MQ102A
+inline constexpr uint16_t kHadvarAlduinCleanupStage = 3;
+inline constexpr uint16_t kHadvarRiverwoodSceneStage = 10;
 
 inline constexpr bool IsLocalScene(uint32_t aModId, uint32_t aBaseId) noexcept
 {
