@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 #include <Structs/QuestReplayPlan.h>
+#include <Structs/QuestSyncPolicy.h>
 
 TEST_CASE("Quest replay keeps committed event order and requires an explicit stage allowlist", "[quest.replay]")
 {
@@ -53,5 +54,52 @@ TEST_CASE("Lifecycle replay is explicit and cannot silently reset another quest 
     REQUIRE(plan.Apply.back().Status == 2);
     journal.Epoch = 2;
     REQUIRE_FALSE(PlanQuestReplay(journal, {0, 10}, true, local, plan));
+    REQUIRE(plan.Apply.empty());
+}
+
+TEST_CASE("Different completed Helgen routes can join without replaying the prologue", "[quest.replay]")
+{
+    QuestJournal journal;
+    journal.Id = GameId(0, QuestSyncPolicy::kHelgenPrologue);
+    journal.Type = 1;
+    journal.Started = true;
+    journal.Stopped = true;
+    journal.Events = {{1, 0, true}, {0, 318, true}, {0, 900, true}, {0, 1000, true}, {2, 1000, true}};
+    LocalQuestState local{true, true, {317, 900, 1000}};
+    QuestReplayPlan plan;
+
+    REQUIRE(PlanQuestReplay(journal, {}, false, local, plan));
+    REQUIRE(plan.Apply.empty());
+
+    SECTION("A player still in Helgen must finish")
+    {
+        local.Stopped = false;
+        local.Reached = {317, 900};
+    }
+    SECTION("An incomplete imported run stays strict")
+    {
+        journal.Events[3].Stage = 800;
+    }
+    SECTION("A later run stays strict")
+    {
+        journal.Epoch = 2;
+    }
+    SECTION("A live stage stays strict")
+    {
+        journal.Events[1].Bootstrap = false;
+    }
+    SECTION("An explicit shared decision stays strict")
+    {
+        journal.Decisions.push_back({"route", 318});
+    }
+    SECTION("A form from a different plugin stays strict")
+    {
+        journal.Id.ModId = 1;
+    }
+    SECTION("A different Skyrim quest stays strict")
+    {
+        journal.Id.BaseId = 0x0004E50D;
+    }
+    REQUIRE_FALSE(PlanQuestReplay(journal, {}, false, local, plan));
     REQUIRE(plan.Apply.empty());
 }

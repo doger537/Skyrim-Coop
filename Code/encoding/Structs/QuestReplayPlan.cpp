@@ -1,6 +1,28 @@
 #include "QuestReplayPlan.h"
+#include "QuestSyncPolicy.h"
 #include <algorithm>
 #include <set>
+
+namespace
+{
+bool BothCompletedHelgen(const QuestJournal& acJournal, const LocalQuestState& acLocal) noexcept
+{
+    if (acJournal.Id.ModId != 0 || acJournal.Id.BaseId != QuestSyncPolicy::kHelgenPrologue ||
+        acJournal.Epoch != 1 || acJournal.Type != 1 || !acJournal.Started || !acJournal.Stopped ||
+        !acLocal.Stopped || !acJournal.Decisions.empty() ||
+        !std::all_of(acJournal.Events.begin(), acJournal.Events.end(), [](const auto& event) { return event.Bootstrap; }))
+        return false;
+
+    for (uint16_t stage : {QuestSyncPolicy::kHelgenEscapeStage, QuestSyncPolicy::kHelgenCompletionStage})
+    {
+        if (std::find(acLocal.Reached.begin(), acLocal.Reached.end(), stage) == acLocal.Reached.end() ||
+            !std::any_of(acJournal.Events.begin(), acJournal.Events.end(),
+                         [stage](const auto& event) { return event.Status == 0 && event.Stage == stage; }))
+            return false;
+    }
+    return true;
+}
+} // namespace
 
 bool PlanQuestReplay(
     const QuestJournal& acJournal, const TiltedPhoques::Vector<uint16_t>& acReplayStages, bool aReplayLifecycle, const LocalQuestState& acLocal, QuestReplayPlan& aPlan) noexcept
@@ -14,6 +36,11 @@ bool PlanQuestReplay(
     };
     if (!acJournal.IsValid() || !acLocal.Exists)
         return fail("Shared quest is invalid or missing from the game");
+    // Both players escaped Helgen before this campaign. Keep their local
+    // route history without replaying either set of prologue scripts.
+    if (BothCompletedHelgen(acJournal, acLocal))
+        return true;
+
     std::set<uint16_t> expected;
     std::set<uint16_t> reached(acLocal.Reached.begin(), acLocal.Reached.end());
     for (const auto& event : acJournal.Events)

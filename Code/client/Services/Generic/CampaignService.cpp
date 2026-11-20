@@ -91,11 +91,18 @@ bool QuestService::SeedCampaign(uint32_t& aCount, String& aError) noexcept
 
 bool QuestService::CheckCampaign(bool aApply, String& aError) noexcept
 {
+    aError.clear();
     if (!m_checkpointComplete || m_journals.size() != m_checkpoint.Count)
     {
         aError = "Shared quest snapshot is incomplete";
         return false;
     }
+    const auto report = [&](String aReason)
+    {
+        spdlog::warn("Campaign quest admission at revision {}: {}", m_checkpoint.Revision, aReason);
+        if (aError.empty())
+            aError = std::move(aReason);
+    };
     Vector<QuestReplayPlan> plans;
     std::set<uint32_t> known;
     for (const auto& message : m_journals)
@@ -105,14 +112,15 @@ bool QuestService::CheckCampaign(bool aApply, String& aError) noexcept
         QuestReplayPlan plan;
         if (!IsSharedQuest(quest) || !known.insert(form).second || !PlanQuestReplay(message.Data, message.ReplayStages, message.ReplayLifecycle, Observe(quest), plan))
         {
-            aError = String("Quest ") + std::to_string(message.Data.Id.LogFormat()).c_str() + ": " +
-                     (plan.Error.empty() ? String("Missing, duplicate or unsupported quest in the shared campaign") : plan.Error);
-            return false;
+            const char* editorId = quest ? quest->idName.AsAscii() : nullptr;
+            report(fmt::format("Quest {} ({}): {}", message.Data.Id.LogFormat(), editorId ? editorId : "unresolved",
+                               plan.Error.empty() ? "Missing, duplicate or unsupported quest in the shared campaign" : plan.Error.c_str()).c_str());
+            continue;
         }
         if (!aApply && !plan.Apply.empty())
         {
-            aError = "Quest state changed during admission. Load a matching campaign save and reconnect";
-            return false;
+            report(fmt::format("Quest {:08X} changed during admission. Load a matching campaign save and reconnect", form).c_str());
+            continue;
         }
         plans.push_back(std::move(plan));
     }
@@ -123,10 +131,14 @@ bool QuestService::CheckCampaign(bool aApply, String& aError) noexcept
         const auto local = Observe(quest);
         if (!local.Stopped || !local.Reached.empty())
         {
-            aError = "Local save has quest progress outside the shared campaign. Load a matching campaign save";
-            return false;
+            const char* editorId = quest->idName.AsAscii();
+            report(fmt::format("Quest {} ({:08X}) has local progress outside the shared campaign. Load a matching campaign save",
+                               editorId ? editorId : "unresolved", quest->formID).c_str());
         }
     }
+    if (!aError.empty())
+        return false;
+
     // No engine writes until every quest and every proposed replay has passed validation.
     if (aApply)
         for (size_t i = 0; i < plans.size(); ++i)
