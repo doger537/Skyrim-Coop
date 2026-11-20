@@ -57,6 +57,17 @@ TEST_CASE("Lifecycle replay is explicit and cannot silently reset another quest 
     REQUIRE(plan.Apply.empty());
 }
 
+TEST_CASE("A local-only Companions offer is eligible for admission until its first objective", "[quest.replay]")
+{
+    const GameId offer(0, 0x0001CEEE); // CR01
+    LocalQuestState local{true, false, {0, 1}};
+    REQUIRE(IsUnacceptedCompanionsOffer(offer, 5, local));
+    REQUIRE_FALSE(IsUnacceptedCompanionsOffer(GameId(1, offer.BaseId), 5, local));
+    REQUIRE_FALSE(IsUnacceptedCompanionsOffer(GameId(0, 0x0004B2D9), 5, local));
+    local.Reached.push_back(10);
+    REQUIRE_FALSE(IsUnacceptedCompanionsOffer(offer, 5, local));
+}
+
 TEST_CASE("Different completed Helgen routes can join without replaying the prologue", "[quest.replay]")
 {
     QuestJournal journal;
@@ -141,6 +152,47 @@ TEST_CASE("The Hadvar route accepts an imported difference in Alduin cleanup", "
     SECTION("A different quest cannot use the exception")
     {
         journal.Id.BaseId = 0x0004E50D;
+    }
+    REQUIRE_FALSE(PlanQuestReplay(journal, {}, false, local, plan));
+    REQUIRE(plan.Apply.empty());
+}
+
+TEST_CASE("An unaccepted Companions radiant offer never needs lifecycle replay", "[quest.replay]")
+{
+    QuestJournal journal;
+    journal.Id = GameId(0, 0x00025231); // CR04
+    journal.Type = 5;
+    journal.Started = true;
+    journal.Events = {{1, 0, true}, {0, 0, true}, {0, 1, true}};
+    LocalQuestState local{true, true, {}};
+    QuestReplayPlan plan;
+
+    REQUIRE(PlanQuestReplay(journal, {}, false, local, plan));
+    REQUIRE(plan.Apply.empty());
+    local.Stopped = false;
+    local.Reached = {0};
+    REQUIRE(PlanQuestReplay(journal, {}, false, local, plan));
+    REQUIRE(plan.Apply.empty());
+
+    SECTION("A player has accepted the offer")
+    {
+        local.Reached.push_back(10);
+    }
+    SECTION("The shared quest already has a real objective")
+    {
+        journal.Events.push_back({0, 10, true});
+    }
+    SECTION("The offer was modified during the campaign")
+    {
+        journal.Events.back().Bootstrap = false;
+    }
+    SECTION("The main Companions quest keeps its own checks")
+    {
+        journal.Id.BaseId = 0x0004B2D9; // C00
+    }
+    SECTION("A form from another plugin cannot use the rule")
+    {
+        journal.Id.ModId = 1;
     }
     REQUIRE_FALSE(PlanQuestReplay(journal, {}, false, local, plan));
     REQUIRE(plan.Apply.empty());

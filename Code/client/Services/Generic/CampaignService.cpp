@@ -131,6 +131,11 @@ bool QuestService::CheckCampaign(bool aApply, String& aError) noexcept
         const auto local = Observe(quest);
         if (!local.Stopped || !local.Reached.empty())
         {
+            GameId id{};
+            if (m_world.GetModSystem().GetServerModId(quest->formID, id) &&
+                IsUnacceptedCompanionsOffer(id, static_cast<uint8_t>(quest->type), local))
+                continue;
+
             const char* editorId = quest->idName.AsAscii();
             report(fmt::format("Quest {} ({:08X}) has local progress outside the shared campaign. Load a matching campaign save",
                                editorId ? editorId : "unresolved", quest->formID).c_str());

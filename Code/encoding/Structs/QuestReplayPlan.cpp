@@ -1,6 +1,7 @@
 #include "QuestReplayPlan.h"
 #include "QuestSyncPolicy.h"
 #include <algorithm>
+#include <iterator>
 #include <set>
 
 namespace
@@ -39,7 +40,27 @@ bool CanAcceptLocalAlduinCleanup(const QuestJournal& acJournal, const LocalQuest
            std::none_of(acJournal.Events.begin(), acJournal.Events.end(),
                         [](const auto& event) { return event.Stage == kHadvarAlduinCleanupStage && (event.Status != 0 || !event.Bootstrap); });
 }
+
+bool CanLeaveCompanionsOfferToSkyrim(const QuestJournal& acJournal, const LocalQuestState& acLocal) noexcept
+{
+    if (acJournal.Epoch != 1 || !acJournal.Started || acJournal.Stopped || !acJournal.Decisions.empty() || acJournal.Events.empty() ||
+        !IsUnacceptedCompanionsOffer(acJournal.Id, acJournal.Type, acLocal))
+        return false;
+
+    return std::all_of(acJournal.Events.begin(), acJournal.Events.end(), [](const auto& event)
+                       { return event.Bootstrap && ((event.Status == 0 && event.Stage <= 1) || (event.Status == 1 && event.Stage == 0)); });
+}
 } // namespace
+
+bool IsUnacceptedCompanionsOffer(const GameId& acId, uint8_t aType, const LocalQuestState& acLocal) noexcept
+{
+    // The stage-zero fragments of these quests call CompanionsRadiantQuest.Setup,
+    // which registers an offer and sets stage 1. The first objective is at stage 10.
+    constexpr uint32_t kOfferQuests[]{0x0001CEEE, 0x00025185, 0x00025231, 0x0002522F, 0x000C18E1, 0x00025250, 0x00025251}; // CR01, CR02, CR04-CR08
+    return acLocal.Exists && acId.ModId == 0 && aType == 5 &&
+           std::find(std::begin(kOfferQuests), std::end(kOfferQuests), acId.BaseId) != std::end(kOfferQuests) &&
+           std::all_of(acLocal.Reached.begin(), acLocal.Reached.end(), [](uint16_t stage) { return stage <= 1; });
+}
 
 bool PlanQuestReplay(
     const QuestJournal& acJournal, const TiltedPhoques::Vector<uint16_t>& acReplayStages, bool aReplayLifecycle, const LocalQuestState& acLocal, QuestReplayPlan& aPlan) noexcept
@@ -56,6 +77,8 @@ bool PlanQuestReplay(
     // Both players escaped Helgen before this campaign. Keep their local
     // route history without replaying either set of prologue scripts.
     if (BothCompletedHelgen(acJournal, acLocal))
+        return true;
+    if (CanLeaveCompanionsOfferToSkyrim(acJournal, acLocal))
         return true;
 
     std::set<uint16_t> expected;
