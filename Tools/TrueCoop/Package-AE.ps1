@@ -77,7 +77,7 @@ Copy-Item -LiteralPath $InstallGuide -Destination $guideOutput
 Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination $info
 Copy-Item -LiteralPath (Join-Path $repo 'build/BuildInfo.h') -Destination $info
 foreach ($name in @('TiltedConnect','TiltedHooks','TiltedReverse','TiltedUI')) { Copy-Item -LiteralPath (Join-Path $repo "Libraries/$name/LICENSE") -Destination (Join-Path $info "$name-LICENSE.txt") }
-foreach ($name in @('CONNECTION.md','PERSISTENCE.md','QUESTS.md','OBJECTS.md')) { Copy-Item -LiteralPath (Join-Path $repo "docs/truecoop/ae/$name") -Destination $info }
+foreach ($name in @('CONNECTION.md','PERSISTENCE.md','QUESTS.md','OBJECTS.md','COOP_SYNC_ROADMAP_RU.md')) { Copy-Item -LiteralPath (Join-Path $repo "docs/truecoop/ae/$name") -Destination $info }
 Copy-Item -LiteralPath (Join-Path $repo 'GameFiles/Server/TrueCoopQuestAdapters.example.json') -Destination $info
 foreach ($name in @('COOP_RESYNC.md','DEEP_COOP_TEST_RU.md','docs/truecoop/HOST_AUTHORITY_DESIGN.md','docs/truecoop/PHYSICS_NPC_AUDIT.md','docs/truecoop/PHYSICS_NPC_20261118.md','docs/truecoop/WORLD_ITEM_RECEIPTS.md','docs/truecoop/DIALOGUE_LEASE.md','docs/truecoop/PLAYER_MARKERS.md','docs/truecoop/CHARACTER_IDENTITY.md','docs/truecoop/PAIRED_CHECKPOINTS.md','docs/truecoop/QUEST_GRANTS.md','docs/truecoop/NATIVE_QUEST_GATE.md','docs/truecoop/QUEST_GRANT_DELIVERY.md','docs/truecoop/IMPLEMENTATION_20261118.md','docs/truecoop/ACCELERATED_QUESTS_RU.md','docs/truecoop/ACCELERATED_BUILD_20261119_RU.md')) {
     $source = Join-Path $repo $name

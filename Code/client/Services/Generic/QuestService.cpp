@@ -22,7 +22,9 @@
 
 #include <Messages/RequestQuestUpdate.h>
 #include <Messages/NotifyQuestUpdate.h>
+#include <Structs/QuestScenePolicy.h>
 #include <Structs/QuestSyncPolicy.h>
+#include <array>
 #include <iterator>
 #include <set>
 
@@ -224,63 +226,71 @@ BSTEventResult QuestService::OnEvent(const TESTopicInfoEvent* apEvent, const Eve
     return BSTEventResult::kOk;
 }
 
-static bool Compare(TESConditionItem::OpCode aOpCode, float aLhs, float aRhs) noexcept
+static QuestScenePolicy::Comparison SceneComparison(const TESConditionItem& acItem) noexcept
 {
-    switch (aOpCode)
-    {
-    case TESConditionItem::OpCode::kEqualTo: return aLhs == aRhs;
-    case TESConditionItem::OpCode::kNotEqualTo: return aLhs != aRhs;
-    case TESConditionItem::OpCode::kGreaterThan: return aLhs > aRhs;
-    case TESConditionItem::OpCode::kGreaterThanOrEqualTo: return aLhs >= aRhs;
-    case TESConditionItem::OpCode::kLessThan: return aLhs < aRhs;
-    case TESConditionItem::OpCode::kLessThanOrEqualTo: return aLhs <= aRhs;
-    default: return false;
-    }
+    using OpCode = TESConditionItem::OpCode;
+    using Comparison = QuestScenePolicy::Comparison;
+    static_assert(static_cast<Comparison>(OpCode::kEqualTo) == Comparison::Equal);
+    static_assert(static_cast<Comparison>(OpCode::kNotEqualTo) == Comparison::NotEqual);
+    static_assert(static_cast<Comparison>(OpCode::kGreaterThan) == Comparison::Greater);
+    static_assert(static_cast<Comparison>(OpCode::kGreaterThanOrEqualTo) == Comparison::GreaterOrEqual);
+    static_assert(static_cast<Comparison>(OpCode::kLessThan) == Comparison::Less);
+    static_assert(static_cast<Comparison>(OpCode::kLessThanOrEqualTo) == Comparison::LessOrEqual);
+    return static_cast<Comparison>(acItem.GetOpCode());
 }
 
-// Whether setting the stage turns a GetStage/GetStageDone check on the quest from false to true. With aOrChecksLater,
-// also whether it changes the check's result at all, or the check is on the same or a later stage.
-static bool IsCheckedByStage(const TESCondition& acConditions, TESQuest* apQuest, uint16_t aStage, bool aOrChecksLater) noexcept
+// Watch phase conditions on this quest that may change with the stage or
+// depend on a stage still ahead. Global comparisons still count as a dependency.
+static bool WatchesQuestStage(const TESCondition& acConditions, TESQuest* apQuest, uint16_t aStage) noexcept
 {
-    for (const TESConditionItem* pItem = acConditions.pHead; pItem; pItem = pItem->pNext)
+    using namespace QuestScenePolicy;
+    for (const auto* pItem = acConditions.pHead; pItem; pItem = pItem->pNext)
     {
+        if (pItem->params[0] != apQuest)
+            continue;
+        if (pItem->function == TESConditionItem::kGetStageDone)
+        {
+            const uint16_t stage = static_cast<uint16_t>(reinterpret_cast<uintptr_t>(pItem->params[1]));
+            if (stage >= aStage)
+                return true;
+        }
+        else if (pItem->function == TESConditionItem::kGetStage)
+        {
+            const auto operation = SceneComparison(*pItem);
+            if (pItem->UsesGlobal() || !IsSupported(operation, pItem->comparisonValue) || pItem->comparisonValue >= aStage ||
+                Compare(operation, apQuest->currentStage, pItem->comparisonValue) !=
+                    Compare(operation, std::max(apQuest->currentStage, aStage), pItem->comparisonValue))
+                return true;
+        }
+    }
+    return false;
+}
+
+static size_t ClosingScenePrefix(const TESCondition& acConditions, TESQuest* apQuest, const Vector<uint16_t>& acStages) noexcept
+{
+    using namespace QuestScenePolicy;
+    std::array<Condition, kMaxConditions> conditions{};
+    size_t count = 0;
+    for (const auto* pItem = acConditions.pHead; pItem; pItem = pItem->pNext)
+    {
+        if (count == conditions.size())
+            return 0;
+        auto& condition = conditions[count++];
+        condition.OrWithNext = pItem->OrWithNext();
         if (pItem->UsesGlobal() || pItem->params[0] != apQuest)
             continue;
-
-        const TESConditionItem::OpCode cOpCode = pItem->GetOpCode();
-        float checkedStage = 0.f;
-        bool before = false;
-        bool after = false;
+        condition.Operation = SceneComparison(*pItem);
+        condition.Value = pItem->comparisonValue;
         if (pItem->function == TESConditionItem::kGetStage)
-        {
-            // Stages only go up, GetStage returns the highest one set
-            checkedStage = pItem->comparisonValue;
-            before = Compare(cOpCode, apQuest->currentStage, pItem->comparisonValue);
-            after = Compare(cOpCode, std::max(apQuest->currentStage, aStage), pItem->comparisonValue);
-        }
+            condition.Source = Operand::CurrentStage;
         else if (pItem->function == TESConditionItem::kGetStageDone)
         {
-            const uint16_t cStage = static_cast<uint16_t>(reinterpret_cast<uintptr_t>(pItem->params[1]));
-            checkedStage = cStage;
-            if (cStage == aStage)
-            {
-                before = Compare(cOpCode, apQuest->IsStageDone(cStage) ? 1.f : 0.f, pItem->comparisonValue);
-                after = Compare(cOpCode, 1.f, pItem->comparisonValue);
-            }
+            condition.Source = Operand::CompletedStage;
+            condition.Stage = static_cast<uint16_t>(reinterpret_cast<uintptr_t>(pItem->params[1]));
+            condition.WasDone = apQuest->IsStageDone(condition.Stage);
         }
-        else
-        {
-            continue;
-        }
-
-        if (!before && after)
-            return true;
-
-        if (aOrChecksLater && (before != after || checkedStage >= aStage))
-            return true;
     }
-
-    return false;
+    return ClosingPrefix(std::span(conditions).first(count), apQuest->currentStage, acStages);
 }
 
 // Whether the phase's own lines are done, so passing its completion conditions won't cut one off. Timers and packages
@@ -315,8 +325,8 @@ static bool WatchesStage(const BGSScene& acScene, TESQuest* apQuest, uint16_t aS
 
         // The current phase already passed its start conditions.
         const bool running = acScene.currentPhaseIndex == i;
-        if ((!running && IsCheckedByStage(phase->startConditions, apQuest, aStage, true)) ||
-            IsCheckedByStage(phase->completionConditions, apQuest, aStage, true))
+        if ((!running && WatchesQuestStage(phase->startConditions, apQuest, aStage)) ||
+            WatchesQuestStage(phase->completionConditions, apQuest, aStage))
             return true;
     }
     return false;
@@ -342,16 +352,15 @@ static SceneStageGate CheckSceneStages(TESQuest* apQuest, const Vector<uint16_t>
         if (pScene->currentPhaseIndex >= pScene->phases.length)
             return SceneStageGate::Wait;
         const auto* phase = pScene->phases[pScene->currentPhaseIndex];
-        if (!phase)
+        if (!phase || !IsPhaseWaitingOnConditions(pScene, pScene->currentPhaseIndex))
             return SceneStageGate::Wait;
-        const auto required = std::find_if(acStages.begin(), acStages.end(), [&](uint16_t aStage)
-            { return IsCheckedByStage(phase->completionConditions, apQuest, aStage, false); });
-        if (required == acStages.end() || !IsPhaseWaitingOnConditions(pScene, pScene->currentPhaseIndex))
+        const size_t prefix = ClosingScenePrefix(phase->completionConditions, apQuest, acStages);
+        if (prefix == 0)
             return SceneStageGate::Wait;
 
         // The fragment for an earlier stage can wait on this phase.
         // Confirm the stage itself before proceeding to the required stage.
-        if (required != acStages.begin())
+        if (prefix > 1)
             gate = SceneStageGate::ReleasePrefix;
     }
     return gate;
@@ -491,7 +500,12 @@ QuestApplyConfirmation::Next QuestService::AdvanceQuestUpdate(QuestUpdateIterato
         sceneGate = CheckSceneStages(quest, stages);
     }
 
-    const auto next = queued.Verification.Observe(GetTickCount64(), reached, sceneGate == SceneStageGate::Wait);
+    const bool blockedByScene = sceneGate == SceneStageGate::Wait;
+    if (queued.WaitingForScene != blockedByScene)
+        spdlog::info("Quest scene stage {:08X}:{:08X} stage {} revision {} {}",
+                     update.Id.ModId, update.Id.BaseId, update.Stage, update.Revision, blockedByScene ? "waiting" : "released");
+    queued.WaitingForScene = blockedByScene;
+    const auto next = queued.Verification.Observe(GetTickCount64(), reached, blockedByScene);
     switch (next)
     {
     case QuestApplyConfirmation::Next::Confirm:

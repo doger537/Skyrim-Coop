@@ -61,6 +61,7 @@ private:
         NotifyQuestUpdate Update;
         QuestApplyConfirmation Verification;
         bool NativeResult{};
+        bool WaitingForScene{};
     };
     using QuestUpdateIterator = std::deque<QueuedQuest>::iterator;
     QuestApplyConfirmation::Next AdvanceQuestUpdate(QuestUpdateIterator aEntry) noexcept;
