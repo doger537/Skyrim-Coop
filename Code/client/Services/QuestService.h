@@ -21,6 +21,7 @@ struct TESQuest;
  */
 class QuestService final : public BSTEventSink<TESQuestStartStopEvent>,
                            BSTEventSink<TESQuestStageEvent>,
+                           BSTEventSink<TESQuestStageItemDoneEvent>,
                            BSTEventSink<TESSceneEvent>,
                            BSTEventSink<TESSceneActionEvent>,
                            BSTEventSink<TESScenePhaseEvent>,
@@ -45,6 +46,7 @@ private:
 
     BSTEventResult OnEvent(const TESQuestStartStopEvent*, const EventDispatcher<TESQuestStartStopEvent>*) override;
     BSTEventResult OnEvent(const TESQuestStageEvent*, const EventDispatcher<TESQuestStageEvent>*) override;
+    BSTEventResult OnEvent(const TESQuestStageItemDoneEvent*, const EventDispatcher<TESQuestStageItemDoneEvent>*) override;
     BSTEventResult OnEvent(const TESSceneEvent*, const EventDispatcher<TESSceneEvent>*) override;
     BSTEventResult OnEvent(const TESSceneActionEvent*, const EventDispatcher<TESSceneActionEvent>*) override;
     BSTEventResult OnEvent(const TESScenePhaseEvent*, const EventDispatcher<TESScenePhaseEvent>*) override;
@@ -60,6 +62,8 @@ private:
         QuestApplyConfirmation Verification;
         bool NativeResult{};
     };
+    using QuestUpdateIterator = std::deque<QueuedQuest>::iterator;
+    QuestApplyConfirmation::Next AdvanceQuestUpdate(QuestUpdateIterator aEntry) noexcept;
     std::deque<QueuedQuest> m_questUpdates;
     bool m_admissionReplayPending{};
     void OnCampaignCheckpoint(const NotifyCampaignCheckpoint&) noexcept;

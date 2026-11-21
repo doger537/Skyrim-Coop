@@ -23,6 +23,8 @@
 #include <Messages/RequestQuestUpdate.h>
 #include <Messages/NotifyQuestUpdate.h>
 #include <Structs/QuestSyncPolicy.h>
+#include <iterator>
+#include <set>
 
 QuestService::QuestService(World& aWorld, entt::dispatcher& aDispatcher)
     : m_world(aWorld)
@@ -40,6 +42,7 @@ QuestService::QuestService(World& aWorld, entt::dispatcher& aDispatcher)
     auto* pEventList = EventDispatcherManager::Get();
     pEventList->questStartStopEvent.RegisterSink(this);
     pEventList->questStageEvent.RegisterSink(this);
+    pEventList->questStageItemDoneEvent.RegisterSink(this);
     pEventList->sceneEvent.RegisterSink(this);
     pEventList->sceneActionEvent.RegisterSink(this);
     pEventList->scenePhaseEvent.RegisterSink(this);
@@ -221,6 +224,163 @@ BSTEventResult QuestService::OnEvent(const TESTopicInfoEvent* apEvent, const Eve
     return BSTEventResult::kOk;
 }
 
+static bool Compare(TESConditionItem::OpCode aOpCode, float aLhs, float aRhs) noexcept
+{
+    switch (aOpCode)
+    {
+    case TESConditionItem::OpCode::kEqualTo: return aLhs == aRhs;
+    case TESConditionItem::OpCode::kNotEqualTo: return aLhs != aRhs;
+    case TESConditionItem::OpCode::kGreaterThan: return aLhs > aRhs;
+    case TESConditionItem::OpCode::kGreaterThanOrEqualTo: return aLhs >= aRhs;
+    case TESConditionItem::OpCode::kLessThan: return aLhs < aRhs;
+    case TESConditionItem::OpCode::kLessThanOrEqualTo: return aLhs <= aRhs;
+    default: return false;
+    }
+}
+
+// Whether setting the stage turns a GetStage/GetStageDone check on the quest from false to true. With aOrChecksLater,
+// also whether it changes the check's result at all, or the check is on the same or a later stage.
+static bool IsCheckedByStage(const TESCondition& acConditions, TESQuest* apQuest, uint16_t aStage, bool aOrChecksLater) noexcept
+{
+    for (const TESConditionItem* pItem = acConditions.pHead; pItem; pItem = pItem->pNext)
+    {
+        if (pItem->UsesGlobal() || pItem->params[0] != apQuest)
+            continue;
+
+        const TESConditionItem::OpCode cOpCode = pItem->GetOpCode();
+        float checkedStage = 0.f;
+        bool before = false;
+        bool after = false;
+        if (pItem->function == TESConditionItem::kGetStage)
+        {
+            // Stages only go up, GetStage returns the highest one set
+            checkedStage = pItem->comparisonValue;
+            before = Compare(cOpCode, apQuest->currentStage, pItem->comparisonValue);
+            after = Compare(cOpCode, std::max(apQuest->currentStage, aStage), pItem->comparisonValue);
+        }
+        else if (pItem->function == TESConditionItem::kGetStageDone)
+        {
+            const uint16_t cStage = static_cast<uint16_t>(reinterpret_cast<uintptr_t>(pItem->params[1]));
+            checkedStage = cStage;
+            if (cStage == aStage)
+            {
+                before = Compare(cOpCode, apQuest->IsStageDone(cStage) ? 1.f : 0.f, pItem->comparisonValue);
+                after = Compare(cOpCode, 1.f, pItem->comparisonValue);
+            }
+        }
+        else
+        {
+            continue;
+        }
+
+        if (!before && after)
+            return true;
+
+        if (aOrChecksLater && (before != after || checkedStage >= aStage))
+            return true;
+    }
+
+    return false;
+}
+
+// Whether the phase's own lines are done, so passing its completion conditions won't cut one off. Timers and packages
+// don't hold such a phase back, and packages never complete on clients that don't own the NPC.
+static bool IsPhaseWaitingOnConditions(BGSScene* apScene, uint32_t aPhaseIndex) noexcept
+{
+    for (BGSSceneAction* pAction : apScene->actions)
+    {
+        if (!pAction || !pAction->IsInPhase(aPhaseIndex))
+            continue;
+
+        if (pAction->GetType() != BGSSceneAction::Type::kDialogue || pAction->IsComplete() || pAction->Loops())
+            continue;
+
+        // The player's own lines wait for this player to answer, while a member may have answered instead
+        if (apScene->owningQuest && apScene->owningQuest->GetAliasedRef(pAction->actorId) == PlayerCharacter::Get())
+            continue;
+
+        return false;
+    }
+
+    return true;
+}
+
+static bool WatchesStage(const BGSScene& acScene, TESQuest* apQuest, uint16_t aStage) noexcept
+{
+    for (uint32_t i = acScene.GetNextPhaseIndex(); i < acScene.phases.length; ++i)
+    {
+        const auto* phase = acScene.phases[i];
+        if (!phase)
+            continue;
+
+        // The current phase already passed its start conditions.
+        const bool running = acScene.currentPhaseIndex == i;
+        if ((!running && IsCheckedByStage(phase->startConditions, apQuest, aStage, true)) ||
+            IsCheckedByStage(phase->completionConditions, apQuest, aStage, true))
+            return true;
+    }
+    return false;
+}
+
+enum class SceneStageGate
+{
+    Ready,
+    Wait,
+    ReleasePrefix
+};
+
+static SceneStageGate CheckSceneStages(TESQuest* apQuest, const Vector<uint16_t>& acStages) noexcept
+{
+    auto gate = SceneStageGate::Ready;
+    for (BGSScene* pScene : apQuest->scenes)
+    {
+        if (!pScene || !WatchesStage(*pScene, apQuest, acStages.front()))
+            continue;
+
+        // Once the dialogue is done, the current phase may itself be
+        // waiting for a stage from this queue.
+        if (pScene->currentPhaseIndex >= pScene->phases.length)
+            return SceneStageGate::Wait;
+        const auto* phase = pScene->phases[pScene->currentPhaseIndex];
+        if (!phase)
+            return SceneStageGate::Wait;
+        const auto required = std::find_if(acStages.begin(), acStages.end(), [&](uint16_t aStage)
+            { return IsCheckedByStage(phase->completionConditions, apQuest, aStage, false); });
+        if (required == acStages.end() || !IsPhaseWaitingOnConditions(pScene, pScene->currentPhaseIndex))
+            return SceneStageGate::Wait;
+
+        // The fragment for an earlier stage can wait on this phase.
+        // Confirm the stage itself before proceeding to the required stage.
+        if (required != acStages.begin())
+            gate = SceneStageGate::ReleasePrefix;
+    }
+    return gate;
+}
+
+BSTEventResult QuestService::OnEvent(const TESQuestStageItemDoneEvent* apEvent, const EventDispatcher<TESQuestStageItemDoneEvent>*)
+{
+    m_world.GetRunner().QueueGameplay(
+        [this, generation = m_world.GetTransport().GetConnectionGeneration(), form = apEvent->formId, stage = apEvent->stageId]()
+        {
+            if (generation != m_world.GetTransport().GetConnectionGeneration())
+                return;
+
+            GameId id;
+            if (!m_world.GetModSystem().GetServerModId(form, id))
+                return;
+            for (auto& queued : m_questUpdates)
+            {
+                if (queued.Update.Id == id && queued.Update.Stage == stage && queued.Verification.PendingFragments &&
+                    queued.Update.WorldEpoch == m_world.GetTransport().GetWorldEpoch())
+                {
+                    --queued.Verification.PendingFragments;
+                    return;
+                }
+            }
+        });
+    return BSTEventResult::kOk;
+}
+
 void QuestService::OnQuestUpdate(const NotifyQuestUpdate& acUpdate) noexcept
 {
     if (!acUpdate.IsValid() || QuestSyncPolicy::Classify(acUpdate.Id, acUpdate.ClientQuestType).Type == QuestSyncPolicy::Category::Local)
@@ -251,12 +411,28 @@ void QuestService::TickQuestUpdates() noexcept
 {
     if (m_questUpdates.empty() || m_world.ctx().at<WorldCheckpointService>().IsFrozen())
         return;
-    auto& queued = m_questUpdates.front();
+    std::set<uint64_t> seen;
+    for (auto entry = m_questUpdates.begin(); entry != m_questUpdates.end(); ++entry)
+    {
+        if (!seen.insert(entry->Update.Id.LogFormat()).second)
+            continue;
+
+        const auto next = AdvanceQuestUpdate(entry);
+        if (next == QuestApplyConfirmation::Next::Confirm)
+            m_questUpdates.erase(entry);
+        if (next != QuestApplyConfirmation::Next::Wait)
+            return;
+    }
+}
+
+QuestApplyConfirmation::Next QuestService::AdvanceQuestUpdate(QuestUpdateIterator aEntry) noexcept
+{
+    using Next = QuestApplyConfirmation::Next;
+    auto& queued = *aEntry;
     const auto& update = queued.Update;
     if (update.Revision && update.WorldEpoch != m_world.GetTransport().GetWorldEpoch())
     {
-        m_questUpdates.pop_front();
-        return;
+        return Next::Confirm;
     }
     const uint32_t form = m_world.GetModSystem().GetGameId(update.Id);
     if (update.Revision)
@@ -264,15 +440,13 @@ void QuestService::TickQuestUpdates() noexcept
         const auto cursor = m_cursors.find(form);
         if (cursor != m_cursors.end() && (update.Epoch < cursor->second.Epoch || update.Revision <= cursor->second.Revision))
         {
-            m_questUpdates.pop_front();
-            return;
+            return Next::Confirm;
         }
         if (update.AcknowledgementOnly)
         {
             // The sender already observed this local engine event before requesting it.
             m_cursors[form] = {update.Epoch, update.Revision, update.RunStopped};
-            m_questUpdates.pop_front();
-            return;
+            return Next::Confirm;
         }
     }
     auto* quest = Cast<TESQuest>(TESForm::GetById(form));
@@ -287,7 +461,7 @@ void QuestService::TickQuestUpdates() noexcept
     if (!quest || static_cast<uint8_t>(quest->type) != update.ClientQuestType)
     {
         fail("quest is missing or its type differs");
-        return;
+        return Next::Failed;
     }
 
     const bool stageReached = update.Stage ? quest->IsStageReached(update.Stage) : quest->IsStageDone(0);
@@ -297,14 +471,34 @@ void QuestService::TickQuestUpdates() noexcept
     else if (update.Status == NotifyQuestUpdate::Started)
         reached = !quest->IsStopped() && (!update.Stage || stageReached);
 
-    switch (queued.Verification.Observe(GetTickCount64(), reached))
+    const bool appliesStage = update.Status == NotifyQuestUpdate::StageUpdate ||
+                              (update.Status == NotifyQuestUpdate::Started && update.Stage);
+    const bool liveStage = update.Revision && appliesStage && !quest->scenes.Empty();
+    auto sceneGate = SceneStageGate::Ready;
+    if (liveStage && !reached && !queued.Verification.Deadline)
+    {
+        Vector<uint16_t> stages{update.Stage};
+        for (auto later = std::next(aEntry); later != m_questUpdates.end(); ++later)
+        {
+            const auto& next = later->Update;
+            if (next.Id != update.Id)
+                continue;
+            if (next.WorldEpoch != update.WorldEpoch || next.Epoch != update.Epoch ||
+                next.Status != NotifyQuestUpdate::StageUpdate || next.AcknowledgementOnly)
+                break;
+            stages.push_back(next.Stage);
+        }
+        sceneGate = CheckSceneStages(quest, stages);
+    }
+
+    const auto next = queued.Verification.Observe(GetTickCount64(), reached, sceneGate == SceneStageGate::Wait);
+    switch (next)
     {
     case QuestApplyConfirmation::Next::Confirm:
         if (update.Status == NotifyQuestUpdate::Started)
             quest->SetActive(true);
         if (update.Revision)
             m_cursors[form] = {update.Epoch, update.Revision, update.RunStopped};
-        m_questUpdates.pop_front();
         break;
     case QuestApplyConfirmation::Next::Invoke:
     {
@@ -317,7 +511,11 @@ void QuestService::TickQuestUpdates() noexcept
             queued.NativeResult = quest->EnsureQuestStarted(started, false) && started;
         }
         else
+        {
+            if (liveStage && sceneGate != SceneStageGate::ReleasePrefix)
+                queued.Verification.PendingFragments = quest->GetStageItemCount(update.Stage);
             queued.NativeResult = quest->ScriptSetStage(update.Stage);
+        }
         break;
     }
     case QuestApplyConfirmation::Next::Failed:
@@ -326,6 +524,7 @@ void QuestService::TickQuestUpdates() noexcept
     case QuestApplyConfirmation::Next::Wait:
         break;
     }
+    return next;
 }
 
 void QuestService::NotifyOverlayOfQuestUpdate(uint32_t aFormId) noexcept

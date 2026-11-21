@@ -307,9 +307,8 @@ bool QuestService::SharedRun(uint32_t aFormId, GameId& aQuest, uint32_t& aRun) c
     if (!m_checkpointComplete || !m_world.GetModSystem().GetServerModId(aFormId, aQuest) || !IsSharedQuest(quest, aQuest)) return false;
     // A fragment can begin while the incoming stage is still being verified.
     // Its durable grant belongs to the authoritative run of that update.
-    if (!m_questUpdates.empty())
+    for (const auto& pending : m_questUpdates)
     {
-        const auto& pending = m_questUpdates.front();
         const auto& update = pending.Update;
         if (pending.Verification.Deadline && update.Revision && update.Id == aQuest &&
             update.WorldEpoch == m_world.GetTransport().GetWorldEpoch())

@@ -256,3 +256,24 @@ TEST_CASE("A Creation quest with a displayed objective at stage zero is not a Co
     REQUIRE_FALSE(PlanQuestReplay(gameQuest, {}, false, {true, true, {}}, plan));
     REQUIRE(plan.Apply.empty());
 }
+
+TEST_CASE("A scene wait does not consume the quest stage readback deadline", "[quest.admission][quest.scene]")
+{
+    using Next = QuestApplyConfirmation::Next;
+    QuestApplyConfirmation verification;
+    REQUIRE(verification.Observe(10, false, true) == Next::Wait);
+    REQUIRE(verification.Observe(20000, false, true) == Next::Wait);
+    REQUIRE(verification.Deadline == 0);
+
+    REQUIRE(verification.Observe(20001, false, false) == Next::Invoke);
+    verification.PendingFragments = 2;
+    REQUIRE(verification.Observe(20002, true) == Next::Wait);
+    --verification.PendingFragments;
+    REQUIRE(verification.Observe(26000, true) == Next::Wait);
+    --verification.PendingFragments;
+    REQUIRE(verification.Observe(26001, true) == Next::Confirm);
+
+    verification = {};
+    REQUIRE(verification.Observe(30000, true, true) == Next::Confirm);
+    REQUIRE(verification.Deadline == 0);
+}
