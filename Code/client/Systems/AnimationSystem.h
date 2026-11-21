@@ -12,6 +12,8 @@ struct RequestActionEvents;
  */
 struct AnimationSystem
 {
+    static void BeginRunnerFrame() noexcept;
+    static bool HasBudget() noexcept;
     /**
      * @brief Ran periodically to check for new animations to apply.
      * @param aWorld The registry where the actor in question lives.

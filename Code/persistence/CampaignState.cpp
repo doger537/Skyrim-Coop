@@ -1,4 +1,5 @@
 #include "CampaignState.h"
+#include "CorePluginUpgrade.h"
 #include <Structs/ContentCompatibility.h>
 #include <algorithm>
 #include <limits>
@@ -12,6 +13,7 @@ bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) 
 {
     m_ready = false;
     m_contract.reset();
+    m_worldEpoch = 0;
     m_error.clear();
     if (!m_store.Open(acPath) || !m_store.VerifyRecords())
     {
@@ -44,6 +46,14 @@ bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) 
         return false;
     if (m_contract)
     {
+        // A narrowly pinned additive upgrade of our own ESP changes no existing
+        // FormIDs/records. Do it before binding the restored server contract.
+        // Unknown edits, other mods, resources and downgrades stay incompatible.
+        if (m_contract->Runtime == "1.7.104.0" && CorePluginUpgrade::Upgrade(m_contract->Content) && !m_adapters.Validate(m_contract->Content))
+        {
+            m_error = "The additive core plugin update conflicts with a pinned quest adapter: " + m_adapters.Error();
+            return false;
+        }
         // Upgrade only after validating the pinned policy and journal. Older H
         // servers reject contract v2 instead of silently ignoring the common story.
         Vector<uint8_t> current;
@@ -63,7 +73,75 @@ bool State::Open(const std::filesystem::path& acPath, const String& acAdapters) 
             }
         }
     }
+    WorldStore::Record epoch;
+    const auto epochResult = m_store.Read("$world-epoch", epoch);
+    if (epochResult == WorldStore::ReadResult::Failed ||
+        (epochResult == WorldStore::ReadResult::Found && epoch.Value != Vector<uint8_t>{'T', 'C', 'W', 'E', 1}))
+    {
+        m_error = "Cannot read the authoritative world timeline marker; preserve the database";
+        return false;
+    }
+    if (epochResult == WorldStore::ReadResult::Found)
+        m_worldEpoch = epoch.Revision;
     m_ready = true;
+    if (!ValidateQuestGrantIndexes() || !ValidateItemReceiptIndexes())
+    {
+        m_ready = false;
+        return false;
+    }
+    return true;
+}
+
+bool State::AdvanceWorldEpoch() noexcept
+{
+    if (!m_ready || !m_contract)
+    {
+        m_error = "Cannot start a timeline before the world content contract is bound";
+        return false;
+    }
+    WorldStore::Record marker;
+    marker.Key = "$world-epoch";
+    marker.Revision = m_worldEpoch;
+    marker.Value = {'T', 'C', 'W', 'E', 1};
+    uint64_t revision{};
+    if (m_store.Commit({marker}, revision) != WorldStore::WriteResult::Committed)
+    {
+        m_error = "Cannot persist a new world timeline: " + m_store.Error();
+        return false;
+    }
+    m_worldEpoch = revision;
+    return true;
+}
+
+bool State::RegisterParticipant(const CharacterIdentity& acIdentity) noexcept
+{
+    if (!m_ready || !m_contract || !acIdentity.IsValid())
+    {
+        m_error = "Cannot register an invalid character or an unbound world";
+        return false;
+    }
+    WorldStore::Record record;
+    record.Key = "$participant/";
+    constexpr char hex[] = "0123456789abcdef";
+    for (uint16_t part : acIdentity.Parts)
+        for (int shift = 12; shift >= 0; shift -= 4)
+            record.Key += hex[(part >> shift) & 15];
+    const auto result = m_store.Read(record.Key, record);
+    const Vector<uint8_t> format{'T', 'C', 'P', 'I', 1};
+    if (result == WorldStore::ReadResult::Found && record.Value == format)
+        return true;
+    if (result != WorldStore::ReadResult::Missing)
+    {
+        m_error = "Cannot read the durable character identity record; preserve the database";
+        return false;
+    }
+    record.Value = format;
+    uint64_t revision{};
+    if (m_store.Commit({record}, revision) != WorldStore::WriteResult::Committed)
+    {
+        m_error = "Cannot persist the character identity: " + m_store.Error();
+        return false;
+    }
     return true;
 }
 
@@ -126,9 +204,14 @@ String State::Key(const char* apKind, GameId aId) const noexcept
 
 bool State::ValidObject(const ObjectData& acObject) const noexcept
 {
-    if (!ValidForm(acObject.Id) || !ValidForm(acObject.CellId) || !ValidForm(acObject.WorldSpaceId, true) || acObject.CurrentInventory.Entries.size() > 4096)
+    return ValidForm(acObject.Id) && ValidForm(acObject.CellId) && ValidForm(acObject.WorldSpaceId, true) && ValidInventory(acObject.CurrentInventory);
+}
+
+bool State::ValidInventory(const Inventory& acInventory) const noexcept
+{
+    if (acInventory.Entries.size() > 4096)
         return false;
-    for (const auto& entry : acObject.CurrentInventory.Entries)
+    for (const auto& entry : acInventory.Entries)
     {
         if (!ValidForm(entry.BaseId) || entry.Count <= 0 || !ValidForm(entry.ExtraPoisonId, true) || entry.EnchantData.Effects.size() > 256)
             return false;
@@ -144,7 +227,7 @@ bool State::ValidObject(const ObjectData& acObject) const noexcept
             if (!ValidForm(effect.EffectId))
                 return false;
     }
-    const auto& magic = acObject.CurrentInventory.CurrentMagicEquipment;
+    const auto& magic = acInventory.CurrentMagicEquipment;
     return ValidForm(magic.LeftHandSpell, true) && ValidForm(magic.RightHandSpell, true) && ValidForm(magic.Shout, true);
 }
 

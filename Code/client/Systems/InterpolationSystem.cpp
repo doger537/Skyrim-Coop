@@ -6,6 +6,7 @@
 
 #include <AI/AIProcess.h>
 #include <Misc/MiddleProcess.h>
+#include <AI/NativeActorPose.h>
 
 #include <Games/References.h>
 #include <World.h>
@@ -67,8 +68,33 @@ void InterpolationSystem::Update(Actor* apActor, InterpolationComponent& aInterp
     if (!apActor)
         return;
 
-    apActor->ForcePosition(aInterpolationComponent.Position);
-    apActor->LoadAnimationVariables(second.Variables);
+    const auto& displayed = cRenderTick < static_cast<double>(second.Tick) ? first : second;
+    const uint64_t now = GetTickCount64();
+    if (displayed.Pose.Known && now >= aInterpolationComponent.FurnitureRetryAt)
+    {
+        const auto result = NativeActorPose::ApplyFurniture(apActor, displayed.Pose);
+        if (result != NativeActorPose::FurnitureResult::Throttled)
+            aInterpolationComponent.FurnitureRetryAt = now + (result == NativeActorPose::FurnitureResult::Matched ? 100 : 500);
+    }
+    const auto localPose = NativeActorPose::Capture(apActor);
+    if (displayed.Pose.Known && !displayed.Pose.IsDriven() && !displayed.Pose.Life && localPose.Known &&
+        !localPose.Life && !localPose.SitSleep && localPose.Knock && localPose.Knock != 6)
+    {
+        auto& stable = aInterpolationComponent.RecoveryStableTick;
+        if (!stable) stable = displayed.Tick;
+        // Require new owner observations, not just 300 ms without packets.
+        if (displayed.Tick >= stable && displayed.Tick - stable >= 300 && now >= aInterpolationComponent.RecoveryRetryAt)
+        {
+            const auto result = NativeActorPose::BeginGetUp(apActor, displayed.Pose);
+            if (result != NativeActorPose::FurnitureResult::Throttled) aInterpolationComponent.RecoveryRetryAt = now + 1000;
+        }
+    }
+    else aInterpolationComponent.RecoveryStableTick = 0;
+    const bool driven = displayed.Pose.IsDriven() || localPose.IsDriven();
+    // Furniture, get-up and ragdoll own their physical root. Moving a standing
+    // controller here fights the solver/seat binding and can launch the model.
+    if (!driven) apActor->ForcePosition(aInterpolationComponent.Position);
+    if (!displayed.Pose.Ragdoll && !localPose.Ragdoll) apActor->LoadAnimationVariables(second.Variables);
 
     if (apActor->currentProcess && apActor->currentProcess->middleProcess)
     {
@@ -89,7 +115,7 @@ void InterpolationSystem::Update(Actor* apActor, InterpolationComponent& aInterp
     const auto finalY = TiltedPhoques::Mod(rotA.y + deltaY, float(TiltedPhoques::Pi * 2));
     const auto finalZ = TiltedPhoques::Mod(rotA.z + deltaZ, float(TiltedPhoques::Pi * 2));
 
-    apActor->SetRotation(finalX, finalY, finalZ);
+    if (!driven) apActor->SetRotation(finalX, finalY, finalZ);
 
     auto* pProcess = apActor->currentProcess;
     if (!pProcess || !pProcess->middleProcess)
@@ -114,7 +140,7 @@ void InterpolationSystem::Update(Actor* apActor, InterpolationComponent& aInterp
 void InterpolationSystem::AddPoint(InterpolationComponent& aInterpolationComponent, InterpolationComponent::TimePoint aPoint, const double aArrivalTime) noexcept
 {
     // Validate before adding a timing sample or exposing values to the actor's animation graph.
-    if (!MovementPlayback::IsFinite(aPoint.Position) || !MovementPlayback::IsFinite(aPoint.Rotation) || !std::isfinite(aPoint.Direction) ||
+    if (!aPoint.Pose.IsValid() || !MovementPlayback::IsFinite(aPoint.Position) || !MovementPlayback::IsFinite(aPoint.Rotation) || !std::isfinite(aPoint.Direction) ||
         (aPoint.HasLookAt && !MovementPlayback::IsFinite(aPoint.LookOffset)) ||
         !std::all_of(aPoint.Variables.Floats.begin(), aPoint.Variables.Floats.end(), [](float aValue) { return std::isfinite(aValue); }))
         return;

@@ -1,5 +1,7 @@
 #include "CampaignData.h"
 #include "WorldStore.h"
+#include "QuestGrant.h"
+#include "WorldItemReceipt.h"
 #include <Structs/ContentCompatibility.h>
 #include <algorithm>
 #include <bit>
@@ -137,11 +139,11 @@ template <class A, class T> bool Effect(A& aArchive, T& aEffect) noexcept
            Form(aArchive, aEffect.EffectId);
 }
 
-template <class A, class T> bool Entry(A& aArchive, T& aEntry) noexcept
+template <class A, class T> bool Entry(A& aArchive, T& aEntry, size_t aMaxEffects = 256) noexcept
 {
     return Form(aArchive, aEntry.BaseId) && aArchive.Number(aEntry.Count) && aArchive.Number(aEntry.ExtraCharge) && Form(aArchive, aEntry.ExtraEnchantId) &&
            aArchive.Number(aEntry.ExtraEnchantCharge) && aArchive.Number(aEntry.EnchantData.IsWeapon) &&
-           aArchive.List(aEntry.EnchantData.Effects, 256, [](auto& archive, auto& effect) { return Effect(archive, effect); }) && aArchive.Number(aEntry.ExtraHealth) &&
+           aArchive.List(aEntry.EnchantData.Effects, aMaxEffects, [](auto& archive, auto& effect) { return Effect(archive, effect); }) && aArchive.Number(aEntry.ExtraHealth) &&
            Form(aArchive, aEntry.ExtraPoisonId) && aArchive.Number(aEntry.ExtraPoisonCount) && aArchive.Number(aEntry.ExtraSoulLevel) &&
            aArchive.Number(aEntry.ExtraEnchantRemoveUnequip) && aArchive.Number(aEntry.ExtraWorn) && aArchive.Number(aEntry.ExtraWornLeft) && aArchive.Number(aEntry.IsQuestItem);
 }
@@ -179,9 +181,61 @@ template <class A, class T> bool QuestFields(A& aArchive, T& aQuest) noexcept
            aArchive.List(aQuest.Decisions, 256, [](auto& archive, auto& decision) { return archive.Text(decision.Group, 64) && archive.Number(decision.Stage); });
 }
 
+template <class A, class T> bool PlanFields(A& aArchive, T& plan) noexcept
+{
+    if (!Form(aArchive, plan.Quest) || !aArchive.Number(plan.Run) || !aArchive.Number(plan.Stage) || !aArchive.Text(plan.Event, 96))
+        return false;
+    for (auto& part : plan.Initiator.Parts) if (!aArchive.Number(part)) return false;
+    return aArchive.List(plan.Items, QuestGrantPlan::kMaxItems, [](auto& archive, auto& value)
+    {
+        return archive.Number(value.Role) && Entry(archive, value.Item, 64);
+    });
+}
+template <class A, class T> bool GrantFields(A& aArchive, T& aReceipt) noexcept
+{
+    // Preserve the schema-2 stored receipt order used by existing campaigns.
+    auto& plan = aReceipt.Plan;
+    if (!Form(aArchive, plan.Quest) || !aArchive.Number(plan.Run) || !aArchive.Number(plan.Stage) || !aArchive.Text(plan.Event, 96)) return false;
+    for (auto* identity : {&plan.Initiator, &aReceipt.Participants.Initiator, &aReceipt.Participants.Players[0], &aReceipt.Participants.Players[1]})
+        for (auto& part : identity->Parts) if (!aArchive.Number(part)) return false;
+    return aArchive.List(plan.Items, QuestGrantPlan::kMaxItems, [](auto& archive, auto& value) { return archive.Number(value.Role) && Entry(archive, value.Item, 64); });
+}
+
+template <class A, class T> bool WorldItemFields(A& aArchive, T& aItem) noexcept
+{
+    if (!aArchive.Number(aItem.Id) || !aArchive.Number(aItem.WorldEpoch) || !aArchive.Number(aItem.HostEpoch) ||
+        !aArchive.Number(aItem.Revision) || !aArchive.Number(aItem.Sequence) || !aArchive.Number(aItem.Tick) ||
+        !Form(aArchive, aItem.CellId) || !Form(aArchive, aItem.WorldSpaceId) ||
+        !aArchive.Number(aItem.Position.x) || !aArchive.Number(aItem.Position.y) || !aArchive.Number(aItem.Position.z))
+        return false;
+    for (auto& value : aItem.Rotation)
+        if (!aArchive.Number(value))
+            return false;
+    for (auto& value : aItem.LinearVelocity)
+        if (!aArchive.Number(value))
+            return false;
+    for (auto& value : aItem.AngularVelocity)
+        if (!aArchive.Number(value))
+            return false;
+    uint8_t mode = static_cast<uint8_t>(aItem.Mode);
+    if (!aArchive.Number(mode) || !Entry(aArchive, aItem.Item, WorldItemState::kMaxEffects) || !aArchive.Number(aItem.Deleted))
+        return false;
+    if constexpr (!std::is_const_v<std::remove_reference_t<T>>)
+        aItem.Mode = static_cast<WorldItemMotion::Motion>(mode);
+    return true;
+}
+
 bool Header(Writer& aWriter, uint8_t aKind) noexcept
 {
     return aWriter.Number(uint32_t{0x53574354}) && aWriter.Number(static_cast<uint16_t>(aKind == 2 ? 1 : 2)) && aWriter.Number(aKind);
+}
+template <class A, class T> bool ItemReceiptFields(A& aArchive, T& aReceipt) noexcept
+{
+    if (!WorldItemFields(aArchive, aReceipt.State) || !aArchive.Number(aReceipt.Operation) || !aArchive.Number(aReceipt.Delta) ||
+        !aArchive.Number(aReceipt.ExpectedRevision)) return false;
+    for (auto* identity : {&aReceipt.Recipient, &aReceipt.Session})
+        for (auto& part : identity->Parts) if (!aArchive.Number(part)) return false;
+    return true;
 }
 
 bool Header(Reader& aReader, uint8_t aKind, bool aLegacyContract = false) noexcept
@@ -232,5 +286,62 @@ bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, Quest& aQuest) noexce
     aQuest = {};
     Reader reader(acBytes);
     return acBytes.size() <= WorldStore::kMaxRecordBytes && Header(reader, 3) && QuestFields(reader, aQuest) && aQuest.Epoch != 0 && reader.End();
+}
+bool Encode(const WorldItemState& acItem, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept
+{
+    Writer writer(aBytes);
+    return acItem.IsValid() && Header(writer, 4) && WorldItemFields(writer, acItem);
+}
+
+bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, WorldItemState& aItem) noexcept
+{
+    WorldItemState candidate;
+    Reader reader(acBytes);
+    if (acBytes.size() > WorldStore::kMaxRecordBytes || !Header(reader, 4) || !WorldItemFields(reader, candidate) || !reader.End() || !candidate.IsValid())
+        return false;
+    aItem = std::move(candidate);
+    return true;
+}
+bool Encode(const QuestGrantReceipt& acReceipt, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept
+{
+    Writer writer(aBytes);
+    return acReceipt.Plan.IsValid() && acReceipt.Participants.IsValid() && acReceipt.Plan.Initiator == acReceipt.Participants.Initiator &&
+        Header(writer, 5) && GrantFields(writer, acReceipt);
+}
+
+bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, QuestGrantReceipt& aReceipt) noexcept
+{
+    QuestGrantReceipt candidate;
+    Reader reader(acBytes);
+    if (acBytes.size() > WorldStore::kMaxRecordBytes || !Header(reader, 5) || !GrantFields(reader, candidate) || !reader.End() ||
+        !candidate.Plan.IsValid() || !candidate.Participants.IsValid() || candidate.Plan.Initiator != candidate.Participants.Initiator)
+        return false;
+    aReceipt = std::move(candidate);
+    return true;
+}
+bool Encode(const WorldItemReceipt& acReceipt, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept
+{
+    Writer writer(aBytes);
+    return acReceipt.IsValid() && Header(writer, 6) && ItemReceiptFields(writer, acReceipt);
+}
+bool Encode(const QuestGrantPlan& acPlan, TiltedPhoques::Vector<uint8_t>& aBytes) noexcept
+{
+    Writer writer(aBytes);
+    return acPlan.IsValid() && Header(writer, 7) && PlanFields(writer, acPlan);
+}
+bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, QuestGrantPlan& aPlan) noexcept
+{
+    QuestGrantPlan candidate;
+    Reader reader(acBytes);
+    if (acBytes.size() > 16384 || !Header(reader, 7) || !PlanFields(reader, candidate) || !reader.End() || !candidate.IsValid()) return false;
+    aPlan = std::move(candidate); return true;
+}
+bool Decode(const TiltedPhoques::Vector<uint8_t>& acBytes, WorldItemReceipt& aReceipt) noexcept
+{
+    WorldItemReceipt candidate;
+    Reader reader(acBytes);
+    if (acBytes.size() > WorldStore::kMaxRecordBytes || !Header(reader, 6) || !ItemReceiptFields(reader, candidate) || !reader.End() || !candidate.IsValid()) return false;
+    aReceipt = std::move(candidate);
+    return true;
 }
 } // namespace Campaign

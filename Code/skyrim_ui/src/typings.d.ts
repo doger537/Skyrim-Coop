@@ -96,6 +96,7 @@ declare namespace SkyrimTogetherTypes {
   type PartyInviteReceivedCallback = (inviterId: number) => void;
 
   type QuestUpdatedCallback = () => void;
+  type CoopSleepCallback = (phase: number, hours: number, localReady: boolean) => void;
 }
 
 /** Global Skyrim: Together object. */
@@ -225,6 +226,7 @@ interface SkyrimTogether {
     event: 'questUpdated',
     callback: SkyrimTogetherTypes.QuestUpdatedCallback,
   ): void;
+  on(event: 'coopSleep', callback: SkyrimTogetherTypes.CoopSleepCallback): void;
 
   /** Remove listener from when the application is first initialized. */
   off(event: 'init', callback?: SkyrimTogetherTypes.InitCallback): void;
@@ -360,6 +362,7 @@ interface SkyrimTogether {
     event: 'questUpdated',
     callback?: SkyrimTogetherTypes.QuestUpdatedCallback,
   ): void;
+  off(event: 'coopSleep', callback?: SkyrimTogetherTypes.CoopSleepCallback): void;
 
   /**
    * Connect to server at given address and port.

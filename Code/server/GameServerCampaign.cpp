@@ -1,5 +1,6 @@
 #include <GameServer.h>
 #include <BuildInfo.h>
+#include <Setting.h>
 #include <Messages/AuthenticationResponse.h>
 #include <Messages/NotifyCampaignCheckpoint.h>
 #include <Messages/NotifyQuestJournal.h>
@@ -8,11 +9,17 @@
 #include <Messages/NotifyPlayerJoined.h>
 #include <Events/PlayerJoinEvent.h>
 
-void GameServer::RejectCampaign(ConnectionId_t aConnectionId, const String& acReason)
+namespace
+{
+Console::Setting bQuestStartupDiagnosticOnly{"Gameplay:bQuestStartupDiagnosticOnly",
+    "Report startup quest history differences without accepting the audited equivalences", false};
+}
+
+void GameServer::RejectCampaign(ConnectionId_t aConnectionId, const String& acReason, bool aQuestMismatch)
 {
     spdlog::warn("Campaign admission/update refused: {}", acReason);
     AuthenticationResponse response;
-    response.Type = AuthenticationResponse::ResponseType::kContentMismatch;
+    response.Type = aQuestMismatch ? AuthenticationResponse::ResponseType::kQuestAdmissionMismatch : AuthenticationResponse::ResponseType::kCampaignRefused;
     response.Version = BUILD_COMMIT;
     response.ContentError = acReason;
     Send(aConnectionId, response);
@@ -37,6 +44,7 @@ void GameServer::BeginCampaignSync(Player* apPlayer)
     pending.Revision = campaign.QuestRevision();
     pending.SeedOwner = !campaign.IsBootstrapped() && m_seedOwner == connection;
     pending.Seed.clear();
+    pending.QuestDetails = 0;
     NotifyCampaignCheckpoint checkpoint;
     checkpoint.State = NotifyCampaignCheckpoint::Begin;
     checkpoint.WorldId = campaign.WorldId();
@@ -46,6 +54,7 @@ void GameServer::BeginCampaignSync(Player* apPlayer)
     checkpoint.SeedOwner = pending.SeedOwner;
     checkpoint.BaselinePending = !campaign.IsBootstrapped();
     checkpoint.AllowMisc = m_pWorld->GetQuestService().AllowsMisc();
+    checkpoint.StartupDiagnosticOnly = bQuestStartupDiagnosticOnly;
     checkpoint.MiscQuests = campaign.MiscQuestIds();
     apPlayer->Send(checkpoint);
     for (const auto& quest : campaign.Quests())
@@ -98,9 +107,49 @@ void GameServer::HandleCampaignReady(ConnectionId_t aConnectionId, const Request
         return;
     auto& pending = found.value();
     auto& campaign = m_pWorld->GetCampaign();
-    if (acRequest.SeedCount > 4095 || acRequest.Revision != pending.Revision)
+    if (acRequest.State > RequestCampaignReady::Refused || acRequest.SeedCount > 4095 || acRequest.Revision != pending.Revision)
     {
         RejectCampaign(aConnectionId, "Campaign checkpoint revision or seed count is invalid");
+        return;
+    }
+    if (acRequest.State != RequestCampaignReady::Ready)
+    {
+        if (!campaign.IsBootstrapped())
+        {
+            RejectCampaign(aConnectionId, "Quest diagnostic does not match the current campaign snapshot", true);
+            return;
+        }
+        if (pending.Revision != campaign.QuestRevision())
+        {
+            BeginCampaignSync(pPlayer);
+            return;
+        }
+        if (acRequest.State == RequestCampaignReady::Detail)
+        {
+            const auto& diff = acRequest.Diff;
+            if (acRequest.SeedCount != 0 || !diff.IsValid() || pending.QuestDetails >= QuestAdmissionDiff::kMaxServerDetails ||
+                (diff.Id && !campaign.ValidForm(diff.Id)))
+            {
+                RejectCampaign(aConnectionId, "Invalid or oversized quest diagnostic", true);
+                return;
+            }
+            const auto* saved = campaign.FindQuest(diff.Id);
+            spdlog::warn("Campaign quest admission revision={} {}", pending.Revision,
+                         DescribeQuestAdmission(diff, saved ? &saved->Data : nullptr));
+            ++pending.QuestDetails;
+            return;
+        }
+        if (!acRequest.SeedCount || acRequest.SeedCount < pending.QuestDetails)
+        {
+            RejectCampaign(aConnectionId, "Invalid quest diagnostic count", true);
+            return;
+        }
+        RejectCampaign(aConnectionId, fmt::format("{} incompatible quest(s). See Campaign quest admission in tp_client.log for the full report", acRequest.SeedCount).c_str(), true);
+        return;
+    }
+    if (pending.QuestDetails)
+    {
+        RejectCampaign(aConnectionId, "Client reported incompatible quest progress for this snapshot", true);
         return;
     }
     if (!campaign.IsBootstrapped())
@@ -133,6 +182,7 @@ void GameServer::HandleCampaignReady(ConnectionId_t aConnectionId, const Request
     const auto joined = pending;
     m_pendingCampaigns.erase(aConnectionId);
     pPlayer->SetCampaignReady();
+    pPlayer->SetCampaignNonce(joined.Nonce);
     m_pWorld->GetQuestService().FillPlayerJournal(*pPlayer);
     NotifyCampaignCheckpoint accepted;
     accepted.State = NotifyCampaignCheckpoint::Accepted;

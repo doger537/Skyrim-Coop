@@ -24,12 +24,14 @@ struct NotifyQuestUpdate final : ServerMessage
         Stopped
     };
 
-    GameId Id;
-    uint16_t Stage;
-    uint8_t Status;
-    uint8_t ClientQuestType;
+    GameId Id{};
+    uint16_t Stage{};
+    uint8_t Status{};
+    uint8_t ClientQuestType{};
     uint32_t Epoch{1};
     uint64_t Revision{};
     bool RunStopped{};
     bool AcknowledgementOnly{};
+    bool Decoded{true};
+    bool IsValid() const noexcept { return Decoded && Id.BaseId && Epoch && Status <= Stopped && ClientQuestType <= 11; }
 };

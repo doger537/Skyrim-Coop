@@ -1,4 +1,5 @@
 #include "ContentFingerprint.h"
+#include "ArchiveFingerprintCache.h"
 #include <cryptopp/sha.h>
 #include <fstream>
 #include <algorithm>
@@ -29,6 +30,36 @@ bool FingerprintPluginFile(const std::filesystem::path& acPath, std::array<uint8
         return false;
     hash.Final(aDigest.data());
     return true;
+}
+
+bool FingerprintCheckpointSave(const std::filesystem::path& acPath, bool aWithCoSave, CheckpointPlayer& aPlayer) noexcept
+{
+    aPlayer.Save = {};
+    aPlayer.CoSave = {};
+    aPlayer.Physics = {};
+    const auto inspect = [](const std::filesystem::path& acFile, CheckpointFile& aFile)
+    {
+        std::error_code error;
+        const auto bytes = std::filesystem::file_size(acFile, error);
+        if (error || !bytes || bytes > CheckpointFile::kMaxBytes || !FingerprintPluginFile(acFile, aFile.Digest))
+            return false;
+        if (std::filesystem::file_size(acFile, error) != bytes || error)
+            return false;
+        aFile.Bytes = bytes;
+        return aFile.IsValid();
+    };
+    auto companion = acPath;
+    companion.replace_extension(L".skse");
+    auto physics = acPath;
+    physics.replace_extension(L".tcphys");
+    if (acPath.empty() || !inspect(acPath, aPlayer.Save) || !inspect(physics, aPlayer.Physics) || (aWithCoSave && !inspect(companion, aPlayer.CoSave)))
+    {
+        aPlayer.Save = {};
+        aPlayer.CoSave = {};
+        aPlayer.Physics = {};
+        return false;
+    }
+    return aPlayer.IsValid();
 }
 
 namespace
@@ -90,9 +121,12 @@ bool ReadPluginMasters(const std::filesystem::path& acPath, bool aExpectedLite, 
     return true;
 }
 
-bool FingerprintContent(const std::filesystem::path& acDataPath, const std::filesystem::path& acAddressLibrary, const std::filesystem::path& acScriptExtender, Mods& aMods) noexcept
+bool FingerprintContent(
+    const std::filesystem::path& acDataPath, const std::filesystem::path& acAddressLibrary, const std::filesystem::path& acScriptExtender, Mods& aMods,
+    const std::filesystem::path& acArchiveCache, ArchiveFingerprintStats* apStats) noexcept
 {
     aMods.Resources.clear();
+    ArchiveFingerprintCache archiveCache(acArchiveCache);
     bool success = true;
     for (auto& entry : aMods.ModList)
     {
@@ -139,7 +173,12 @@ bool FingerprintContent(const std::filesystem::path& acDataPath, const std::file
         if (cFile)
         {
             if (relative.parent_path().empty() && name.ends_with(".bsa"))
-                addFile("data/" + name, path);
+            {
+                auto& resource = aMods.Resources.emplace_back();
+                resource.Filename = "data/" + name;
+                if (!archiveCache.Fingerprint(path, resource.Digest))
+                    success = false;
+            }
             else if (IsLooseResource(name))
                 looseFiles.push_back({name, path});
         }
@@ -153,11 +192,17 @@ bool FingerprintContent(const std::filesystem::path& acDataPath, const std::file
     for (const auto& file : looseFiles)
     {
         std::array<uint8_t, 32> digest{};
-        if (file.Name == previous || !FingerprintPluginFile(file.Path, digest))
+        // Engine Fixes writes each player's sound sliders into this file.
+        // Keep the shipped empty file's digest for existing campaign manifests.
+        const bool cLocalVolumeSettings = file.Name == "skse/plugins/enginefixes_snct.ini";
+        if (file.Name == previous || (!cLocalVolumeSettings && !FingerprintPluginFile(file.Path, digest)))
         {
             complete = false;
             break;
         }
+        if (cLocalVolumeSettings)
+            CryptoPP::SHA256{}.Final(digest.data());
+
         previous = file.Name;
         const uint32_t size = static_cast<uint32_t>(file.Name.size());
         const std::array<uint8_t, 4> length{static_cast<uint8_t>(size), static_cast<uint8_t>(size >> 8), static_cast<uint8_t>(size >> 16), static_cast<uint8_t>(size >> 24)};
@@ -172,5 +217,9 @@ bool FingerprintContent(const std::filesystem::path& acDataPath, const std::file
     else
         success = false;
     std::sort(aMods.Resources.begin(), aMods.Resources.end(), [](const auto& left, const auto& right) { return left.Filename < right.Filename; });
+    if (complete)
+        archiveCache.Save();
+    if (apStats)
+        *apStats = archiveCache.Stats();
     return success;
 }

@@ -41,7 +41,8 @@ void TP_MAKE_THISCALL(HookSpellCast, ActorMagicCaster, bool abSuccess, int32_t a
     }
 
     if (apSpell)
-        World::Get().GetRunner().Trigger(SpellCastEvent(apThis, apSpell->formID, targetFormId));
+        World::Get().GetRunner().Trigger(SpellCastEvent(apThis->pCasterActor->formID, apSpell->formID, targetFormId,
+                                                      apThis->GetCastingSource(), apThis->GetIsDualCasting()));
 
     TiltedPhoques::ThisCall(RealSpellCast, apThis, abSuccess, auiTargetCount, apSpell);
 }

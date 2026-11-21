@@ -131,6 +131,7 @@ private:
     };
 
     Map<uint32_t, WeaponDrawData> m_weaponDrawUpdates{};
+    entt::entity m_animationCursor{entt::null};
 
     // Actor form ID -> pick form ID. The active stage lives in ActorExtension.
     // Written from const message handlers, drained by ProcessLeveledConforms.

@@ -27,7 +27,7 @@
 
 int32_t PlayerCharacter::LastUsedCombatSkill = -1;
 
-TP_THIS_FUNCTION(TPickUpObject, char, PlayerCharacter, TESObjectREFR* apObject, int32_t aCount, bool aUnk1, bool aUnk2);
+TP_THIS_FUNCTION(TPickUpObject, void, PlayerCharacter, TESObjectREFR* apObject, int32_t aCount, bool aUnk1, bool aUnk2);
 TP_THIS_FUNCTION(TSetBeastForm, void, void, void* apUnk1, void* apUnk2, bool aEntering);
 TP_THIS_FUNCTION(TAddSkillExperience, void, PlayerCharacter, int32_t aSkill, float aExperience);
 TP_THIS_FUNCTION(TCalculateExperience, bool, int32_t, float* aFactor, float* aBonus, float* aUnk1, float* aUnk2);
@@ -162,8 +162,13 @@ void PlayerCharacter::RemoveWaypoint() noexcept
     return TiltedPhoques::ThisCall(RealRemoveWaypoint, this);
 }
 
-char TP_MAKE_THISCALL(HookPickUpObject, PlayerCharacter, TESObjectREFR* apObject, int32_t aCount, bool aUnk1, bool aUnk2)
+void TP_MAKE_THISCALL(HookPickUpObject, PlayerCharacter, TESObjectREFR* apObject, int32_t aCount, bool aUnk1, bool aUnk2)
 {
+    if (ScopedInventoryOverride::IsOverriden())
+    {
+        TiltedPhoques::ThisCall(RealPickUpObject, apThis, apObject, aCount, aUnk1, aUnk2);
+        return;
+    }
     auto& modSystem = World::Get().GetModSystem();
 
     Inventory::Entry item{};
@@ -176,6 +181,8 @@ char TP_MAKE_THISCALL(HookPickUpObject, PlayerCharacter, TESObjectREFR* apObject
         apThis->GetItemFromExtraData(item, apObject->GetExtraDataList());
     }
 
+    item.Count = aCount;
+
     // This is here so that objects that are picked up on both clients, aka non temps, are synced through activation sync.
     // The inventory change event should always be sent to the server, otherwise the server inventory won't be updated.
     bool shouldUpdateClients = apObject->IsTemporary() && !ScopedActivateOverride::IsOverriden();
@@ -184,7 +191,7 @@ char TP_MAKE_THISCALL(HookPickUpObject, PlayerCharacter, TESObjectREFR* apObject
 
     ScopedInventoryOverride _;
 
-    return TiltedPhoques::ThisCall(RealPickUpObject, apThis, apObject, aCount, aUnk1, aUnk2);
+    TiltedPhoques::ThisCall(RealPickUpObject, apThis, apObject, aCount, aUnk1, aUnk2);
 }
 
 void TP_MAKE_THISCALL(HookSetBeastForm, void, void* apUnk1, void* apUnk2, bool aEntering)

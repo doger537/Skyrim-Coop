@@ -46,7 +46,7 @@ struct GameServer final : Server
     void Initialize();
     void Kill();
     void StopForWorldError(const String& acReason);
-    void RejectCampaign(ConnectionId_t aConnectionId, const String& acReason);
+    void RejectCampaign(ConnectionId_t aConnectionId, const String& acReason, bool aQuestMismatch = false);
 
     bool CheckMoPo();
     void BindMessageHandlers();
@@ -68,6 +68,7 @@ struct GameServer final : Server
     const Info& GetInfo() const noexcept { return m_info; }
 
     bool IsRunning() const noexcept { return !m_requestStop; }
+    void DetachCheckpointSession(ConnectionId_t aConnection);
     bool IsPasswordProtected() const noexcept { return m_isPasswordProtected; }
     [[nodiscard]] bool IsPublicServer() const noexcept;
     [[nodiscard]] bool AllowsAutoPartyJoin() const noexcept;
@@ -123,6 +124,7 @@ private:
     Console::ConsoleRegistry& m_commands;
 
     TiltedPhoques::Set<ConnectionId_t> m_adminSessions;
+    TiltedPhoques::Set<ConnectionId_t> m_detachedCheckpointConnections;
     TiltedPhoques::Map<ConnectionId_t, entt::entity> m_connectionToEntity;
 
     UniquePtr<World> m_pWorld;
@@ -139,6 +141,7 @@ private:
         uint64_t Revision{};
         bool SeedOwner{};
         Vector<QuestJournal> Seed;
+        uint32_t QuestDetails{};
         std::chrono::steady_clock::time_point Deadline{std::chrono::steady_clock::now() + std::chrono::seconds(90)};
     };
     TiltedPhoques::Map<ConnectionId_t, PendingCampaign> m_pendingCampaigns;

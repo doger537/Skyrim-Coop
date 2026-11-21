@@ -21,6 +21,7 @@ struct TESConditionItem
     [[nodiscard]] OpCode GetOpCode() const noexcept { return static_cast<OpCode>(flags >> 5); }
     // comparisonValue holds a TESGlobal* instead of a float
     [[nodiscard]] bool UsesGlobal() const noexcept { return flags & 4; }
+    [[nodiscard]] bool OrWithNext() const noexcept { return flags & 1; }
 
     TESConditionItem* pNext;
     float comparisonValue; // 0x08

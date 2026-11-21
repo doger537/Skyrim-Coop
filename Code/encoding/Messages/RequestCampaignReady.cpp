@@ -6,6 +6,9 @@ void RequestCampaignReady::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) 
     Serialization::WriteVarInt(aWriter, Nonce);
     Serialization::WriteVarInt(aWriter, Revision);
     Serialization::WriteVarInt(aWriter, SeedCount);
+    aWriter.WriteBits(State, 2);
+    if (State == Detail)
+        Diff.Serialize(aWriter);
 }
 
 void RequestCampaignReady::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept
@@ -14,4 +17,9 @@ void RequestCampaignReady::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader
     Revision = Serialization::ReadVarInt(aReader);
     const uint64_t count = Serialization::ReadVarInt(aReader);
     SeedCount = count <= 4095 ? static_cast<uint32_t>(count) : UINT32_MAX;
+    uint64_t state{};
+    aReader.ReadBits(state, 2);
+    State = static_cast<uint8_t>(state);
+    if (State == Detail)
+        Diff.Deserialize(aReader);
 }

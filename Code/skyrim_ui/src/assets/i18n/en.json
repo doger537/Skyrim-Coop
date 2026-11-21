@@ -167,6 +167,8 @@
     "ERROR": {
       "ERRORS": {
         "WRONG_VERSION": "This server expects version {{expectedVersion}} but you are on version {{version}}.",
+        "QUEST_ADMISSION_MISMATCH": "Quest progress differs from the campaign. {{reason}}",
+        "CAMPAIGN_REFUSED": "Campaign connection refused. {{reason}}",
         "CONTENT_MISMATCH": "Active content is incompatible with this session. {{reason}}. Compare plugin contents and load order in a separate co-op profile.",
         "MODS_MISMATCH": "This server has ModPolicy enabled.{{mods}}",
         "MODS_MISMATCH_REMOVE": "Please remove the following mods to join:\n{{mods}}",
@@ -184,6 +186,12 @@
     },
     "PARTY_HINT": {
       "MESSAGE": "Want to quest together? Form a party and stay close to share quest progress! Check out our play guide to learn more."
+    },
+    "COOP_SLEEP": {
+      "WAITING": "You are ready to rest. Waiting for the other player to choose sleep or wait within 30 seconds.",
+      "INVITE": "Your partner wants to rest. Choose sleep or wait within 30 seconds, even in another location.",
+      "COMMITTED": "Both players are ready. Skipping {{hours}} hours.",
+      "CANCELLED": "Cooperative rest cancelled. Time has not been skipped."
     }
   }
 }

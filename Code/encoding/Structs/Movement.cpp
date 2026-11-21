@@ -6,7 +6,7 @@ using TiltedPhoques::Serialization;
 bool Movement::operator==(const Movement& acRhs) const noexcept
 {
     return OwnershipEpoch == acRhs.OwnershipEpoch && CellId == acRhs.CellId && WorldSpaceId == acRhs.WorldSpaceId && Position == acRhs.Position && Rotation == acRhs.Rotation &&
-           Variables == acRhs.Variables && Direction == acRhs.Direction && HasLookAt == acRhs.HasLookAt && LookOffset == acRhs.LookOffset;
+           Variables == acRhs.Variables && Direction == acRhs.Direction && HasLookAt == acRhs.HasLookAt && LookOffset == acRhs.LookOffset && Pose == acRhs.Pose;
 }
 
 bool Movement::operator!=(const Movement& acRhs) const noexcept
@@ -27,6 +27,7 @@ void Movement::Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
     Serialization::WriteBool(aWriter, HasLookAt);
     if (HasLookAt)
         LookOffset.Serialize(aWriter);
+    Pose.Serialize(aWriter);
 }
 
 void Movement::Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept
@@ -48,4 +49,5 @@ void Movement::Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept
     LookOffset = glm::vec3{};
     if (HasLookAt)
         LookOffset.Deserialize(aReader);
+    Decoded = Pose.Deserialize(aReader);
 }

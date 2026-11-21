@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
+#include <string_view>
 
 namespace
 {
@@ -31,12 +32,25 @@ void PrintDigest(const std::array<uint8_t, 32>& acDigest)
 
 int RunAudit(int argc, char** argv)
 {
-    if (argc < 4 || argc > 5)
+    const auto usage = []
     {
-        std::cerr << "Usage: TrueCoopContentAudit <Data directory> <runtime e.g. 1.7.104.0> <full-engine-loadorder.txt> [loaded-SKSE.dll]\n"
+        std::cerr << "Usage: TrueCoopContentAudit <Data directory> <runtime e.g. 1.7.104.0> <full-engine-loadorder.txt> [loaded-SKSE.dll] [--archive-cache <file>]\n"
                      "The UTF-8 load order must include implicit masters and Skyrim.ccc entries, one filename per line.\n"
-                     "Run in the same mod-manager VFS as the game. This read-only audit does not prove gameplay compatibility.\n";
+                     "The audit reads game files. It writes a BSA cache only when explicitly requested.\n";
         return 2;
+    };
+    if (argc < 4)
+        return usage();
+    int nextArg = 4;
+    std::filesystem::path skse;
+    std::filesystem::path archiveCache;
+    if (nextArg < argc && !std::string_view(argv[nextArg]).starts_with("--"))
+        skse = Utf8Path(argv[nextArg++]);
+    if (nextArg != argc)
+    {
+        if (argc - nextArg != 2 || std::string_view(argv[nextArg]) != "--archive-cache" || !argv[nextArg + 1][0])
+            return usage();
+        archiveCache = Utf8Path(argv[nextArg + 1]);
     }
     const auto dataPath = Utf8Path(argv[1]);
     std::ifstream order(Utf8Path(argv[3]), std::ios::binary);
@@ -87,11 +101,13 @@ int RunAudit(int argc, char** argv)
     std::string runtime = argv[2];
     std::replace(runtime.begin(), runtime.end(), '.', '-');
     const auto addressLibrary = dataPath / "SKSE" / "Plugins" / ("versionlib-" + runtime + ".bin");
-    const auto skse = argc == 5 ? Utf8Path(argv[4]) : std::filesystem::path{};
-    FingerprintContent(dataPath, addressLibrary, skse, mods);
+    ArchiveFingerprintStats archives;
+    FingerprintContent(dataPath, addressLibrary, skse, mods, archiveCache, &archives);
     const auto result = ContentCompatibility::Validate(mods);
     std::cout << "{\"protocol\":" << kTrueCoopProtocolVersion << ",\"runtime\":";
     PrintString(argv[2]);
+    if (!archiveCache.empty())
+        std::cout << ",\"archiveCache\":{\"hits\":" << archives.Hits << ",\"filesRead\":" << archives.FilesRead << ",\"bytesRead\":" << archives.BytesRead << '}';
     std::cout << ",\"manifestValid\":" << (result ? "true" : "false") << ",\"diagnostic\":";
     PrintString(ContentCompatibility::Describe(result));
     std::cout << ",\"gameStatus\":\"not-game-tested\",\"plugins\":[";

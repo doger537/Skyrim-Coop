@@ -8,6 +8,8 @@
 #include <Client.hpp>
 #include <Packet.hpp>
 #include <Messages/AuthenticationRequest.h>
+#include <Messages/RequestWorldCheckpoint.h>
+#include <Messages/PhysicsFrameMessages.h>
 #include <Messages/AuthenticationResponse.h>
 #include <Messages/AssignCharacterRequest.h>
 #include <Messages/AssignCharacterResponse.h>
@@ -24,6 +26,8 @@
 #include <Messages/LockChangeRequest.h>
 #include <Messages/NotifyLockChange.h>
 #include <Structs/AnniversaryContent.h>
+#include <Structs/QuestReplayPlan.h>
+#include <Structs/QuestSyncPolicy.h>
 #include <Messages/PartyCreateRequest.h>
 #include <Messages/NotifyPartyJoined.h>
 #include <Messages/RequestWeatherChange.h>
@@ -38,10 +42,20 @@
 #include <Messages/NotifyQuestJournal.h>
 #include <Messages/RequestCampaignReady.h>
 #include <Messages/RequestCampaignSeed.h>
+#include <Messages/RequestCoopSleep.h>
+#include <Messages/NotifyCoopSleep.h>
+#include <Messages/RequestDialogueLease.h>
+#include <Messages/NotifyDialogueLease.h>
+#include <Messages/NotifyPartyLocations.h>
+#include <Messages/NotifyPartyLeft.h>
+#include <Messages/PartyLeaveRequest.h>
 #include <chrono>
 #include <iostream>
+#include <functional>
+#include <cmath>
 #include <optional>
 #include <thread>
+#include <fstream>
 
 using namespace TiltedPhoques;
 using ResponseType = AuthenticationResponse::ResponseType;
@@ -70,19 +84,41 @@ struct Probe final : Client
     bool AutoReady{true};
     uint64_t Nonce{};
     uint64_t CampaignRevision{};
+    uint64_t WorldEpoch{};
     bool SeedOwner{};
     Vector<NotifyQuestJournal> Journals;
     Vector<QuestJournal> Seed;
+    std::function<bool(const Vector<NotifyQuestJournal>&)> CheckJournal;
     float LastPositionX{};
+    std::optional<NotifyCoopSleep> RestState;
+    uint64_t RestSequence{};
+    uint32_t RestCommits{};
+    std::optional<NotifyDialogueLease> DialogueLease;
+    uint32_t DialogueNotifications{};
+    std::optional<NotifyPartyLocations> PartyLocations;
+    uint32_t LocationNotifications{};
+    std::optional<NotifyWorldCheckpoint> WorldCheckpointState;
+    std::optional<NotifyPhysicsFrame> PhysicsEnd;
+    uint32_t WorldCheckpointNotifications{};
+    void Rest(CoopSleepVote::Action aAction, uint8_t aHours = 0, uint64_t aRound = 0)
+    {
+        RequestCoopSleep request;
+        request.Action = aAction;
+        request.Sequence = ++RestSequence;
+        request.Round = aRound;
+        request.Hours = aHours;
+        request.Tick = GetClock().GetCurrentTick();
+        SendMessage(request);
+    }
     void OnUpdate() override {}
     void OnDisconnected(EDisconnectReason) override { Ready = false; }
-    void OnConnected() override { SendMessage(Request); }
+    void OnConnected() override { WorldEpoch = 0; SendMessage(Request); }
     void SendMessage(const ClientMessage& acMessage)
     {
         Buffer buffer(65536);
         Buffer::Writer writer(&buffer);
         writer.WriteBits(0, 8);
-        acMessage.Serialize(writer);
+        acMessage.Serialize(writer, WorldEpoch);
         PacketView packet(reinterpret_cast<char*>(buffer.GetWriteData()), static_cast<uint32_t>(writer.Size()));
         Send(&packet);
     }
@@ -91,9 +127,13 @@ struct Probe final : Client
         ViewBuffer buffer(reinterpret_cast<uint8_t*>(const_cast<void*>(apData)), aSize);
         Buffer::Reader reader(&buffer);
         ServerMessageFactory factory;
-        const auto message = factory.Extract(reader);
+        const auto message = factory.Extract(reader, WorldEpoch);
         if (message && message->GetOpcode() == AuthenticationResponse::Opcode)
+        {
             Reply = *static_cast<AuthenticationResponse*>(message.get());
+            if (Reply->Type == ResponseType::kAccepted)
+                WorldEpoch = message->WorldEpoch;
+        }
         else if (message && message->GetOpcode() == NotifyCampaignCheckpoint::Opcode)
         {
             const auto& checkpoint = *static_cast<NotifyCampaignCheckpoint*>(message.get());
@@ -108,6 +148,8 @@ struct Probe final : Client
             }
             else if (checkpoint.State == NotifyCampaignCheckpoint::End && AutoReady && (!checkpoint.BaselinePending || SeedOwner))
             {
+                if (!SeedOwner && CheckJournal && !CheckJournal(Journals))
+                    return;
                 if (SeedOwner)
                     for (const auto& quest : Seed)
                     {
@@ -127,6 +169,37 @@ struct Probe final : Client
         }
         else if (message && message->GetOpcode() == NotifyQuestJournal::Opcode)
             Journals.push_back(*static_cast<NotifyQuestJournal*>(message.get()));
+        else if (message && message->GetOpcode() == NotifyDialogueLease::Opcode)
+        {
+            DialogueLease = *static_cast<NotifyDialogueLease*>(message.get());
+            ++DialogueNotifications;
+        }
+        else if (message && message->GetOpcode() == NotifyPartyLocations::Opcode)
+        {
+            const auto& snapshot = *static_cast<const NotifyPartyLocations*>(message.get());
+            if (snapshot.IsValid())
+            {
+                PartyLocations = snapshot;
+                ++LocationNotifications;
+            }
+        }
+        else if (message && message->GetOpcode() == NotifyPhysicsFrame::Opcode)
+        {
+            const auto& frame = *static_cast<const NotifyPhysicsFrame*>(message.get());
+            if (frame.IsValid() && frame.Action == NotifyPhysicsFrame::End)
+                PhysicsEnd = frame;
+        }
+        else if (message && message->GetOpcode() == NotifyWorldCheckpoint::Opcode)
+        {
+            const auto& checkpoint = *static_cast<const NotifyWorldCheckpoint*>(message.get());
+            if (checkpoint.IsValid())
+            {
+                WorldCheckpointState = checkpoint;
+                ++WorldCheckpointNotifications;
+            }
+        }
+        else if (message && message->GetOpcode() == NotifyPartyLeft::Opcode)
+            InParty = false;
         else if (message && message->GetOpcode() == AssignCharacterResponse::Opcode)
             Assignment = *static_cast<AssignCharacterResponse*>(message.get());
         else if (message && message->GetOpcode() == NotifyInventoryChanges::Opcode)
@@ -149,6 +222,12 @@ struct Probe final : Client
         {
             ++TimeNotifications;
             Time = *static_cast<ServerTimeSettings*>(message.get());
+        }
+        else if (message && message->GetOpcode() == NotifyCoopSleep::Opcode)
+        {
+            RestState = *static_cast<NotifyCoopSleep*>(message.get());
+            if (RestState->IsValid() && RestState->Phase == CoopSleepVote::Phase::Committed)
+                ++RestCommits;
         }
         else if (message && message->GetOpcode() == NotifyPlayerCellChanged::Opcode)
             PlayerCell = *static_cast<NotifyPlayerCellChanged*>(message.get());
@@ -177,7 +256,11 @@ struct Probe final : Client
 
 AuthenticationRequest MakeRequest()
 {
+    static uint16_t nextIdentity = 1;
+    static const uint64_t processIdentity = static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     AuthenticationRequest request;
+    request.CharacterId.Parts = {nextIdentity++, static_cast<uint16_t>(processIdentity), static_cast<uint16_t>(processIdentity >> 16),
+        static_cast<uint16_t>(processIdentity >> 32), static_cast<uint16_t>(processIdentity >> 48), 0xD2C8, 0x1284, 0xA9F0};
     request.Version = BUILD_COMMIT;
     request.RuntimeVersion = "1.7.104.0";
     request.Username = "Protocol probe";
@@ -220,7 +303,17 @@ bool ConnectProbe(Probe& aProbe, const std::string& acAddress, ResponseType aExp
         aProbe.Update();
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    return aProbe.Reply && aProbe.Reply->Type == aExpected && (!aRequireReady || aExpected != ResponseType::kAccepted || aProbe.Ready);
+    const bool accepted = aProbe.Reply && aProbe.Reply->Type == aExpected && (!aRequireReady || aExpected != ResponseType::kAccepted || aProbe.Ready);
+    if (!accepted)
+    {
+        std::cerr << "Probe admission failed: expected=" << static_cast<unsigned>(aExpected)
+                  << " received=" << (aProbe.Reply ? static_cast<int>(aProbe.Reply->Type) : -1)
+                  << " ready=" << aProbe.Ready;
+        if (aProbe.Reply)
+            std::cerr << " reason=" << aProbe.Reply->ContentError;
+        std::cerr << std::endl;
+    }
+    return accepted;
 }
 
 bool CheckInventoryReplay(Probe& aOwner, const std::string& acAddress)
@@ -609,6 +702,117 @@ bool CheckCampaignAdmission(const std::string& address)
     return passed && seedPassed && objectPassed && restored;
 }
 
+bool CheckQuestPolicy(const std::string& acAddress)
+{
+    using namespace QuestSyncPolicy;
+    const GameId prologue(0, kHelgenPrologue), route(0, kHadvarRoute), scene(0, kHelgenDragonAttack);
+    const GameId hostOffer(0, 0x00025231), guestOffer(0, 0x0001CEEE);
+    using Observation = std::pair<QuestJournal, LocalQuestState>;
+    const auto check = [](const Vector<NotifyQuestJournal>& acJournals, const Vector<Observation>& acLocal)
+    {
+        if (acJournals.size() != 2)
+            return false;
+        for (const auto& [quest, local] : acLocal)
+        {
+            const auto journal = std::find_if(acJournals.begin(), acJournals.end(), [&](const auto& aEntry) { return aEntry.Data.Id == quest.Id; });
+            if (journal == acJournals.end())
+            {
+                if (NeedsSharedJournal(quest.Id, quest.Type, local))
+                    return false;
+                continue;
+            }
+            QuestReplayPlan plan;
+            if (!PlanQuestReplay(journal->Data, journal->ReplayStages, journal->ReplayLifecycle, local, plan) || !plan.Apply.empty())
+                return false;
+        }
+        return true;
+    };
+    const QuestJournal completed{prologue, 1, 1, true, true,
+        {{1, 0, true}, {0, 8, true}, {0, 318, true}, {0, 900, true}, {0, 1000, true}, {2, 1000, true}}};
+    const QuestJournal hadvar{route, 1, 1, true, false, {{1, 0, true}, {0, 5, true}, {0, 10, true}, {0, 20, true}}};
+    const QuestJournal prepared{hostOffer, 1, 5, true, false, {{1, 0, true}, {0, 1, true}}};
+    const Vector<Observation> hostSave{
+        {completed, {true, true, {8, 318, 900, 1000}}},
+        {hadvar, {true, false, {5, 10, 20}}},
+        {prepared, {true, false, {1}}},
+    };
+    const Vector<Observation> guestSave{
+        {completed, {true, true, {8, 317, 318, 900, 1000}}},
+        {hadvar, {true, false, {3, 5, 10, 20}}},
+        {{guestOffer, 1, 5}, {true, false, {0, 1}}},
+        {{scene, 1, 1}, {true, true, {45, 195, 200}}},
+    };
+    Probe host, guest;
+    host.Request = MakeRequest();
+    guest.Request = MakeRequest();
+    host.Seed = {completed, hadvar, prepared};
+    host.CheckJournal = [&](const auto& acJournals) { return check(acJournals, hostSave); };
+    guest.CheckJournal = [&](const auto& acJournals) { return check(acJournals, guestSave); };
+    if (!ConnectProbe(host, acAddress, ResponseType::kAccepted) || !ConnectProbe(guest, acAddress, ResponseType::kAccepted))
+        return false;
+    const uint64_t revision = host.CampaignRevision;
+    if (!revision || guest.CampaignRevision != revision)
+        return false;
+    guest.Close();
+    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+    while (std::chrono::steady_clock::now() < until)
+    {
+        host.Update();
+        guest.Update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    Probe rejoin;
+    rejoin.Request = guest.Request;
+    rejoin.CheckJournal = guest.CheckJournal;
+    const bool rejoined = ConnectProbe(rejoin, acAddress, ResponseType::kAccepted) && rejoin.CampaignRevision == revision;
+    rejoin.Close();
+    host.Close();
+    if (!rejoined)
+        return false;
+
+    Probe incompatible;
+    incompatible.Request = MakeRequest();
+    incompatible.AutoReady = false;
+    if (!ConnectProbe(incompatible, acAddress, ResponseType::kAccepted, false))
+        return false;
+    const auto pump = [&](const auto& aDone)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!aDone() && std::chrono::steady_clock::now() < deadline)
+        {
+            incompatible.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return aDone();
+    };
+    if (!pump([&] { return incompatible.Journals.size() == 2; }))
+        return false;
+    RequestCampaignReady report;
+    report.Nonce = incompatible.Nonce;
+    report.Revision = incompatible.CampaignRevision;
+    report.State = RequestCampaignReady::Detail;
+    report.Diff.Id = prologue;
+    report.Diff.LocalForm = kHelgenPrologue;
+    report.Diff.Type = 1;
+    report.Diff.EditorId = "MQ101";
+    report.Diff.Local = {true, true, {9, 317, 900, 1000}};
+    report.Diff.Problem = QuestAdmissionProblem::LocalProgress;
+    QuestReplayPlan preview;
+    if (PlanQuestReplay(completed, {}, false, report.Diff.Local, preview) || preview.Problem != report.Diff.Problem)
+        return false;
+    incompatible.SendMessage(report);
+    report.State = RequestCampaignReady::Refused;
+    report.SeedCount = 1;
+    incompatible.SendMessage(report);
+    const bool passed = pump([&]
+    {
+        return incompatible.Reply && incompatible.Reply->Type == ResponseType::kQuestAdmissionMismatch;
+    }) && !incompatible.Ready;
+    incompatible.Close();
+    std::cout << (passed ? "PASS: " : "FAIL: ") << "two post-Helgen characters admitted, same guest rejoined, incompatible route diagnosed. Revision " << revision << '\n';
+    return passed;
+}
+
 bool CheckEnvironment(const std::string& acAddress)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(90);
@@ -700,11 +904,555 @@ bool CheckEnvironment(const std::string& acAddress)
     return passed;
 }
 
+bool CheckCoopSleep(const std::string& acAddress)
+{
+    Probe host, guest;
+    host.Request = MakeRequest();
+    host.Request.PlayerTime.Year = 201;
+    host.Request.PlayerTime.Month = 11;
+    host.Request.PlayerTime.Day = 31;
+    host.Request.PlayerTime.Time = 23.5f;
+    host.Request.PlayerTime.DaysPassed = 7000.5;
+    guest.Request = MakeRequest();
+    guest.Request.PlayerTime.Year = 299;
+    const auto check = [](bool aPassed, const char* apName)
+    {
+        std::cout << (aPassed ? "PASS: " : "FAIL: ") << apName << std::endl;
+        return aPassed;
+    };
+    if (!check(ConnectProbe(host, acAddress, ResponseType::kAccepted) && ConnectProbe(guest, acAddress, ResponseType::kAccepted),
+               "rest probes authenticate on the same world epoch"))
+        return false;
+    const auto pump = [&](const auto& acDone)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!acDone() && std::chrono::steady_clock::now() < until)
+        {
+            host.Update();
+            guest.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return acDone();
+    };
+    EnterInteriorCellRequest enter;
+    enter.CellId = host.Request.CellId;
+    host.SendMessage(enter);
+    guest.SendMessage(enter);
+    AssignCharacterRequest assign;
+    assign.ReferenceId = GameId(0, 0x14);
+    assign.CellId = host.Request.CellId;
+    host.SendMessage(assign);
+    guest.SendMessage(assign);
+    if (!check(pump([&] { return host.Assignment && guest.Assignment; }), "rest probe characters are loaded"))
+        return false;
+    host.SendMessage(PartyCreateRequest());
+    if (!check(pump([&] { return host.InParty && guest.InParty; }), "two rest participants form a party while in different cells"))
+        return false;
+    if (!check(host.Time && guest.Time && host.Time->timeModel.Year == 201 && guest.Time->timeModel.Year == 201 && host.WorldEpoch == guest.WorldEpoch && host.WorldEpoch != 0,
+               "late guest's future calendar cannot replace the host timeline"))
+        return false;
+    enter.CellId = GameId(1, 0x124);
+    guest.SendMessage(enter);
+    if (!check(pump([&] { return host.PlayerCell && host.PlayerCell->PlayerId == guest.Reply->PlayerId && host.PlayerCell->CellId == enter.CellId; }),
+               "guest enters another cell before the rest transaction"))
+        return false;
+    const uint32_t initialTime = host.TimeNotifications;
+    host.Rest(CoopSleepVote::Action::Vote, 8);
+    if (!check(pump([&] { return host.RestState && guest.RestState && guest.RestState->Phase == CoopSleepVote::Phase::Waiting; }) &&
+               host.RestCommits == 0 && guest.RestCommits == 0 && host.TimeNotifications == initialTime,
+               "one vote notifies both players without skipping time"))
+        return false;
+    const uint64_t firstRound = guest.RestState->Round;
+    guest.Rest(CoopSleepVote::Action::Vote, 4, firstRound);
+    if (!check(pump([&] { return host.RestState->Phase == CoopSleepVote::Phase::Preparing && guest.RestState->Phase == CoopSleepVote::Phase::Preparing; }) &&
+               host.RestCommits == 0 && guest.RestCommits == 0 && host.TimeNotifications == initialTime,
+               "both votes still wait for live menu acknowledgements"))
+        return false;
+    host.Rest(CoopSleepVote::Action::Ready, 0, firstRound);
+    guest.Rest(CoopSleepVote::Action::Ready, 0, firstRound);
+    if (!check(pump([&] { return host.RestCommits == 1 && guest.RestCommits == 1; }) && host.RestState->Hours == 4 &&
+               host.RestState->Time == guest.RestState->Time && host.RestState->Time.Year == 202 && host.RestState->Time.Month == 0 &&
+               host.RestState->Time.Day == 1 && std::abs(host.RestState->Time.Time - 3.5f) < 0.1f &&
+               std::abs(host.RestState->Time.DaysPassed - (7000.5 + 4.0 / 24.0)) < 0.005,
+               "one four-hour commit advances the same hour, date and elapsed days across midnight"))
+        return false;
+    host.Rest(CoopSleepVote::Action::Ready, 0, firstRound); // fresh sequence, expired transaction
+    host.Rest(CoopSleepVote::Action::Vote, 2);
+    if (!pump([&] { return guest.RestState->Round > firstRound && guest.RestState->Phase == CoopSleepVote::Phase::Waiting; }))
+        return check(false, "next rest transaction starts");
+    const uint64_t secondRound = guest.RestState->Round;
+    guest.Rest(CoopSleepVote::Action::Vote, 2, secondRound);
+    if (!pump([&] { return guest.RestState->Phase == CoopSleepVote::Phase::Preparing; }))
+        return check(false, "next rest transaction reaches prepare");
+    host.Rest(CoopSleepVote::Action::Cancel, 0, secondRound);
+    guest.Rest(CoopSleepVote::Action::Ready, 0, secondRound);
+    if (!check(pump([&] { return guest.RestState->Phase == CoopSleepVote::Phase::Cancelled; }) && host.RestCommits == 1 && guest.RestCommits == 1,
+               "closing either menu cancels prepare and replay cannot skip time twice"))
+        return false;
+    host.Rest(CoopSleepVote::Action::Vote, 1);
+    if (!pump([&] { return guest.RestState->Round > secondRound && guest.RestState->Phase == CoopSleepVote::Phase::Waiting; }))
+        return check(false, "disconnect scenario starts");
+    guest.Close();
+    if (!check(pump([&] { return host.RestState->Phase == CoopSleepVote::Phase::Cancelled; }) && host.RestCommits == 1,
+               "participant disconnect cancels an outstanding rest vote"))
+        return false;
+    host.Close();
+    return true;
+}
+
+bool CheckDialogueLease(const std::string& acAddress)
+{
+    Probe host, guest;
+    host.Request = MakeRequest();
+    guest.Request = MakeRequest();
+    const auto check = [](bool aPassed, const char* apName)
+    {
+        std::cout << (aPassed ? "PASS: " : "FAIL: ") << apName << std::endl;
+        return aPassed;
+    };
+    if (!check(ConnectProbe(host, acAddress, ResponseType::kAccepted) && ConnectProbe(guest, acAddress, ResponseType::kAccepted),
+               "dialogue participants authenticate"))
+        return false;
+    const auto pump = [&](const auto& acDone)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!acDone() && std::chrono::steady_clock::now() < until)
+        {
+            host.Update();
+            guest.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return acDone();
+    };
+    const auto settle = [&](uint32_t aMilliseconds = 350)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(aMilliseconds);
+        return pump([&] { return std::chrono::steady_clock::now() >= until; });
+    };
+    EnterInteriorCellRequest enter;
+    enter.CellId = host.Request.CellId;
+    host.SendMessage(enter);
+    guest.SendMessage(enter);
+    AssignCharacterRequest assign;
+    assign.ReferenceId = GameId(0, 0x14);
+    assign.CellId = enter.CellId;
+    host.SendMessage(assign);
+    guest.SendMessage(assign);
+    if (!check(pump([&] { return host.Assignment && guest.Assignment; }), "dialogue player characters load"))
+        return false;
+    host.SendMessage(PartyCreateRequest());
+    if (!check(pump([&] { return host.InParty && guest.InParty; }), "dialogue players form one party"))
+        return false;
+    host.Assignment.reset();
+    assign.ReferenceId = GameId(0, 0xabc123);
+    host.SendMessage(assign);
+    if (!check(pump([&] { return host.Assignment.has_value(); }), "host owns the synthetic NPC"))
+        return false;
+    RequestDialogueLease request;
+    request.ServerId = host.Assignment->ServerId;
+    request.OwnershipEpoch = host.Assignment->OwnershipEpoch;
+    request.Sequence = 1;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    request.Active = true;
+    guest.SendMessage(request);
+    if (!check(pump([&] { return host.DialogueLease && guest.DialogueLease; }) && host.DialogueLease->Active &&
+               host.DialogueLease->SpeakerPlayerId == guest.Reply->PlayerId && host.DialogueLease->OwnershipEpoch == request.OwnershipEpoch,
+               "guest conversation reaches the NPC owner with the current ownership epoch"))
+        return false;
+    const uint64_t firstRevision = host.DialogueLease->Revision;
+    guest.SendMessage(request);
+    request.Sequence = 2;
+    request.OwnershipEpoch += 1;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    guest.SendMessage(request);
+    request.OwnershipEpoch = host.Assignment->OwnershipEpoch;
+    host.SendMessage(request); // Another participant cannot steal a live lease.
+    settle();
+    if (!check(host.DialogueLease->Revision == firstRevision && host.DialogueLease->Active,
+               "replay, stale ownership and a competing speaker cannot replace a live conversation"))
+        return false;
+    request.Sequence = 3;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    guest.SendMessage(request);
+    if (!check(pump([&] { return host.DialogueLease->Revision > firstRevision; }) && host.DialogueLease->Active,
+               "a fresh heartbeat renews the finite conversation lease"))
+        return false;
+    request.Sequence = 4;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    request.Active = false;
+    guest.SendMessage(request);
+    if (!check(pump([&] { return !host.DialogueLease->Active; }), "closing the guest dialogue releases the NPC"))
+        return false;
+    settle();
+    request.Sequence = 5;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    request.Active = true;
+    guest.SendMessage(request);
+    if (!pump([&] { return host.DialogueLease->Active; }))
+        return check(false, "new conversation starts");
+    request.Sequence = 4;
+    request.Active = false;
+    guest.SendMessage(request);
+    settle();
+    if (!check(host.DialogueLease->Active, "an old release cannot end a newer conversation"))
+        return false;
+    if (!check(pump([&] { return !host.DialogueLease->Active; }), "missing heartbeats expire while both sockets remain connected"))
+        return false;
+    request.Sequence = 6;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    request.Active = true;
+    guest.SendMessage(request);
+    if (!pump([&] { return host.DialogueLease->Active; }))
+        return check(false, "cell change scenario starts");
+    enter.CellId = GameId(0, 0x124);
+    guest.SendMessage(enter);
+    if (!check(pump([&] { return !host.DialogueLease->Active; }), "leaving the NPC cell releases its conversation"))
+        return false;
+    const uint64_t releasedRevision = host.DialogueLease->Revision;
+    settle();
+    request.Sequence = 7;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    guest.SendMessage(request);
+    settle();
+    if (!check(host.DialogueLease->Revision == releasedRevision && !host.DialogueLease->Active,
+               "a participant in another interior cannot renew the NPC lease"))
+        return false;
+    enter.CellId = host.Request.CellId;
+    guest.SendMessage(enter);
+    settle();
+    request.Sequence = 8;
+    request.Tick = guest.GetClock().GetCurrentTick();
+    guest.SendMessage(request);
+    if (!pump([&] { return host.DialogueLease->Active; }))
+        return check(false, "disconnect scenario starts");
+    guest.Close();
+    if (!check(pump([&] { return !host.DialogueLease->Active; }), "guest disconnect releases its NPC without a release packet"))
+        return false;
+    host.Close();
+    return true;
+}
+
+bool CheckPartyLocations(const std::string& acAddress)
+{
+    Probe host, guest, outsider;
+    host.Request = MakeRequest();
+    guest.Request = MakeRequest();
+    outsider.Request = MakeRequest();
+    const auto check = [](bool aPassed, const char* apName)
+    {
+        std::cout << (aPassed ? "PASS: " : "FAIL: ") << apName << std::endl;
+        return aPassed;
+    };
+    const auto pump = [&](const auto& acDone, int aMilliseconds = 6000)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(aMilliseconds);
+        while (!acDone() && std::chrono::steady_clock::now() < until)
+        {
+            host.Update(); guest.Update(); outsider.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return acDone();
+    };
+    const auto settle = [&](int aMilliseconds)
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(aMilliseconds);
+        pump([&] { return std::chrono::steady_clock::now() >= until; }, aMilliseconds + 1000);
+    };
+    if (!check(ConnectProbe(host, acAddress, ResponseType::kAccepted) && ConnectProbe(guest, acAddress, ResponseType::kAccepted) &&
+               ConnectProbe(outsider, acAddress, ResponseType::kAccepted), "location probes authenticate"))
+        return false;
+    EnterInteriorCellRequest enter;
+    enter.CellId = host.Request.CellId;
+    host.SendMessage(enter); guest.SendMessage(enter); outsider.SendMessage(enter);
+    AssignCharacterRequest assign;
+    assign.ReferenceId = GameId(0, 0x14);
+    assign.CellId = enter.CellId;
+    host.SendMessage(assign); guest.SendMessage(assign); outsider.SendMessage(assign);
+    if (!check(pump([&] { return host.Assignment && guest.Assignment && outsider.Assignment; }), "all synthetic player characters load"))
+        return false;
+    host.SendMessage(PartyCreateRequest());
+    if (!pump([&] { return host.InParty && guest.InParty && outsider.InParty; }))
+        return check(false, "location party forms");
+    outsider.SendMessage(PartyLeaveRequest());
+    if (!check(pump([&] { return !outsider.InParty; }), "observer leaves the private party"))
+        return false;
+    const uint32_t outsiderBefore = outsider.LocationNotifications;
+    if (!check(pump([&] { return host.PartyLocations && guest.PartyLocations; }) && host.PartyLocations->Players.size() == 2,
+               "bounded snapshots include both ready party characters"))
+        return false;
+    auto findGuest = [&]() -> const NotifyPartyLocations::Location*
+    {
+        if (host.PartyLocations)
+            for (const auto& location : host.PartyLocations->Players)
+                if (location.PlayerId == guest.Reply->PlayerId)
+                    return &location;
+        return nullptr;
+    };
+    enter.CellId = GameId(0, 0x124);
+    guest.SendMessage(enter);
+    const uint64_t beforeCellChange = host.PartyLocations->Sequence;
+    if (!check(pump([&] { return host.PartyLocations->Sequence > beforeCellChange && findGuest() == nullptr; }),
+               "a cell transition cannot relabel coordinates sampled in the previous cell"))
+        return false;
+    ClientReferencesMoveRequest movement;
+    movement.Tick = guest.GetClock().GetCurrentTick() + 100;
+    auto& position = movement.Updates[guest.Assignment->ServerId];
+    position.OwnershipEpoch = guest.Assignment->OwnershipEpoch;
+    position.CellId = enter.CellId;
+    position.Position = glm::vec3(100.f, -200.f, 30.f);
+    guest.SendMessage(movement);
+    if (!check(pump([&] { const auto* location = findGuest(); return location && location->Cell == enter.CellId && location->Position.x == 100.f; }),
+               "a guest in another interior still reaches the host map stream"))
+        return false;
+    const uint64_t acceptedTick = findGuest()->ReceivedTick;
+    const uint64_t acceptedSequence = host.PartyLocations->Sequence;
+    movement.Tick += 100;
+    position.OwnershipEpoch += 10;
+    position.Position.x = 999.f;
+    guest.SendMessage(movement);
+    position.OwnershipEpoch = guest.Assignment->OwnershipEpoch;
+    host.SendMessage(movement); // Wrong sender for the guest's character.
+    movement.Tick -= 200;
+    guest.SendMessage(movement); // Out-of-order packet from the correct sender.
+    if (!check(pump([&] { return host.PartyLocations->Sequence > acceptedSequence; }) && findGuest() &&
+               findGuest()->Position.x == 100.f && findGuest()->ReceivedTick == acceptedTick,
+               "wrong sender, stale ownership and replay cannot move or refresh the marker"))
+        return false;
+    settle(600);
+    if (!check(outsider.LocationNotifications == outsiderBefore, "party map positions are not sent to a non-member"))
+        return false;
+    if (!check(pump([&] { return findGuest() == nullptr; }), "missing movement observations expire from full snapshots"))
+        return false;
+    movement.Tick = guest.GetClock().GetCurrentTick() + 200;
+    position.Position.x = 150.f;
+    guest.SendMessage(movement);
+    if (!check(pump([&] { const auto* location = findGuest(); return location && location->Position.x == 150.f; }),
+               "a fresh accepted observation restores the distant player location"))
+        return false;
+    guest.SendMessage(PartyLeaveRequest());
+    if (!check(pump([&] { return !guest.InParty && findGuest() == nullptr; }), "leaving the party removes the marker location"))
+        return false;
+    host.Close(); guest.Close(); outsider.Close();
+    return true;
+}
+
+
+void AckEmptyPhysicsFrame(Probe& aProbe)
+{
+    RequestPhysicsFrame ack;
+    ack.Action = RequestPhysicsFrame::Applied;
+    ack.Data = aProbe.PhysicsEnd->Data;
+    aProbe.SendMessage(ack);
+}
+
+bool WaitForRestoredPhysics(Probe& aHost, Probe& aGuest)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    bool acknowledged = false;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        aHost.Update();
+        aGuest.Update();
+        if (!acknowledged && aHost.PhysicsEnd && aGuest.PhysicsEnd)
+        {
+            if (aHost.PhysicsEnd->Data.Index || aGuest.PhysicsEnd->Data.Index || aHost.PhysicsEnd->Data.Digest != aGuest.PhysicsEnd->Data.Digest)
+                return false;
+            AckEmptyPhysicsFrame(aHost);
+            AckEmptyPhysicsFrame(aGuest);
+            acknowledged = true;
+        }
+        if (acknowledged && aHost.WorldCheckpointState && aHost.WorldCheckpointState->State == NotifyWorldCheckpoint::Phase::Resume &&
+            aGuest.WorldCheckpointState && aGuest.WorldCheckpointState->State == NotifyWorldCheckpoint::Phase::Resume)
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return false;
+}
+
+bool CheckWorldCheckpoints(const std::string& address, const char* apRecoveryFile = nullptr, bool aLeavePending = false)
+{
+    using Phase = NotifyWorldCheckpoint::Phase;
+    using Kind = RequestWorldCheckpoint::Kind;
+    Probe host, guest;
+    host.Request = MakeRequest(); guest.Request = MakeRequest();
+    const auto check = [](bool passed, const char* name) { std::cout << (passed ? "PASS: " : "FAIL: ") << name << std::endl; return passed; };
+    if (!check(ConnectProbe(host, address, ResponseType::kAccepted) && ConnectProbe(guest, address, ResponseType::kAccepted), "paired checkpoint participants authenticate")) return false;
+    const auto pump = [&](const auto& done)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!done() && std::chrono::steady_clock::now() < deadline) { host.Update(); guest.Update(); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        return done();
+    };
+    const auto settle = [&] { const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(200); pump([&] { return std::chrono::steady_clock::now() >= until; }); };
+    const auto phase = [](const Probe& probe, Phase value) { return probe.WorldCheckpointState && probe.WorldCheckpointState->State == value; };
+    EnterInteriorCellRequest enter; enter.CellId = host.Request.CellId; host.SendMessage(enter); guest.SendMessage(enter);
+    AssignCharacterRequest assign; assign.ReferenceId = GameId(0, 0x14); assign.CellId = enter.CellId; host.SendMessage(assign); guest.SendMessage(assign);
+    if (!pump([&] { return host.Assignment && guest.Assignment; })) return false;
+    host.SendMessage(PartyCreateRequest());
+    if (!check(pump([&] { return host.InParty && guest.InParty; }), "checkpoint participants have assigned characters and one party")) return false;
+    RequestWorldCheckpoint request;
+    guest.SendMessage(request);
+    if (!check(pump([&] { return phase(guest, Phase::Cancelled); }) && !host.WorldCheckpointState, "a guest cannot start a host checkpoint")) return false;
+    AssignObjectsRequest objects;
+    auto& object = objects.Objects.emplace_back(); object.Id = GameId(1, 0x811); object.CellId = enter.CellId;
+    Inventory::Entry item; item.BaseId = GameId(0, 0xF); item.Count = 3; object.CurrentInventory.Entries.push_back(item);
+    host.SendMessage(objects);
+    if (!check(pump([&] { return host.Objects.has_value(); }), "baseline object inventory is durable before the paired save")) return false;
+    host.SendMessage(request);
+    if (!check(pump([&] { return phase(host, Phase::PrepareSave) && phase(guest, Phase::PrepareSave); }), "one save request prepares both participants")) return false;
+    const auto prepared = *host.WorldCheckpointState;
+    const uint64_t oldEpoch = host.WorldEpoch;
+    request.Action = Kind::Prepared; request.Id = prepared.Id; request.Nonce = prepared.Nonce + 1;
+    guest.SendMessage(request); request.Nonce = prepared.Nonce; host.SendMessage(request); host.SendMessage(request); settle();
+    if (!check(phase(host, Phase::PrepareSave) && phase(guest, Phase::PrepareSave), "replayed preparation and a wrong nonce cannot start the native saves")) return false;
+    guest.SendMessage(request);
+    if (!check(pump([&] { return phase(host, Phase::CapturePhysics) && phase(guest, Phase::CapturePhysics); }),
+        "both preparation acknowledgements start canonical physics capture")) return false;
+    RequestPhysicsFrame end;
+    end.Action = RequestPhysicsFrame::End;
+    end.Data.Id = prepared.Id;
+    end.Data.Nonce = prepared.Nonce;
+    end.Data.NativeToWorld = 1.f;
+    host.SendMessage(end);
+    guest.SendMessage(end);
+    if (!check(pump([&] { return host.PhysicsEnd && guest.PhysicsEnd; }) &&
+        !host.PhysicsEnd->Data.Index && !guest.PhysicsEnd->Data.Index && host.PhysicsEnd->Data.Digest == guest.PhysicsEnd->Data.Digest,
+        "both clients receive the same canonical empty physics frame")) return false;
+    AckEmptyPhysicsFrame(host);
+    settle();
+    if (!check(phase(host, Phase::CapturePhysics), "one physical readback cannot authorize both saves")) return false;
+    AckEmptyPhysicsFrame(guest);
+    if (!check(pump([&] { return phase(host, Phase::SaveNow) && phase(guest, Phase::SaveNow); }),
+        "both physical readbacks authorize the two native saves")) return false;
+    RequestWorldCheckpoint saved; saved.Action = Kind::Saved; saved.Id = prepared.Id; saved.Nonce = prepared.Nonce;
+    saved.Contribution.Character = host.Request.CharacterId; saved.Contribution.Save.Bytes = 100; saved.Contribution.Save.Digest.fill(1);
+    saved.Contribution.Physics.Bytes = 80;
+    saved.Contribution.Physics.Digest.fill(3);
+    guest.SendMessage(saved); host.SendMessage(saved); settle();
+    if (!check(phase(host, Phase::SaveNow) && phase(guest, Phase::SaveNow), "one file receipt or another player's identity cannot commit a pair")) return false;
+    saved.Contribution.Character = guest.Request.CharacterId; saved.Contribution.Save.Digest.fill(2); guest.SendMessage(saved);
+    if (!check(pump([&] { return phase(host, Phase::Saved) && phase(guest, Phase::Saved); }) && host.WorldEpoch == oldEpoch,
+        "two checked file receipts commit one immutable manifest without changing the live epoch")) return false;
+    const auto manifest = host.WorldCheckpointState->Manifest;
+    LockChangeRequest lock; lock.Id = object.Id; lock.CellId = object.CellId; lock.IsLocked = true; lock.LockLevel = 0; host.SendMessage(lock);
+    if (!check(pump([&] { return guest.LockNotifications > 0; }), "world changes after the checkpoint are accepted before rollback")) return false;
+    request = {}; request.Action = Kind::Load; request.Id = prepared.Id; host.SendMessage(request);
+    if (!check(pump([&] { return phase(host, Phase::PrepareLoad) && phase(guest, Phase::PrepareLoad); }) &&
+        host.WorldCheckpointState->Manifest.Players == manifest.Players, "restore preparation reuses the exact two saved-file digests")) return false;
+    const auto load = *host.WorldCheckpointState;
+    request.Action = Kind::Prepared; request.Nonce = load.Nonce;
+    host.SendMessage(request); settle();
+    if (!check(phase(host, Phase::PrepareLoad), "a single prepared client cannot roll back the world")) return false;
+    guest.SendMessage(request);
+    if (!check(pump([&] { return phase(host, Phase::LoadNow) && phase(guest, Phase::LoadNow); }) && host.WorldCheckpointState->WorldEpoch > oldEpoch,
+        "both file checks atomically restore state and authorize a newer world epoch")) return false;
+    const uint64_t newEpoch = host.WorldCheckpointState->WorldEpoch;
+    auto hostRequest = host.Request, guestRequest = guest.Request;
+    hostRequest.CheckpointToken = guestRequest.CheckpointToken = prepared.Id;
+    hostRequest.CheckpointProof = {prepared.WorldId, manifest.Players[0]};
+    guestRequest.CheckpointProof = {prepared.WorldId, manifest.Players[1]};
+    if (apRecoveryFile)
+    {
+        std::ofstream file(apRecoveryFile, std::ios::binary | std::ios::trunc);
+        Buffer buffer(512);
+        Buffer::Writer writer(&buffer);
+        writer.WriteBits(prepared.Id, 64);
+        writer.WriteBits(newEpoch, 64);
+        hostRequest.CheckpointProof.Serialize(writer);
+        guestRequest.CheckpointProof.Serialize(writer);
+        file.write(reinterpret_cast<const char*>(buffer.GetWriteData()), writer.Size());
+        file.close();
+        if (!check(!file.fail(), "synthetic checkpoint recovery identities are recorded")) return false;
+    }
+    host.Close(); guest.Close(); settle();
+    if (aLeavePending)
+        return check(apRecoveryFile != nullptr, "both clients leave before the restored world rendezvous");
+    Probe wrong; wrong.Request = hostRequest; wrong.Request.CheckpointToken = 0;
+    if (!check(ConnectProbe(wrong, address, ResponseType::kContentMismatch), "a save from outside the restored pair cannot rejoin")) return false;
+    wrong.Close();
+    Probe guestReturn, hostReturn;
+    guestReturn.Request = guestRequest; hostReturn.Request = hostRequest;
+    guestReturn.Request.CheckpointToken = hostReturn.Request.CheckpointToken = prepared.Id;
+    if (!check(ConnectProbe(guestReturn, address, ResponseType::kAccepted) && ConnectProbe(hostReturn, address, ResponseType::kAccepted),
+        "both original characters can rejoin the restored checkpoint in reverse connection order")) return false;
+    if (!check(WaitForRestoredPhysics(hostReturn, guestReturn), "both clients align with the restored canonical frame")) return false;
+    if (!check(hostReturn.WorldEpoch == newEpoch && guestReturn.WorldEpoch == newEpoch && hostReturn.WorldCheckpointState &&
+        hostReturn.WorldCheckpointState->State == Phase::Resume && hostReturn.PartyLeader && !guestReturn.PartyLeader,
+        "resume preserves the epoch and original host even when the guest reconnects first")) return false;
+    hostReturn.SendMessage(enter); hostReturn.SendMessage(objects);
+    const auto query = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!hostReturn.Objects && std::chrono::steady_clock::now() < query) { hostReturn.Update(); guestReturn.Update(); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+    const bool restored = hostReturn.Objects && hostReturn.Objects->Objects.size() == 1 && !hostReturn.Objects->Objects[0].CurrentLockData.IsLocked &&
+        hostReturn.Objects->Objects[0].CurrentInventory.Entries.size() == 1 && hostReturn.Objects->Objects[0].CurrentInventory.Entries[0].Count == 3;
+    check(restored, "post-load object assignment reads checkpoint state rather than abandoned future state");
+    hostReturn.Close(); guestReturn.Close();
+    return restored;
+}
+
+bool CheckCheckpointRecovery(const std::string& address, const char* apRecoveryFile, bool aPending)
+{
+    using Phase = NotifyWorldCheckpoint::Phase;
+    const auto check = [](bool passed, const char* name) { std::cout << (passed ? "PASS: " : "FAIL: ") << name << std::endl; return passed; };
+    std::ifstream file(apRecoveryFile, std::ios::binary);
+    Buffer buffer(512);
+    // Two 64-bit values followed by a fixed-size proof for each character.
+    constexpr size_t kProofBytes = 32 + 16 + 3 * (8 + 32);
+    constexpr size_t kFixtureBytes = 16 + 2 * kProofBytes;
+    file.read(reinterpret_cast<char*>(buffer.GetWriteData()), kFixtureBytes);
+    if (!file || file.peek() != std::char_traits<char>::eof())
+        return check(false, "recovery fixture is exact, bounded synthetic data");
+    Buffer::Reader reader(&buffer);
+    uint64_t checkpoint{}, previousEpoch{};
+    Probe host, guest; host.Request = MakeRequest(); guest.Request = MakeRequest();
+    if (!reader.ReadBits(checkpoint, 64) || !reader.ReadBits(previousEpoch, 64) ||
+        !host.Request.CheckpointProof.Deserialize(reader) || !guest.Request.CheckpointProof.Deserialize(reader))
+        return check(false, "recovery fixture contains both paired-save proofs");
+    for (auto* request : {&host.Request, &guest.Request})
+    {
+        request->CharacterId = request->CheckpointProof.Player.Character;
+        request->CheckpointToken = checkpoint;
+    }
+    if (aPending)
+    {
+        Probe outsider; outsider.Request = MakeRequest();
+        if (!check(ConnectProbe(outsider, address, ResponseType::kContentMismatch), "pending recovery refuses an unrelated character")) return false;
+    }
+    if (!check(ConnectProbe(guest, address, ResponseType::kAccepted) && ConnectProbe(host, address, ResponseType::kAccepted),
+        "original checkpoint characters authenticate after server restart")) return false;
+    if (aPending && !check(WaitForRestoredPhysics(host, guest), "restored physical frame is acknowledged after restart")) return false;
+    if (!check(host.WorldEpoch > previousEpoch && guest.WorldEpoch == host.WorldEpoch, "restart has a fresh epoch with the same restored pair")) return false;
+    if (aPending && !check(host.WorldCheckpointState && host.WorldCheckpointState->State == Phase::Resume && host.PartyLeader && !guest.PartyLeader,
+        "unfinished rollback survives restart and restores the original host")) return false;
+    AssignObjectsRequest objects;
+    auto& object = objects.Objects.emplace_back(); object.Id = GameId(1, 0x811); object.CellId = host.Request.CellId;
+    EnterInteriorCellRequest enter; enter.CellId = host.Request.CellId; host.SendMessage(enter); host.SendMessage(objects);
+    const auto query = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!host.Objects && std::chrono::steady_clock::now() < query) { host.Update(); guest.Update(); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+    const bool restored = host.Objects && host.Objects->Objects.size() == 1 && !host.Objects->Objects[0].CurrentLockData.IsLocked &&
+        host.Objects->Objects[0].CurrentInventory.Entries.size() == 1 && host.Objects->Objects[0].CurrentInventory.Entries[0].Count == 3;
+    if (!check(restored, "recovered server accepts gameplay and reads the rolled-back object inventory")) return false;
+    if (!aPending && !check(!host.WorldCheckpointState && !guest.WorldCheckpointState, "completed rollback does not start another rendezvous on restart")) return false;
+    host.Close(); guest.Close();
+    return true;
+}
+
 int main(int argc, char** argv)
 {
     const std::string address = argc > 1 ? argv[1] : "127.0.0.1:10582";
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-checkpoints")
+        return CheckWorldCheckpoints(address, argc > 3 ? argv[3] : nullptr, argc > 4 && std::string_view(argv[4]) == "pending") ? 0 : 1;
+    if (argc > 4 && std::string_view(argv[2]) == "--verify-checkpoint-recovery")
+        return CheckCheckpointRecovery(address, argv[3], std::string_view(argv[4]) == "pending") ? 0 : 1;
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-locations")
+        return CheckPartyLocations(address) ? 0 : 1;
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-dialogue")
+        return CheckDialogueLease(address) ? 0 : 1;
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-coop-sleep")
+        return CheckCoopSleep(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-environment")
         return CheckEnvironment(address) ? 0 : 1;
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-quest-policy")
+        return CheckQuestPolicy(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-campaign-admission")
         return CheckCampaignAdmission(address) ? 0 : 1;
     if (argc > 2 && (std::string_view(argv[2]) == "--verify-world" || std::string_view(argv[2]) == "--touch-world"))
@@ -741,6 +1489,12 @@ int main(int argc, char** argv)
         baseline.Update();
     };
     check("matching active content", MakeRequest(), ResponseType::kAccepted);
+    auto duplicateCharacter = MakeRequest();
+    duplicateCharacter.CharacterId = baseline.Request.CharacterId;
+    check("duplicate active saved character", duplicateCharacter, ResponseType::kContentMismatch);
+    auto missingCharacter = MakeRequest();
+    missingCharacter.CharacterId = {};
+    check("missing saved character identity", missingCharacter, ResponseType::kContentMismatch);
     auto changed = MakeRequest();
     changed.ProtocolVersion += 1;
     check("unknown protocol schema", changed, ResponseType::kContentMismatch);

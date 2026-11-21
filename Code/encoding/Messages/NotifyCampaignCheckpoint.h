@@ -17,6 +17,7 @@ struct NotifyCampaignCheckpoint final : ServerMessage
     bool SeedOwner{};
     bool BaselinePending{};
     bool AllowMisc{};
+    bool StartupDiagnosticOnly{};
     TiltedPhoques::Vector<GameId> MiscQuests;
     bool Decoded{true};
 };

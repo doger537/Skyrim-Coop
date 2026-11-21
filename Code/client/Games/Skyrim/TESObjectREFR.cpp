@@ -7,6 +7,8 @@
 #include <Services/PapyrusService.h>
 #include <Events/ActivateEvent.h>
 #include <Events/InventoryChangeEvent.h>
+#include <NativeQuestContext.h>
+#include <Services/SharedQuestEffectService.h>
 #include <Events/ScriptAnimationEvent.h>
 #include <Events/LockChangeEvent.h>
 
@@ -44,6 +46,9 @@ namespace
 void QueueReferenceInventoryChange(InventoryChangeEvent aEvent, TESObjectREFR* apTransferReference)
 {
     aEvent.IsPlayerTransfer = apTransferReference && apTransferReference == PlayerCharacter::Get();
+    if (aEvent.FormId == 0x14)
+        aEvent.ScriptOrigin = NativeQuestContext::Current();
+    if (aEvent.ScriptOrigin && aEvent.ScriptOrigin->Operation && World::Get().ctx().at<SharedQuestEffectService>().Records(aEvent.ScriptOrigin->Operation)) return;
     World::Get().GetRunner().Trigger(std::move(aEvent));
 }
 
@@ -436,13 +441,17 @@ const float TESObjectREFR::GetHeight() noexcept
     return boundMax.z - GetBoundMin().z;
 }
 
-TESObjectREFR::OpenState TESObjectREFR::GetOpenState() noexcept
+std::optional<TESObjectREFR::OpenState> TESObjectREFR::TryGetOpenState() noexcept
 {
-    using ObjectReference = TESObjectREFR;
+    const auto* pAddress = World::Get().ctx().at<PapyrusService>().GetDoorOpenStateFunction();
+    if (!pAddress)
+        return std::nullopt;
+    const auto* pVM = GameVM::Get();
+    if (!pVM || !pVM->virtualMachine)
+        return std::nullopt;
 
-    PAPYRUS_FUNCTION(TESObjectREFR::OpenState, ObjectReference, GetOpenState);
-
-    return s_pGetOpenState(this);
+    const auto pGetOpenState = reinterpret_cast<PapyrusFunction<OpenState, TESObjectREFR>::TFunction>(pAddress);
+    return pGetOpenState(pVM->virtualMachine, 0, this);
 }
 
 ExtraContainerChanges::Data* TESObjectREFR::GetContainerChanges() const noexcept
@@ -684,7 +693,7 @@ Inventory TESObjectREFR::GetInventory(std::function<bool(TESForm&)> aFilter) con
     auto& modSystem = World::Get().GetModSystem();
     Inventory inventory{};
 
-    if (TESContainer* pBaseContainer = GetContainer())
+    if (TESContainer* pBaseContainer = GetContainer(); pBaseContainer && pBaseContainer->entries)
     {
         for (int i = 0; i < pBaseContainer->count; i++)
         {
@@ -708,37 +717,43 @@ Inventory TESObjectREFR::GetInventory(std::function<bool(TESForm&)> aFilter) con
 
     Inventory extraInventory{};
 
-    auto pExtraContChangesEntries = GetContainerChanges()->entries;
-    for (auto pGameEntry : *pExtraContChangesEntries)
+    const auto* changes = GetContainerChanges();
+    if (changes && changes->entries)
     {
-        if (!pGameEntry)
-            continue;
-
-        if (!aFilter(*pGameEntry->form))
-            continue;
-
-        Inventory::Entry entry{};
-        modSystem.GetServerModId(pGameEntry->form->formID, entry.BaseId);
-        entry.Count = pGameEntry->count;
-
-        for (ExtraDataList* pExtraDataList : *pGameEntry->dataList)
+        for (auto pGameEntry : *changes->entries)
         {
-            if (!pExtraDataList)
+            if (!pGameEntry || !pGameEntry->form)
                 continue;
 
-            Inventory::Entry innerEntry;
-            innerEntry.BaseId = entry.BaseId;
-            innerEntry.Count = 1;
+            if (!aFilter(*pGameEntry->form))
+                continue;
 
-            GetItemFromExtraData(innerEntry, pExtraDataList);
+            Inventory::Entry entry{};
+            modSystem.GetServerModId(pGameEntry->form->formID, entry.BaseId);
+            entry.Count = pGameEntry->count;
 
-            entry.Count -= innerEntry.Count;
+            if (pGameEntry->dataList)
+            {
+                for (ExtraDataList* pExtraDataList : *pGameEntry->dataList)
+                {
+                    if (!pExtraDataList)
+                        continue;
 
-            extraInventory.Entries.push_back(std::move(innerEntry));
+                    Inventory::Entry innerEntry;
+                    innerEntry.BaseId = entry.BaseId;
+                    innerEntry.Count = 1;
+
+                    GetItemFromExtraData(innerEntry, pExtraDataList);
+
+                    entry.Count -= innerEntry.Count;
+
+                    extraInventory.Entries.push_back(std::move(innerEntry));
+                }
+            }
+
+            if (entry.Count != 0)
+                extraInventory.Entries.push_back(std::move(entry));
         }
-
-        if (entry.Count != 0)
-            extraInventory.Entries.push_back(std::move(entry));
     }
 
     spdlog::debug("ExtraInventory count: {}", extraInventory.Entries.size());
@@ -909,19 +924,9 @@ void TESObjectREFR::AddOrRemoveItem(const Inventory::Entry& arEntry, bool aIsSet
         RemoveItem(pObject, -arEntry.Count, ITEM_REMOVE_REASON::kRemove, pExtraDataList, nullptr);
     }
 
-    // TODO(cosideci): this is still flawed. Adding the refr to the quest leader is hard.
-    // It is still recommended that the quest leader loots all quest items.
-    if (arEntry.IsQuestItem && arEntry.Count > 0 && !aIsSettingInventory)
-    {
-        PlayerCharacter* pPlayer = PlayerCharacter::Get();
-
-        if (!pPlayer->IsItemInInventory(objectId))
-        {
-            Actor* pActor = Cast<Actor>(this);
-            if (pActor && pActor->GetExtension()->IsRemotePlayer())
-                pPlayer->AddOrRemoveItem(arEntry);
-        }
-    }
+    // Replicating the remote player's inventory must not also mint a copy of a
+    // quest item in our local inventory. Actual custody/rewards use a separate
+    // quest transaction; a remote actor snapshot is never a grant to us.
 
     UpdateItemList(nullptr);
 }
@@ -1021,17 +1026,14 @@ bool TP_MAKE_THISCALL(HookActivate, TESObjectREFR, TESObjectREFR* apActivator, u
 {
     Actor* pActivator = Cast<Actor>(apActivator);
 
-    // Exclude books from activation since only reading them removes them from the cell
-    // Note: Books are now unsynced 
-    if (pActivator && apThis->baseForm->formType != FormType::Book)
+    // Books are removed from the cell only when read.
+    if (pActivator && apThis->baseForm && apThis->baseForm->formType != FormType::Book)
     {
-        auto openState = TESObjectREFR::kNone;
-        if (apThis->baseForm->formType == FormType::Door)
-            openState = apThis->GetOpenState();
-
-        World::Get().GetRunner().Trigger(
-            ActivateEvent(apThis, pActivator, apObjectToGet, aCount, aDefaultProcessing, aUnk1, openState)
-        );
+        const auto openState = apThis->baseForm->formType == FormType::Door
+            ? apThis->TryGetOpenState()
+            : std::optional<TESObjectREFR::OpenState>{TESObjectREFR::kNone};
+        if (openState)
+            World::Get().GetRunner().Trigger(ActivateEvent(apThis, pActivator, apObjectToGet, aCount, aDefaultProcessing, aUnk1, *openState));
     }
 
     return TiltedPhoques::ThisCall(RealActivate, apThis, apActivator, aUnk1, apObjectToGet, aCount, aDefaultProcessing);

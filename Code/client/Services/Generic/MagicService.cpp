@@ -62,7 +62,8 @@ void MagicService::OnSpellCastEvent(const SpellCastEvent& acEvent) const noexcep
     if (!m_transport.IsConnected())
         return;
 
-    if (!acEvent.pCaster->pCasterActor || !acEvent.pCaster->pCasterActor->GetNiNode())
+    Actor* pActor = Cast<Actor>(TESForm::GetById(acEvent.CasterFormId));
+    if (!pActor || !pActor->GetNiNode())
     {
         spdlog::warn("Spell cast event has no actor or actor is not loaded");
         return;
@@ -89,7 +90,7 @@ void MagicService::OnSpellCastEvent(const SpellCastEvent& acEvent) const noexcep
         }
     }
 
-    uint32_t formId = acEvent.pCaster->pCasterActor->formID;
+    const uint32_t formId = acEvent.CasterFormId;
 
     auto view = m_world.view<FormIdComponent, LocalComponent>();
     const auto casterEntityIt = std::find_if(std::begin(view), std::end(view), [formId, view](entt::entity entity) { return view.get<FormIdComponent>(entity).Id == formId; });
@@ -102,8 +103,8 @@ void MagicService::OnSpellCastEvent(const SpellCastEvent& acEvent) const noexcep
     SpellCastRequest request{};
 
     request.CasterId = localComponent.Id;
-    request.CastingSource = acEvent.pCaster->GetCastingSource();
-    request.IsDualCasting = acEvent.pCaster->GetIsDualCasting();
+    request.CastingSource = acEvent.CastingSource;
+    request.IsDualCasting = acEvent.IsDualCasting;
 
     if (!m_world.GetModSystem().GetServerModId(acEvent.SpellId, request.SpellFormId))
     {

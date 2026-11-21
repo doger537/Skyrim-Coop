@@ -47,6 +47,18 @@ uint32_t ModManager::Spawn(NiPoint3& aPosition, NiPoint3& aRotation, TESObjectCE
     return refrHandle;
 }
 
+uint32_t ModManager::SpawnObject(TESForm* apBaseForm, NiPoint3& aPosition, NiPoint3& aRotation, TESObjectCELL* apParentCell, TESWorldSpace* apWorldSpace) noexcept
+{
+    if (!apBaseForm || !apParentCell)
+        return 0;
+    uint32_t refrHandle = 0;
+    // The same verified ID 13723 factory as actor creation, with no existing
+    // reference. The caller binds the returned handle to the server item ID.
+    TiltedPhoques::ThisCall(RealSpawnNewREFR, this, refrHandle, apBaseForm, &aPosition, &aRotation, apParentCell, apWorldSpace,
+                           static_cast<Actor*>(nullptr), uintptr_t(0), uintptr_t(0), static_cast<char>(0), static_cast<char>(1));
+    return refrHandle;
+}
+
 Mod* ModManager::GetByName(const char* acpName) const noexcept
 {
     auto pEntry = &mods.entry;

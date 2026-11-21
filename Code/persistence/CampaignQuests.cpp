@@ -1,6 +1,7 @@
 #include "CampaignState.h"
 #include <Structs/AlternateStartPolicy.h>
 #include <Structs/ContentCompatibility.h>
+#include <Structs/QuestSyncPolicy.h>
 #include <algorithm>
 #include <limits>
 #include <set>
@@ -12,6 +13,8 @@ namespace Campaign
 {
 namespace
 {
+constexpr size_t kMaxSharedQuests = 4095;
+
 bool HasStage(const Quest& acQuest, uint16_t aStage) noexcept
 {
     return std::any_of(acQuest.Events.begin(), acQuest.Events.end(), [&](const auto& event) { return event.Status == 0 && event.Stage == aStage; });
@@ -101,26 +104,36 @@ bool State::LoadQuestState(const String& acAdapters) noexcept
         }
     }
     Vector<WorldStore::Record> records;
-    if (!m_store.ReadPrefix("quest/", records) || records.size() > 4095)
+    if (!m_store.ReadPrefix("quest/", records))
     {
-        m_error = "Shared quest journal is unreadable or exceeds the supported quest count";
+        m_error = "Shared quest journal is unreadable";
         return false;
     }
+    std::set<uint64_t> ids;
     for (const auto& record : records)
     {
         Quest quest;
-        if (!Decode(record.Value, quest) || !quest.IsValid() || !ValidForm(quest.Id) || record.Key != Key("quest", quest.Id) || FindQuest(quest.Id))
+        if (!Decode(record.Value, quest) || !quest.IsValid() || !ValidForm(quest.Id) || record.Key != Key("quest", quest.Id) || !ids.insert(quest.Id.LogFormat()).second)
         {
             m_error = "Saved shared quest entry is invalid";
             return false;
         }
         m_questRevision = std::max(m_questRevision, record.Revision);
+        // Preserve the durable records and checkpoint digests. Local history
+        // and old preparation-only imports have no shared run to publish.
+        if (QuestSyncPolicy::IsLocalOnly(quest))
+            continue;
+        if (m_quests.size() >= kMaxSharedQuests)
+        {
+            m_error = "Shared quest journal exceeds the supported quest count";
+            return false;
+        }
         m_quests.push_back({std::move(quest), record.Revision});
     }
     WorldStore::Record seeded;
     const auto seedRead = m_store.Read("$seeded", seeded);
     if (seedRead == WorldStore::ReadResult::Failed || (seedRead == WorldStore::ReadResult::Found && seeded.Value != Vector<uint8_t>{1}) ||
-        (seedRead == WorldStore::ReadResult::Missing && !m_quests.empty()))
+        (seedRead == WorldStore::ReadResult::Missing && !records.empty()))
     {
         m_error = "Shared campaign baseline is incomplete or invalid";
         return false;
@@ -133,7 +146,7 @@ bool State::LoadQuestState(const String& acAdapters) noexcept
 
 bool State::BootstrapQuests(const Vector<Quest>& acQuests, bool aAllowMisc) noexcept
 {
-    if (!m_ready || !m_contract || m_bootstrapped || acQuests.size() > 4095)
+    if (!m_ready || !m_contract || m_bootstrapped || acQuests.size() > kMaxSharedQuests)
     {
         m_error = "The shared campaign can be initialized only once";
         return false;
@@ -144,9 +157,10 @@ bool State::BootstrapQuests(const Vector<Quest>& acQuests, bool aAllowMisc) noex
     for (auto quest : acQuests)
     {
         const auto* adapter = Adapter(quest.Id);
+        const auto policy = QuestSyncPolicy::Classify(quest.Id, quest.Type);
         if (!quest.IsValid() || !ValidForm(quest.Id) || quest.Epoch != 1 || !ids.insert(quest.Id.LogFormat()).second || !quest.Decisions.empty() ||
-            ContentCompatibility::NormalizeName(m_contract->Content.ModList[quest.Id.ModId].Filename) == AlternateStartPolicy::cPlugin ||
-            ((quest.Type == 0 || quest.Type == 6) && !aAllowMisc && !(adapter && adapter->AllowMisc)))
+            !QuestSyncPolicy::IsShared(policy, quest.Type, aAllowMisc || (adapter && adapter->AllowMisc)) ||
+            ContentCompatibility::NormalizeName(m_contract->Content.ModList[quest.Id.ModId].Filename) == AlternateStartPolicy::cPlugin)
         {
             m_error = "Initial quest baseline has an invalid, duplicate, personal or unsupported miscellaneous quest";
             return false;
@@ -162,6 +176,8 @@ bool State::BootstrapQuests(const Vector<Quest>& acQuests, bool aAllowMisc) noex
             if (event.Status != 2 && !Choose(quest, adapter, event.Stage, m_error))
                 return false;
         }
+        if (QuestSyncPolicy::IsPreparedImport(quest))
+            continue;
         WorldStore::Record record;
         record.Key = Key("quest", quest.Id);
         if (!Encode(quest, record.Value))
@@ -187,19 +203,93 @@ bool State::BootstrapQuests(const Vector<Quest>& acQuests, bool aAllowMisc) noex
     return true;
 }
 
-State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc) noexcept
+bool State::ReadQuestRunParticipants(GameId aId, uint32_t aEpoch, QuestRunParticipants& aParticipants, bool& aFound, bool aShared) noexcept
+{
+    aFound = false;
+    aParticipants = {};
+    if (!m_ready || !ValidForm(aId) || !aEpoch)
+        return false;
+    WorldStore::Record record;
+    const auto result = m_store.Read(Key(aShared ? "quest-shared-run" : "quest-run", aId) + "/" + std::to_string(aEpoch).c_str(), record);
+    if (result == WorldStore::ReadResult::Missing)
+        return true;
+    if (result != WorldStore::ReadResult::Found || record.Value.size() != 49 || record.Value[0] != 1)
+    {
+        m_error = "Quest run ownership is unreadable; do not guess a quest-item custodian";
+        return false;
+    }
+    size_t offset = 1;
+    for (auto* identity : {&aParticipants.Initiator, &aParticipants.Players[0], &aParticipants.Players[1]})
+        for (auto& part : identity->Parts)
+        {
+            part = uint16_t(record.Value[offset]) | uint16_t(uint16_t(record.Value[offset + 1]) << 8);
+            offset += 2;
+        }
+    if (!aParticipants.IsValid())
+    {
+        m_error = "Quest run ownership contains invalid or duplicate characters";
+        return false;
+    }
+    aFound = true;
+    return true;
+}
+bool State::BindSharedQuestRun(GameId aId, uint32_t aEpoch, const QuestRunParticipants& acParticipants) noexcept
+{
+    const auto* quest = FindQuest(aId);
+    if (!m_ready || !m_contract || !acParticipants.IsValid() || !quest || quest->Data.Epoch != aEpoch || !quest->Data.Started) return false;
+    QuestRunParticipants existing; bool found{};
+    if (!ReadQuestRunParticipants(aId, aEpoch, existing, found, true)) return false;
+    if (found) return existing == acParticipants;
+    WorldStore::Record record; record.Key = Key("quest-shared-run", aId) + "/" + std::to_string(aEpoch).c_str(); record.Value = {1};
+    for (const auto* identity : {&acParticipants.Initiator, &acParticipants.Players[0], &acParticipants.Players[1]})
+        for (uint16_t part : identity->Parts) { record.Value.push_back(static_cast<uint8_t>(part)); record.Value.push_back(static_cast<uint8_t>(part >> 8)); }
+    uint64_t revision{};
+    if (m_store.Commit({record}, revision) != WorldStore::WriteResult::Committed) { m_error = m_store.Error(); return false; }
+    return true;
+}
+
+State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
+    const QuestRunParticipants* apParticipants) noexcept
+{
+    return ChangeQuest(aId, aEpoch, aStatus, aStage, aType, aAllowMisc, apParticipants, true);
+}
+State::QuestResult State::PreviewQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
+    const QuestRunParticipants* apParticipants) noexcept
+{
+    return ChangeQuest(aId, aEpoch, aStatus, aStage, aType, aAllowMisc, apParticipants, false);
+}
+State::QuestResult State::ChangeQuest(GameId aId, uint32_t aEpoch, uint8_t aStatus, uint16_t aStage, uint8_t aType, bool aAllowMisc,
+    const QuestRunParticipants* apParticipants, bool aCommit) noexcept
 {
     if (!m_ready || !m_bootstrapped || !ValidForm(aId) || aEpoch == 0 || aStatus > 2 || aType > 11)
     {
         m_error = "Invalid shared quest identity, epoch or state";
         return QuestResult::Invalid;
     }
-    if (ContentCompatibility::NormalizeName(m_contract->Content.ModList[aId.ModId].Filename) == AlternateStartPolicy::cPlugin)
-        return QuestResult::Ignored;
+    const auto policy = QuestSyncPolicy::Classify(aId, aType);
     const auto* adapter = Adapter(aId);
-    if ((aType == 0 || aType == 6) && !aAllowMisc && !(adapter && adapter->AllowMisc))
+    if (!QuestSyncPolicy::IsShared(policy, aType, aAllowMisc || (adapter && adapter->AllowMisc)) ||
+        ContentCompatibility::NormalizeName(m_contract->Content.ModList[aId.ModId].Filename) == AlternateStartPolicy::cPlugin)
         return QuestResult::Ignored;
+
     const auto* saved = FindQuest(aId);
+    const bool radiant = policy.Type == QuestSyncPolicy::Category::Radiant;
+    const bool activeRun = saved && !saved->Data.Stopped && saved->Data.Epoch == aEpoch;
+    if (QuestSyncPolicy::IsPreparationEvent(policy, aStatus, aStage) && !(aStatus == 2 && activeRun))
+        return QuestResult::Ignored;
+    if (radiant && !saved && aStatus != 0)
+    {
+        m_error = "Radiant quest has no accepted campaign run to stop";
+        return QuestResult::Conflict;
+    }
+    const bool startsRun = radiant ? aStatus == 0 : aStatus == 1;
+    const bool restart = startsRun && saved && saved->Data.Stopped && saved->Data.Epoch < UINT32_MAX && aEpoch == saved->Data.Epoch + 1;
+    const bool newRun = !saved || restart;
+    if (apParticipants && !apParticipants->IsValid())
+    {
+        m_error = "Invalid quest initiator or reward recipient identities";
+        return QuestResult::Invalid;
+    }
     Quest next = saved ? saved->Data : Quest{};
     next.Id = aId;
     next.Type = aType;
@@ -208,7 +298,7 @@ State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
         m_error = "Quest type differs from the saved campaign";
         return QuestResult::Invalid;
     }
-    if (aStatus == 1 && next.Stopped && next.Epoch < UINT32_MAX && aEpoch == next.Epoch + 1)
+    if (restart)
     {
         if (adapter && !adapter->AllowRestart)
         {
@@ -234,19 +324,43 @@ State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
     }
     if (aStatus != 2 && !Choose(next, adapter, aStage, m_error))
         return QuestResult::Conflict;
-    if (aStatus == 1)
+    if (aStatus == 1 || (radiant && newRun))
         next.Started = true;
     if (aStatus == 2)
         next.Stopped = true;
-    if (next.Events.size() >= QuestJournal::kMaxEvents || (!saved && m_quests.size() >= 4095))
+    if (next.Events.size() >= QuestJournal::kMaxEvents || (!saved && m_quests.size() >= kMaxSharedQuests))
     {
         m_error = "Shared quest journal exceeded its bounded event/quest count";
         return QuestResult::Invalid;
     }
     next.Events.push_back({aStatus, aStage, false});
+    // Preview and commit share all policy/state validation. Preview never
+    // changes either the in-memory journal or durable quest ownership.
+    if (!aCommit)
+        return QuestResult::Applied;
     WorldStore::Record state;
     state.Key = Key("quest", aId);
     state.Revision = saved ? saved->Revision : 0;
+    if (!saved && radiant)
+    {
+        WorldStore::Record legacy;
+        const auto read = m_store.Read(state.Key, legacy);
+        if (read == WorldStore::ReadResult::Found)
+        {
+            Quest observed;
+            if (!Decode(legacy.Value, observed) || observed.Id != aId || !QuestSyncPolicy::IsPreparedImport(observed))
+            {
+                m_error = "The previous radiant quest record is invalid";
+                return QuestResult::StorageError;
+            }
+            state.Revision = legacy.Revision;
+        }
+        else if (read == WorldStore::ReadResult::Failed)
+        {
+            m_error = m_store.Error();
+            return QuestResult::StorageError;
+        }
+    }
     Quest event = next;
     event.Events = {next.Events.back()};
     WorldStore::Record audit;
@@ -257,7 +371,21 @@ State::QuestResult State::UpdateQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
         return QuestResult::Invalid;
     }
     uint64_t revision = 0;
-    if (m_store.Commit({state, audit}, revision) != WorldStore::WriteResult::Committed)
+    Vector<WorldStore::Record> records{state, audit};
+    if (newRun && apParticipants)
+    {
+        WorldStore::Record ownership;
+        ownership.Key = Key("quest-run", aId) + "/" + std::to_string(aEpoch).c_str();
+        ownership.Value.push_back(1);
+        for (const auto* identity : {&apParticipants->Initiator, &apParticipants->Players[0], &apParticipants->Players[1]})
+            for (const auto part : identity->Parts)
+            {
+                ownership.Value.push_back(static_cast<uint8_t>(part));
+                ownership.Value.push_back(static_cast<uint8_t>(part >> 8));
+            }
+        records.push_back(std::move(ownership));
+    }
+    if (m_store.Commit(records, revision) != WorldStore::WriteResult::Committed)
     {
         m_error = m_store.Error();
         return QuestResult::StorageError;

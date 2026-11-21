@@ -38,27 +38,28 @@ void QuestService::FillPlayerJournal(Player& aPlayer) const noexcept
     }
 }
 
-void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acMessage) noexcept
+bool QuestService::Commit(Player& aInitiator, const RequestQuestUpdate& message, const Campaign::QuestRunParticipants* apParticipants) noexcept
 {
-    const auto& message = acMessage.Packet;
     auto& campaign = m_world.GetCampaign();
-    const auto result = campaign.UpdateQuest(message.Id, message.Epoch, message.Status, message.Stage, message.ClientQuestType, AllowsMisc());
+    const auto result = campaign.UpdateQuest(message.Id, message.Epoch, message.Status, message.Stage, message.ClientQuestType, AllowsMisc(),
+        apParticipants);
     using Result = Campaign::State::QuestResult;
     if (result == Result::Ignored)
-        return;
+        return true;
     if (result == Result::StorageError)
     {
         GameServer::Get()->StopForWorldError(campaign.Error());
-        return;
+        return false;
     }
     if (result == Result::Invalid || result == Result::Conflict)
     {
-        GameServer::Get()->RejectCampaign(acMessage.pPlayer->GetConnectionId(), campaign.Error() + ". Load a matching campaign save before reconnecting");
-        return;
+        GameServer::Get()->RejectCampaign(aInitiator.GetConnectionId(), fmt::format("Quest {:08X}:{:08X} stage {} epoch {}. {}. Load a matching paired save",
+            message.Id.ModId, message.Id.BaseId, message.Stage, message.Epoch, campaign.Error()).c_str(), true);
+        return false;
     }
     const auto* saved = campaign.FindQuest(message.Id);
     if (!saved)
-        return;
+        return false;
     NotifyQuestUpdate notify;
     notify.Id = message.Id;
     notify.Stage = message.Stage;
@@ -72,9 +73,37 @@ void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acMessa
         for (Player* pPlayer : m_world.GetPlayerManager())
             if (pPlayer->IsCampaignReady())
                 FillPlayerJournal(*pPlayer);
-        GameServer::Get()->SendToPlayers(notify, acMessage.pPlayer);
+        GameServer::Get()->SendToPlayers(notify, &aInitiator);
     }
     // The sender already applied its local event. Acknowledging must not rerun its fragment.
     notify.AcknowledgementOnly = true;
-    acMessage.pPlayer->Send(notify);
+    aInitiator.Send(notify);
+    return true;
+}
+
+void QuestService::OnQuestChanges(const PacketEvent<RequestQuestUpdate>& acPacket) noexcept
+{
+    auto& initiator = *acPacket.pPlayer;
+    const auto& change = acPacket.Packet;
+    if (!change.IsValid())
+    {
+        GameServer::Get()->RejectCampaign(initiator.GetConnectionId(), "Malformed or truncated quest update");
+        return;
+    }
+    auto* party = m_world.GetPartyService().GetPlayerParty(&initiator);
+    if (party && !m_world.GetPartyService().IsPlayerLeader(&initiator))
+    {
+        const auto preview = m_world.GetCampaign().PreviewQuest(change.Id, change.Epoch, change.Status, change.Stage, change.ClientQuestType, AllowsMisc());
+        if (preview == Campaign::State::QuestResult::Duplicate || preview == Campaign::State::QuestResult::Ignored)
+        { Commit(initiator, change, nullptr); return; }
+        GameServer::Get()->RejectCampaign(initiator.GetConnectionId(),
+            fmt::format("Quest {:08X}:{:08X} stage {} epoch {}. Shared quests are advanced by the host. Load the matching paired save",
+                        change.Id.ModId, change.Id.BaseId, change.Stage, change.Epoch).c_str(), true);
+        return;
+    }
+    Campaign::QuestRunParticipants participants;
+    participants.Initiator = initiator.GetPersistentCharacterId();
+    if (party && party->Members.size() == 2)
+        for (size_t i = 0; i < 2; ++i) participants.Players[i] = party->Members[i]->GetPersistentCharacterId();
+    Commit(initiator, change, participants.IsValid() ? &participants : nullptr);
 }

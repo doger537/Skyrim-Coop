@@ -327,7 +327,7 @@ void ObjectService::OnActivateNotify(const NotifyActivate& acMessage) noexcept
 
     const uint32_t cObjectId = World::Get().GetModSystem().GetGameId(acMessage.Id);
     TESObjectREFR* pObject = Cast<TESObjectREFR>(TESForm::GetById(cObjectId));
-    if (!pObject)
+    if (!pObject || !pObject->baseForm)
     {
         spdlog::error("Failed to retrieve object to activate.");
         return;
@@ -336,9 +336,9 @@ void ObjectService::OnActivateNotify(const NotifyActivate& acMessage) noexcept
     if (pObject->baseForm->formType == FormType::Door)
     {
         auto remotePreActivationState = static_cast<TESObjectREFR::OpenState>(acMessage.PreActivationOpenState);
-        TESObjectREFR::OpenState localState = pObject->GetOpenState();
+        const auto localState = pObject->TryGetOpenState();
 
-        if (remotePreActivationState != localState)
+        if (!localState || remotePreActivationState != *localState)
         {
             // The doors are unsynced at this point. If we'll Activate the one on our side
             // it'll just continue to be unsynced (open remotely, closed locally and vice versa)

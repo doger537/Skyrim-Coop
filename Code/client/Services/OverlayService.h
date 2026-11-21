@@ -61,6 +61,7 @@ struct OverlayService
     OverlayApp* GetOverlayApp() const noexcept { return m_pOverlay.get(); }
 
     void SendSystemMessage(const std::string& acMessage);
+    void ShowCoopRest(uint8_t aPhase, uint8_t aHours, bool aLocalReady) const noexcept;
 
     void SetPlayerHealthPercentage(uint32_t aFormId) const noexcept;
 

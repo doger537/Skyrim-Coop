@@ -59,6 +59,61 @@ struct CampaignDirectory
 };
 } // namespace
 
+TEST_CASE("Quest initiators and the two reward recipients persist per run and roll back with the journal", "[world.quest.ownership]")
+{
+    CampaignDirectory paths;
+    const GameId quest(0, 0x812);
+    Campaign::QuestRunParticipants first;
+    first.Players[0].Parts[0] = 1; first.Players[1].Parts[0] = 2; first.Initiator = first.Players[1];
+    REQUIRE(first.IsValid());
+    uint64_t checkpoint{};
+    {
+        Campaign::State campaign;
+        REQUIRE(campaign.Open(paths.File));
+        REQUIRE(campaign.Bind("1.7.104.0", Content()));
+        REQUIRE(campaign.AdvanceWorldEpoch());
+        REQUIRE(campaign.BootstrapQuests({}, false));
+        REQUIRE(campaign.UpdateQuest(quest, 1, 1, 10, 1, false, &first) == Campaign::State::QuestResult::Applied);
+        Campaign::QuestRunParticipants decoded; bool found{};
+        REQUIRE(campaign.ReadQuestRunParticipants(quest, 1, decoded, found));
+        REQUIRE(found); REQUIRE(decoded == first);
+        auto second = first; second.Initiator = second.Players[0];
+        REQUIRE(campaign.UpdateQuest(quest, 1, 1, 10, 1, false, &second) == Campaign::State::QuestResult::Duplicate);
+        REQUIRE(campaign.UpdateQuest(quest, 1, 0, 20, 1, false, &second) == Campaign::State::QuestResult::Applied);
+        REQUIRE(campaign.ReadQuestRunParticipants(quest, 1, decoded, found)); REQUIRE(decoded == first);
+        REQUIRE(campaign.ReserveCheckpoint(checkpoint));
+        REQUIRE(campaign.CaptureCheckpoint(checkpoint, {1}));
+        REQUIRE(campaign.UpdateQuest(quest, 1, 2, 20, 1, false, &second) == Campaign::State::QuestResult::Applied);
+        REQUIRE(campaign.UpdateQuest(quest, 2, 1, 10, 1, false, &second) == Campaign::State::QuestResult::Applied);
+        REQUIRE(campaign.ReadQuestRunParticipants(quest, 2, decoded, found)); REQUIRE(found); REQUIRE(decoded == second);
+        REQUIRE(campaign.RestoreCheckpoint(checkpoint));
+        REQUIRE(campaign.FindQuest(quest)->Data.Epoch == 1);
+        REQUIRE(campaign.ReadQuestRunParticipants(quest, 2, decoded, found)); REQUIRE_FALSE(found);
+    }
+    Campaign::State reopened;
+    REQUIRE(reopened.Open(paths.File)); REQUIRE(reopened.Bind("1.7.104.0", Content()));
+    Campaign::QuestRunParticipants decoded; bool found{};
+    REQUIRE(reopened.ReadQuestRunParticipants(quest, 1, decoded, found)); REQUIRE(found); REQUIRE(decoded == first);
+}
+
+TEST_CASE("Imported quest history never guesses its initiator from a later stage sender", "[world.quest.ownership]")
+{
+    CampaignDirectory paths;
+    Campaign::State campaign;
+    REQUIRE(campaign.Open(paths.File)); REQUIRE(campaign.Bind("1.7.104.0", Content()));
+    Campaign::Quest baseline; baseline.Id = GameId(0, 0x813); baseline.Type = 1; baseline.Started = true;
+    baseline.Events.push_back({1, 10, true});
+    REQUIRE(campaign.BootstrapQuests({baseline}, false));
+    Campaign::QuestRunParticipants next; next.Players[0].Parts[0] = 1; next.Players[1].Parts[0] = 2; next.Initiator = next.Players[0];
+    REQUIRE(campaign.UpdateQuest(baseline.Id, 1, 0, 20, 1, false, &next) == Campaign::State::QuestResult::Applied);
+    Campaign::QuestRunParticipants decoded; bool found{};
+    REQUIRE(campaign.ReadQuestRunParticipants(baseline.Id, 1, decoded, found)); REQUIRE_FALSE(found);
+    next.Players[1] = next.Players[0];
+    REQUIRE_FALSE(next.IsValid());
+    REQUIRE(campaign.UpdateQuest(GameId(0, 0x814), 1, 1, 10, 1, false, &next) == Campaign::State::QuestResult::Invalid);
+    REQUIRE(campaign.FindQuest(GameId(0, 0x814)) == nullptr);
+}
+
 TEST_CASE("Persistent object codec preserves item effects and excludes transient entity IDs", "[world.codec]")
 {
     const auto object = Container();
@@ -127,6 +182,32 @@ TEST_CASE("Saved content contract and CC container survive a new campaign instan
     REQUIRE_FALSE(restored.Bind("1.7.104.0", changed));
     REQUIRE_FALSE(restored.Bind("1.6.1170.0", Content()));
     REQUIRE(restored.Bind("1.7.104.0", Content()));
+}
+
+TEST_CASE("World timeline survives reopening and advances beyond unrelated commits", "[world.epoch]")
+{
+    CampaignDirectory directory;
+    uint64_t first{};
+    {
+        Campaign::State state;
+        REQUIRE(state.Open(directory.File));
+        REQUIRE_FALSE(state.AdvanceWorldEpoch());
+        REQUIRE(state.Bind("1.7.104.0", Content()));
+        REQUIRE(state.AdvanceWorldEpoch());
+        first = state.WorldEpoch();
+        REQUIRE(first > 0);
+        REQUIRE(state.SaveObject(Container()));
+        REQUIRE(state.Revision() > first);
+        REQUIRE(state.WorldEpoch() == first);
+    }
+    Campaign::State reopened;
+    REQUIRE(reopened.Open(directory.File));
+    REQUIRE(reopened.WorldEpoch() == first);
+    REQUIRE(reopened.AdvanceWorldEpoch());
+    const uint64_t second = reopened.WorldEpoch();
+    REQUIRE(second > first + 1);
+    REQUIRE(reopened.AdvanceWorldEpoch());
+    REQUIRE(reopened.WorldEpoch() > second);
 }
 
 TEST_CASE("Persistent forms reject missing plugins and invalid ESL base IDs", "[world.campaign]")

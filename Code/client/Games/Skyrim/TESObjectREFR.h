@@ -12,6 +12,7 @@
 #include <Magic/MagicTarget.h>
 #include <Structs/Inventory.h>
 #include <ExtraData/ExtraDataList.h>
+#include <optional>
 
 struct AnimationVariables;
 struct TESWorldSpace;
@@ -202,7 +203,7 @@ struct TESObjectREFR : TESForm
 
     const float GetHeight() noexcept;
     void EnableImpl() noexcept;
-    OpenState GetOpenState() noexcept;
+    std::optional<OpenState> TryGetOpenState() noexcept;
 
     Inventory GetInventory() const noexcept;
     Inventory GetInventory(std::function<bool(TESForm&)> aFilter) const noexcept;

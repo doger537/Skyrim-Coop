@@ -35,6 +35,9 @@ public:
 
     float GetTimeScale() const noexcept { return m_dateTime.m_timeModel.TimeScale; }
     bool SetTimeScale(float aScale) noexcept;
+    bool AdvanceHours(uint8_t aHours) noexcept;
+    const TimeModel& GetModel() const noexcept { return m_dateTime.m_timeModel; }
+    void RestoreCheckpointModel(const TimeModel& acModel) noexcept;
 
 private:
     void OnUpdate(const UpdateEvent&) noexcept;

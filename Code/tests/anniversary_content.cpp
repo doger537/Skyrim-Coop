@@ -6,6 +6,7 @@
 #include <Structs/ContentCompatibility.h>
 #include <Messages/AuthenticationRequest.h>
 #include "../client/Systems/ContentFingerprint.h"
+#include <algorithm>
 #include <fstream>
 #include <set>
 
@@ -91,6 +92,7 @@ TEST_CASE("The complete 74-Creation profile fits and survives authentication enc
     std::set<std::string_view> unique(kAnniversaryPlugins.begin(), kAnniversaryPlugins.end());
     REQUIRE(unique.size() == 74);
     AuthenticationRequest request;
+    request.CharacterId.Parts[0] = 1;
     request.RuntimeVersion = "1.7.104.0";
     request.UserMods = mods;
     request.Token = "test-password";
@@ -101,6 +103,7 @@ TEST_CASE("The complete 74-Creation profile fits and survives authentication enc
     TiltedPhoques::Buffer::Reader reader(&buffer);
     uint64_t opcode{};
     reader.ReadBits(opcode, 8);
+    REQUIRE(reader.ReadBits(opcode, 64)); // world timeline envelope
     AuthenticationRequest decoded;
     decoded.DeserializeRaw(reader);
     REQUIRE(request == decoded);
@@ -218,6 +221,7 @@ TEST_CASE("Unknown authentication protocol is refused before parsing the changed
     writer.WriteBits(kTrueCoopProtocolVersion + 1, 32);
     TiltedPhoques::Buffer::Reader reader(&buffer);
     AuthenticationRequest request;
+    request.CharacterId.Parts[0] = 1;
     request.DeserializeRaw(reader);
     REQUIRE(request.ProtocolVersion != kTrueCoopProtocolVersion);
     REQUIRE(request.UserMods.ModList.empty());
@@ -281,3 +285,114 @@ TEST_CASE("Fingerprinting detects BSA, loose asset and native library changes", 
     REQUIRE_FALSE(collect());
     REQUIRE(ContentCompatibility::Validate(mods).Reason == ContentCompatibility::Issue::UnreadableResource);
 }
+
+TEST_CASE("Engine Fixes volume preferences preserve the installed empty-file fingerprint", "[content.files]")
+{
+    TempProfile profile;
+    profile.Write("Skyrim.esm", PluginHeader(false));
+    profile.Write("library.bin", "addresses");
+    const auto collect = [&]
+    {
+        Mods mods;
+        mods.ModList = {{"Skyrim.esm", 0, false}};
+        REQUIRE(FingerprintContent(profile.Path, profile.Path / "library.bin", {}, mods));
+        REQUIRE(ContentCompatibility::Validate(mods));
+        return mods;
+    };
+    const auto absent = collect();
+    constexpr auto kVolumePreferences = "SKSE/Plugins/EngineFixes_SNCT.InI";
+    profile.Write(kVolumePreferences, "");
+    const auto installed = collect();
+    // Legacy aggregate for the canonical path and a SHA-256 of zero file bytes.
+    const std::array<uint8_t, 32> legacyDigest{0x30, 0xd5, 0x34, 0x17, 0x8f, 0xef, 0x66, 0x89, 0x80, 0xc0, 0x73, 0xd0, 0x73, 0xbc, 0x18, 0xe5,
+                                                0x08, 0xdc, 0x94, 0x3a, 0xe9, 0x98, 0x72, 0x40, 0xdf, 0x44, 0x06, 0x14, 0x0f, 0x12, 0xb4, 0x4d};
+    const auto loose = std::find_if(installed.Resources.begin(), installed.Resources.end(), [](const auto& resource) { return resource.Filename == "data/loose-files"; });
+    REQUIRE(loose != installed.Resources.end());
+    REQUIRE(loose->Digest == legacyDigest);
+    REQUIRE(ContentCompatibility::Compare(installed, absent).Reason == ContentCompatibility::Issue::DifferentResource);
+
+    profile.Write(kVolumePreferences, "[Skyrim.esm]\n000172A1 = 0.45\n");
+    const auto firstVolumes = collect();
+    REQUIRE(ContentCompatibility::Compare(installed, firstVolumes));
+    profile.Write(kVolumePreferences, "[Skyrim.esm]\n000172A1 = 0.8\n");
+    REQUIRE(ContentCompatibility::Compare(firstVolumes, collect()));
+
+    for (const char* name : {"SKSE/Plugins/EngineFixes.toml", "SKSE/Plugins/Other/EngineFixes_SNCT.ini"})
+    {
+        INFO(name);
+        profile.Write(name, "value = 1");
+        const auto before = collect();
+        profile.Write(name, "value = 2");
+        REQUIRE(ContentCompatibility::Compare(before, collect()).Reason == ContentCompatibility::Issue::DifferentResource);
+    }
+}
+
+#ifdef _WIN32
+TEST_CASE("An archive cache survives a scan and invalidates same-size edits and corrupt entries", "[content.cache]")
+{
+    TempProfile profile;
+    const auto data = profile.Path / "Data";
+    const auto cache = profile.Path / "archive-cache.bin";
+    profile.Write("Data/Skyrim.esm", PluginHeader(false));
+    profile.Write("Data/primary.bsa", "first");
+    profile.Write("Data/other.bsa", "other");
+    profile.Write("Data/library.bin", "addresses");
+    Mods mods;
+    mods.ModList = {{"Skyrim.esm", 0, false}};
+    const auto scan = [&]
+    {
+        ArchiveFingerprintStats stats;
+        REQUIRE(FingerprintContent(data, data / "library.bin", {}, mods, cache, &stats));
+        REQUIRE(ContentCompatibility::Validate(mods));
+        return stats;
+    };
+
+    const auto cold = scan();
+    const auto original = mods;
+    REQUIRE(cold.Hits == 0);
+    REQUIRE(cold.FilesRead == 2);
+    REQUIRE(cold.BytesRead == 10);
+    REQUIRE(std::filesystem::is_regular_file(cache));
+    const auto warm = scan();
+    REQUIRE(warm.Hits == 2);
+    REQUIRE(warm.FilesRead == 0);
+    REQUIRE(warm.BytesRead == 0);
+    REQUIRE(ContentCompatibility::Compare(original, mods));
+
+    const auto primary = data / "primary.bsa";
+    const auto originalWriteTime = std::filesystem::last_write_time(primary);
+    profile.Write("Data/primary.bsa", "edits");
+    std::filesystem::last_write_time(primary, originalWriteTime);
+    const auto edited = scan();
+    REQUIRE(edited.Hits == 1);
+    REQUIRE(edited.BytesRead == 5);
+    REQUIRE(ContentCompatibility::Compare(original, mods).Reason == ContentCompatibility::Issue::DifferentResource);
+    const auto editedManifest = mods;
+
+    profile.Write("replacement.bsa", "again");
+    std::filesystem::last_write_time(profile.Path / "replacement.bsa", originalWriteTime);
+    std::filesystem::rename(profile.Path / "replacement.bsa", primary);
+    const auto replaced = scan();
+    REQUIRE(replaced.Hits == 1);
+    REQUIRE(replaced.BytesRead == 5);
+    REQUIRE(ContentCompatibility::Compare(editedManifest, mods).Reason == ContentCompatibility::Issue::DifferentResource);
+    const auto replacedManifest = mods;
+
+    // Change a byte within an entry while leaving the header and length intact.
+    {
+        std::fstream file(cache, std::ios::binary | std::ios::in | std::ios::out);
+        REQUIRE(file);
+        file.seekg(-1, std::ios::end);
+        const int byte = file.get();
+        REQUIRE(byte != std::char_traits<char>::eof());
+        file.seekp(-1, std::ios::end);
+        file.put(static_cast<char>(byte ^ 1));
+        REQUIRE(file);
+    }
+    const auto repaired = scan();
+    REQUIRE(repaired.Hits == 0);
+    REQUIRE(repaired.BytesRead == 10);
+    REQUIRE(ContentCompatibility::Compare(replacedManifest, mods));
+    REQUIRE(scan().Hits == 2);
+}
+#endif

@@ -14,10 +14,16 @@ struct TimeModel
     uint32_t Year = 1;
     uint32_t Month = 1;
     uint32_t Day = 1;
+    // Keep accumulation in double: adding a frame delta to Skyrim's float
+    // GameDaysPassed eventually rounds to zero on long-running saves.
+    double DaysPassed = 0.5;
+    bool Decoded = true;
+
+    bool IsValid() const noexcept;
 
     void Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept;
     void Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept;
 
-    bool operator==(const TimeModel& achRhs) const noexcept { return TimeScale == achRhs.TimeScale && Time == achRhs.Time && Day == achRhs.Day && Month == achRhs.Month && Year == achRhs.Year; }
+    bool operator==(const TimeModel& achRhs) const noexcept { return TimeScale == achRhs.TimeScale && Time == achRhs.Time && Day == achRhs.Day && Month == achRhs.Month && Year == achRhs.Year && DaysPassed == achRhs.DaysPassed; }
     bool operator!=(const TimeModel& achRhs) const noexcept { return !this->operator==(achRhs); }
 };

@@ -28,6 +28,7 @@
 #include <Games/ActorExtension.h>
 #include <Forms/TESNPC.h>
 #include <DefaultObjectManager.h>
+#include <NativeQuestContext.h>
 
 InventoryService::InventoryService(World& aWorld, entt::dispatcher& aDispatcher, TransportService& aTransport) noexcept
     : m_world(aWorld)
@@ -51,6 +52,20 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
 {
     if (!m_transport.IsConnected())
         return;
+
+    if (acEvent.FormId == 0x14 && acEvent.ScriptOrigin)
+    {
+        const auto& origin = *acEvent.ScriptOrigin;
+        // Observation only: a quest's AddItem may be a key, a temporary tool,
+        // a refund or a reward. Do not mirror or suppress it on this evidence.
+        spdlog::log(NativeQuestContext::AuditEnabled() ? spdlog::level::info : spdlog::level::debug,
+            "Quest item source: quest={:X} source={} script={} function={} ip={} stack={} item={:X}:{:X} count={} quest_alias={}",
+            origin.QuestFormId, static_cast<uint8_t>(origin.Kind), origin.Script, origin.Function, origin.InstructionOffset,
+            origin.StackId, acEvent.Item.BaseId.ModId, acEvent.Item.BaseId.BaseId, acEvent.Item.Count, acEvent.Item.IsQuestItem);
+    }
+    else if (NativeQuestContext::AuditEnabled() && acEvent.FormId == 0x14 && acEvent.Item.Count > 0)
+        spdlog::info("Quest item audit: source=none item={:X}:{:X} count={} quest_alias={}",
+            acEvent.Item.BaseId.ModId, acEvent.Item.BaseId.BaseId, acEvent.Item.Count, acEvent.Item.IsQuestItem);
 
     auto view = m_world.view<FormIdComponent>();
 

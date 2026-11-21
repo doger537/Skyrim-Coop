@@ -57,6 +57,18 @@ enum ClientOpcode : unsigned char
     kRequestActionEvents,
     kRequestCampaignReady,
     kRequestCampaignSeed,
+    kRequestCoopSleep,
+    kRequestDialogueLease,
+    kRequestWorldCheckpoint,
+    kRequestQuestDecision,
+    kRequestQuestGrants,
+    kRequestRagdollPose,
+    kRequestSharedQuestEffect,
+    kRequestWorldItems,
+    kRequestWorldItemTransfer,
+    kRequestWorldItemMotion,
+    kRequestPlacedPhysics,
+    kRequestPhysicsFrame,
     kClientOpcodeMax
 };
 
@@ -120,5 +132,18 @@ enum ServerOpcode : unsigned char
     kNotifyActionEvents,
     kNotifyCampaignCheckpoint,
     kNotifyQuestJournal,
+    kNotifyCoopSleep,
+    kNotifyDialogueLease,
+    kNotifyPartyLocations,
+    kNotifyWorldCheckpoint,
+    kNotifyQuestProposal,
+    kNotifyQuestGrant,
+    kNotifyRagdollPose,
+    kNotifySharedQuestEffect,
+    kNotifyWorldItems,
+    kNotifyWorldItemTransfer,
+    kNotifyWorldItemMotion,
+    kNotifyPlacedPhysics,
+    kNotifyPhysicsFrame,
     kServerOpcodeMax
 };

@@ -12,6 +12,8 @@
 #include <Forms/TESObjectCELL.h>
 
 #include <TimeManager.h>
+#include <Havok/PhysicsReplication.h>
+#include <AI/DialogueMovement.h>
 
 #include <Forms/TESNPC.h>
 #include <TiltedOnlinePCH.h>
@@ -26,6 +28,11 @@
 #include <ScriptExtender.h>
 #include <Structs/ContentCompatibility.h>
 #include <Systems/ContentFingerprint.h>
+#include <Forms/SavedCharacterIdentity.h>
+#include <Services/WorldCheckpointService.h>
+#include <NativeCheckpoint.h>
+#include <NativeQuestContext.h>
+#include <bcrypt.h>
 #include "../../../immersive_launcher/utils/FileVersion.inl"
 #include <Services/DiscordService.h>
 #include <Services/QuestService.h>
@@ -36,6 +43,18 @@
 // #include <imgui_internal.h>
 
 static constexpr wchar_t kMO2DllName[] = L"usvfs_x64.dll";
+
+namespace
+{
+std::filesystem::path ArchiveCachePath() noexcept
+{
+    std::array<wchar_t, MAX_PATH> folder{};
+    const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", folder.data(), static_cast<DWORD>(folder.size()));
+    if (!length || length >= folder.size())
+        return {};
+    return std::filesystem::path(folder.data()) / L"SkyrimTrueCoop" / L"archive-fingerprints-v1.bin";
+}
+}
 
 using TiltedPhoques::Packet;
 
@@ -80,6 +99,12 @@ TransportService::TransportService(World& aWorld, entt::dispatcher& aDispatcher)
 
 bool TransportService::Send(const ClientMessage& acMessage, const TiltedPhoques::EPacketFlags aPacketFlags) const noexcept
 {
+    if (m_world.ctx().at<WorldCheckpointService>().IsFrozen() && acMessage.GetOpcode() != kRequestWorldCheckpoint && acMessage.GetOpcode() != kRequestPhysicsFrame &&
+        acMessage.GetOpcode() != kAuthenticationRequest && acMessage.GetOpcode() != kRequestCampaignReady && acMessage.GetOpcode() != kRequestCampaignSeed)
+    {
+        m_world.ctx().at<WorldCheckpointService>().UnexpectedGameplay();
+        return false;
+    }
     static thread_local ScratchAllocator s_allocator(1 << 18);
 
     struct ScopedReset
@@ -96,7 +121,7 @@ bool TransportService::Send(const ClientMessage& acMessage, const TiltedPhoques:
         Buffer::Writer writer(&buffer);
         writer.WriteBits(0, 8); // Write first byte as packet needs it
 
-        acMessage.Serialize(writer);
+        acMessage.Serialize(writer, m_worldEpoch);
         TiltedPhoques::PacketView packet(reinterpret_cast<char*>(buffer.GetWriteData()), writer.Size());
 
         Client::Send(&packet, aPacketFlags);
@@ -113,29 +138,98 @@ void TransportService::OnConsume(const void* apData, uint32_t aSize)
     TiltedPhoques::ViewBuffer buf((uint8_t*)apData, aSize);
     Buffer::Reader reader(&buf);
 
-    auto pMessage = factory.Extract(reader);
+    auto pMessage = factory.Extract(reader, m_worldEpoch);
     if (!pMessage)
     {
         spdlog::error("Couldn't parse packet from server");
         return;
     }
 
+    if (m_world.ctx().at<WorldCheckpointService>().IsFrozen())
+    {
+        const auto opcode = pMessage->GetOpcode();
+        if (opcode != kNotifyWorldCheckpoint && opcode != kNotifyPhysicsFrame && opcode != kAuthenticationResponse && opcode != kNotifyCampaignCheckpoint &&
+            opcode != kNotifyQuestJournal && opcode != kStringCacheUpdate && opcode != kServerTimeSettings && opcode != kNotifySettingsChange && opcode != kNotifyPartyJoined &&
+            opcode != kNotifyPartyInfo && opcode != kNotifyPlayerList)
+            return;
+    }
     m_messageHandlers[pMessage->GetOpcode()](pMessage);
 }
 
 void TransportService::OnConnected()
 {
+    m_world.GetRunner().InvalidateGameplay();
+    PhysicsReplication::Reset();
+    DialogueMovement::Reset();
+    m_worldEpoch = 0;
     m_connected = false;
     m_pendingAuthentication.reset();
     m_campaignNonce = 0;
+    m_queuedCheckpointPath.clear();
     ++m_connectionGeneration;
     AuthenticationRequest request{};
     request.Version = BUILD_COMMIT;
     request.RuntimeVersion = QueryFileVersion((std::filesystem::current_path() / L"SkyrimSE.exe").c_str()).c_str();
     request.SKSEActive = IsScriptExtenderLoaded();
     request.MO2Active = GetModuleHandleW(kMO2DllName);
+    if (!NativeCheckpoint::ReadToken(request.CheckpointToken))
+    {
+        FailCampaign("The paired-save globals are missing. Deploy the complete matching True Coop package and reload your character");
+        return;
+    }
+    const auto identity = SavedCharacterIdentity::Read(request.CharacterId);
+    if (identity == SavedCharacterIdentity::Result::Invalid)
+    {
+        spdlog::warn("Authentication stopped: unreadable saved character identity");
+        FailCampaign("Cannot read the character identity. Deploy the complete matching True Coop package, load a save and reconnect");
+        return;
+    }
+    if (identity == SavedCharacterIdentity::Result::Unassigned)
+    {
+        if (request.CheckpointToken)
+        {
+            FailCampaign("The paired save is missing its character identity. Load your complete matching checkpoint");
+            return;
+        }
+        auto& words = request.CharacterId.Parts;
+        if (BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(words.data()), static_cast<ULONG>(sizeof(words)), BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0 ||
+            !request.CharacterId.IsValid())
+        {
+            spdlog::warn("Authentication stopped: cannot generate a character identity");
+            FailCampaign("Cannot generate a character identity. Restart Skyrim and reconnect");
+            return;
+        }
+        if (!SavedCharacterIdentity::Commit(request.CharacterId))
+        {
+            spdlog::warn("Authentication stopped: native character identity write failed");
+            FailCampaign("Cannot initialize the character identity in Skyrim. Reload your character and reconnect");
+            return;
+        }
+    }
+
+    if (request.CheckpointToken)
+    {
+        const auto loaded = NativeCheckpoint::BaselineName();
+        uint64_t id{};
+        CharacterIdentity character;
+        if (!CheckpointNames::Parse(std::string_view(loaded.data(), loaded.size()), request.CheckpointProof.WorldId, id, character) || id != request.CheckpointToken ||
+            character != request.CharacterId)
+        {
+            FailCampaign("This local save inherited a checkpoint token but was not loaded from its paired checkpoint file. Load your TrueCoop checkpoint save and reconnect");
+            return;
+        }
+        request.CheckpointProof.Player.Character = character;
+        const auto name = CheckpointNames::Make(std::string_view(request.CheckpointProof.WorldId.data(), request.CheckpointProof.WorldId.size()), id, character);
+        m_queuedCheckpointPath = NativeCheckpoint::Path(name);
+        if (m_queuedCheckpointPath.empty())
+        {
+            FailCampaign("Cannot resolve the loaded paired-save file for verification");
+            return;
+        }
+    }
 
     request.Token = m_serverPassword;
+    m_reconnectPassword = m_serverPassword;
     m_serverPassword = "";
 
     PlayerCharacter* pPlayer = PlayerCharacter::Get();
@@ -184,17 +278,25 @@ void TransportService::OnConnected()
     request.PlayerTime.Year = pGameTime->GameYear->f;
     request.PlayerTime.Month = pGameTime->GameMonth->f;
     request.PlayerTime.Day = pGameTime->GameDay->f;
+    request.PlayerTime.DaysPassed = pGameTime->GameDaysPassed->f;
 
     m_queuedAuthentication = std::move(request);
 }
 
 void TransportService::OnDisconnected(EDisconnectReason aReason)
 {
+    NativeQuestContext::SetEnabled(false);
+    m_deferredCheckpointPlayer.reset();
+    m_world.GetRunner().InvalidateGameplay();
+    DialogueMovement::Reset();
+    PhysicsReplication::Reset();
+    m_worldEpoch = 0;
     m_connected = false;
     m_pendingAuthentication.reset();
     m_campaignNonce = 0;
     ++m_connectionGeneration;
     m_queuedAuthentication.reset();
+    m_queuedCheckpointPath.clear();
 
     spdlog::warn("Disconnected from server {}", aReason);
 
@@ -209,7 +311,15 @@ void TransportService::OnUpdate()
         if (m_manifestGeneration == m_connectionGeneration && Client::IsConnected())
         {
             const auto result = ContentCompatibility::Validate(request.UserMods);
-            if (result)
+            CharacterIdentity current;
+            if (SavedCharacterIdentity::Read(current) != SavedCharacterIdentity::Result::Found || current != request.CharacterId)
+            {
+                spdlog::warn("Authentication stopped: character identity changed while checking game files");
+                FailCampaign("The loaded character changed while checking game files. Reconnect after loading finishes");
+            }
+            else if (request.CheckpointToken && !request.CheckpointProof.IsValid())
+                FailCampaign("Cannot verify the loaded paired ESS/SKSE files. Preserve your saves and load a complete matching checkpoint");
+            else if (result)
                 Send(request);
             else
             {
@@ -230,12 +340,22 @@ void TransportService::OnUpdate()
         std::replace(runtime.begin(), runtime.end(), '.', '-');
         const auto addressLibrary = dataPath / L"SKSE" / L"Plugins" / (std::string("versionlib-") + runtime.c_str() + ".bin");
         const auto scriptExtender = GetScriptExtenderPath();
+        auto checkpointPath = std::move(m_queuedCheckpointPath);
+        m_queuedCheckpointPath.clear();
         // Only file IO and copies of the manifest cross threads; no engine objects do.
         m_manifestTask = std::async(
             std::launch::async,
-            [request = std::move(request), dataPath, addressLibrary, scriptExtender]() mutable
+            [request = std::move(request), dataPath, addressLibrary, scriptExtender, checkpointPath = std::move(checkpointPath)]() mutable
             {
-                FingerprintContent(dataPath, addressLibrary, scriptExtender, request.UserMods);
+                const auto started = std::chrono::steady_clock::now();
+                spdlog::info("Checking game content");
+                ArchiveFingerprintStats archives;
+                FingerprintContent(dataPath, addressLibrary, scriptExtender, request.UserMods, ArchiveCachePath(), &archives);
+                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
+                spdlog::info("Game content check finished in {} ms. BSA cache hits: {}, archives read: {}, archive bytes read: {}",
+                    elapsed.count(), archives.Hits, archives.FilesRead, archives.BytesRead);
+                if (request.CheckpointToken)
+                    FingerprintCheckpointSave(checkpointPath, request.SKSEActive, request.CheckpointProof.Player);
                 if (request.SKSEActive && scriptExtender.empty())
                 {
                     auto& missing = request.UserMods.Resources.emplace_back();
@@ -253,6 +373,22 @@ double TransportService::GetMessageReceiveTime() const noexcept
 
 void TransportService::HandleUpdate(const UpdateEvent& acEvent) noexcept
 {
+    if (m_nativeLoadCompleted.exchange(false, std::memory_order_acq_rel))
+    {
+        m_world.GetRunner().InvalidateGameplay();
+        m_queuedAuthentication.reset();
+        const bool coordinated = m_world.ctx().at<WorldCheckpointService>().NativeLoadCompleted();
+        if (!coordinated && Client::IsConnected())
+        {
+            // A local .ess load is not a coordinated server rollback. Never
+            // continue applying the old session to the newly loaded world.
+            ConnectionErrorEvent event;
+            event.ErrorDetail =
+                "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"A local save outside the paired checkpoint was loaded. Reconnect after loading finishes\"}}";
+            m_dispatcher.trigger(event);
+            Close();
+        }
+    }
     // Taken before polling, so that every message that arrived before this time gets handled by this update
     m_lastPollTime = static_cast<double>(SteamNetworkingUtils()->GetLocalTimestamp()) / 1000.0;
 
@@ -274,6 +410,7 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
     using AR = AuthenticationResponse::ResponseType;
     if (acMessage.Type == AR::kAccepted)
     {
+        m_campaignWorldId = acMessage.WorldId;
         if (acMessage.Version != BUILD_COMMIT)
         {
             ConnectionErrorEvent event;
@@ -283,11 +420,12 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
             Close();
             return;
         }
-        if (m_pendingAuthentication || m_connected || acMessage.WorldId.size() != 32)
+        if (m_pendingAuthentication || m_connected || acMessage.WorldId.size() != 32 || acMessage.WorldEpoch == 0)
         {
             FailCampaign("Invalid or duplicate campaign authentication response");
             return;
         }
+        m_worldEpoch = acMessage.WorldEpoch;
         m_pendingAuthentication = acMessage;
         m_world.SetServerSettings(acMessage.Settings);
 
@@ -306,6 +444,8 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
     switch (acMessage.Type)
     {
     case AR::kContentMismatch: ErrorInfo += "\"error\":\"content_mismatch\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acMessage.ContentError) + "\"}"; break;
+    case AR::kCampaignRefused: ErrorInfo += "\"error\":\"campaign_refused\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acMessage.ContentError) + "\"}"; break;
+    case AR::kQuestAdmissionMismatch: ErrorInfo += "\"error\":\"quest_admission_mismatch\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acMessage.ContentError) + "\"}"; break;
     case AR::kWrongVersion:
         ErrorInfo += "\"error\": \"wrong_version\", \"data\": {";
         ErrorInfo += fmt::format("\"expectedVersion\": \"{}\", \"version\": \"{}\"", acMessage.Version, BUILD_COMMIT);
@@ -373,7 +513,7 @@ void TransportService::HandleNotifySettingsChange(const NotifySettingsChange& ac
 void TransportService::FailCampaign(const String& acReason) noexcept
 {
     ConnectionErrorEvent event;
-    event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acReason) + "\"}}";
+    event.ErrorDetail = "{\"error\":\"campaign_refused\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acReason) + "\"}}";
     m_dispatcher.trigger(event);
     Close();
 }
@@ -410,8 +550,40 @@ void TransportService::HandleCampaignCheckpoint(const NotifyCampaignCheckpoint& 
         const uint32_t player = m_pendingAuthentication->PlayerId;
         m_pendingAuthentication.reset();
         m_connected = true;
-        m_dispatcher.trigger(ConnectedEvent(player));
+        m_localPlayerId = player;
+        m_world.GetRunner().InvalidateGameplay();
+        if (m_world.ctx().at<WorldCheckpointService>().AwaitingReconnect())
+            m_deferredCheckpointPlayer = player;
+        else
+        {
+            NativeQuestContext::SetEnabled(true);
+            m_dispatcher.trigger(ConnectedEvent(player));
+        }
         return;
     }
     m_dispatcher.trigger(acMessage);
+}
+
+bool TransportService::Connect(const std::string& acEndpoint) noexcept
+{
+    m_reconnectEndpoint = acEndpoint;
+    return Client::Connect(acEndpoint);
+}
+void TransportService::ReconnectAfterCheckpoint() noexcept
+{
+    if (!Client::IsConnected() && !m_reconnectEndpoint.empty())
+    {
+        m_serverPassword = m_reconnectPassword;
+        Client::Connect(m_reconnectEndpoint);
+    }
+}
+void TransportService::CompleteCheckpointConnection() noexcept
+{
+    if (m_deferredCheckpointPlayer && IsConnected())
+    {
+        const uint32_t player = *m_deferredCheckpointPlayer;
+        m_deferredCheckpointPlayer.reset();
+        NativeQuestContext::SetEnabled(true);
+        m_dispatcher.trigger(ConnectedEvent(player));
+    }
 }

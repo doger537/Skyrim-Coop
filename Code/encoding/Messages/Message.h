@@ -15,7 +15,7 @@ struct ClientMessage : TiltedPhoques::AllocatorCompatible
 
     virtual ~ClientMessage() = default;
 
-    void Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept;
+    void Serialize(TiltedPhoques::Buffer::Writer& aWriter, uint64_t aWorldEpoch = 0) const noexcept;
     // Serialize values that are not dependent on previous states
     virtual void SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept;
     // Serialize values that are dependent on previous states
@@ -25,6 +25,9 @@ struct ClientMessage : TiltedPhoques::AllocatorCompatible
     virtual void DeserializeDifferential(TiltedPhoques::Buffer::Reader& aReader) noexcept;
 
     [[nodiscard]] ClientOpcode GetOpcode() const noexcept;
+
+    // Envelope metadata, checked by the factory before decoding a gameplay payload.
+    uint64_t WorldEpoch{};
 
 private:
     ClientOpcode m_opcode;
@@ -39,13 +42,15 @@ struct ServerMessage : TiltedPhoques::AllocatorCompatible
 
     virtual ~ServerMessage() = default;
 
-    void Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept;
+    void Serialize(TiltedPhoques::Buffer::Writer& aWriter, uint64_t aWorldEpoch = 0) const noexcept;
     virtual void SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter) const noexcept;
     virtual void SerializeDifferential(TiltedPhoques::Buffer::Writer& aWriter) const noexcept;
     virtual void DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept;
     virtual void DeserializeDifferential(TiltedPhoques::Buffer::Reader& aReader) noexcept;
 
     [[nodiscard]] ServerOpcode GetOpcode() const noexcept;
+
+    uint64_t WorldEpoch{};
 
 private:
     ServerOpcode m_opcode;

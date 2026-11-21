@@ -2,16 +2,17 @@
 
 #include <Events/PacketEvent.h>
 #include <Structs/GameId.h>
+#include <Messages/RequestQuestUpdate.h>
+#include <QuestRunParticipants.h>
 
 struct World;
-struct UpdateEvent;
 struct RequestQuestUpdate;
 struct Player;
 
 /**
  * @brief Dispatch quest sync messages.
  *
- * This service is currently not in use.
+ * Novel shared changes come from the session host; peer echoes are idempotent.
  */
 class QuestService
 {
@@ -22,10 +23,8 @@ public:
 
 private:
     void OnQuestChanges(const PacketEvent<RequestQuestUpdate>& aChanges) noexcept;
-
+    bool Commit(Player& aInitiator, const RequestQuestUpdate& acChange, const Campaign::QuestRunParticipants* apParticipants) noexcept;
     World& m_world;
 
     entt::scoped_connection m_questUpdateConnection;
-    entt::scoped_connection m_updateConnection;
-    entt::scoped_connection m_joinConnection;
 };

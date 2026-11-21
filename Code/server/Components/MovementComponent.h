@@ -5,13 +5,18 @@
 #endif
 
 #include <Structs/AnimationVariables.h>
+#include <Structs/ActorPoseState.h>
 
 struct MovementComponent
 {
     uint32_t OwnershipEpoch{};
     uint64_t Tick{};
+    uint64_t ReceivedTick{};
+    GameId ReceivedCell{};
+    GameId ReceivedWorldSpace{};
     glm::vec3 Position;
     glm::vec3 Rotation;
     AnimationVariables Variables;
     float Direction;
+    ActorPoseState Pose;
 };

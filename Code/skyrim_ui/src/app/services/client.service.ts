@@ -57,6 +57,7 @@ export class ClientService implements OnDestroy {
 
   /** Local quest started or updated while not in a party. */
   public questUpdatedChange = new Subject<void>();
+  public coopSleepChange = new Subject<{ phase: number; hours: number; localReady: boolean }>();
 
   /** Disconnect player to server change. */
   public playerDisconnectedChange = new Subject<Player>();
@@ -155,6 +156,9 @@ export class ClientService implements OnDestroy {
       this.onPartyInviteReceived.bind(this),
     );
     skyrimtogether.on('questUpdated', this.onQuestUpdated.bind(this));
+    skyrimtogether.on('coopSleep', (phase, hours, localReady) => {
+      this.zone.run(() => this.coopSleepChange.next({ phase, hours, localReady }));
+    });
   }
 
   /**
@@ -189,6 +193,7 @@ export class ClientService implements OnDestroy {
     skyrimtogether.off('partyLeft');
     skyrimtogether.off('partyInviteReceived');
     skyrimtogether.off('questUpdated');
+    skyrimtogether.off('coopSleep');
   }
 
   /**

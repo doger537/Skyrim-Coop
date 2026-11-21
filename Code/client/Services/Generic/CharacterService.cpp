@@ -721,7 +721,7 @@ void CharacterService::OnReferencesMoveRequest(const ServerReferencesMoveRequest
         if (itor == std::end(view))
             continue;
 
-        if (movement.OwnershipEpoch == 0 || view.get<RemoteComponent>(*itor).OwnershipEpoch != movement.OwnershipEpoch)
+        if (!movement.Decoded || !movement.Pose.IsValid() || movement.OwnershipEpoch == 0 || view.get<RemoteComponent>(*itor).OwnershipEpoch != movement.OwnershipEpoch)
             continue;
         auto& interpolationComponent = view.get<InterpolationComponent>(*itor);
 
@@ -735,6 +735,7 @@ void CharacterService::OnReferencesMoveRequest(const ServerReferencesMoveRequest
         point.Direction = movement.Direction;
         point.HasLookAt = movement.HasLookAt;
         point.LookOffset = movement.LookOffset;
+        point.Pose = movement.Pose;
 
         InterpolationSystem::AddPoint(interpolationComponent, std::move(point), cArrivalTime);
     }
@@ -759,7 +760,14 @@ void CharacterService::OnNotifyActionEvents(const NotifyActionEvents& acMessage)
         // Played once the actor's playback clock reaches their tick, in step with its movement
         for (const auto& action : actions)
         {
-            animationComponent.TimePoints.push_back(action);
+            if (animationComponent.TimePoints.size() >= 1024)
+            {
+                m_transport.FailCampaign("Remote animation playback exceeded its bounded queue; reconnect to restore the actor baseline");
+                return;
+            }
+            const auto insertion = std::upper_bound(animationComponent.TimePoints.begin(), animationComponent.TimePoints.end(), action.Tick,
+                [](uint64_t tick, const ActionEvent& queued) { return tick < queued.Tick; });
+            animationComponent.TimePoints.insert(insertion, action);
         }
     }
 }
@@ -2047,20 +2055,25 @@ void CharacterService::RunRemoteUpdates() noexcept
 
     auto animatedView = m_world.view<RemoteComponent, RemoteAnimationComponent, InterpolationComponent, FormIdComponent>();
 
-    for (auto entity : animatedView)
+    auto animationIt = animatedView.find(m_animationCursor);
+    if (animationIt != animatedView.end()) ++animationIt;
+    if (animationIt == animatedView.end()) animationIt = animatedView.begin();
+    const auto animationStart = animationIt;
+    while (animationIt != animatedView.end() && AnimationSystem::HasBudget())
     {
+        const auto entity = *animationIt;
+        m_animationCursor = entity;
+        if (++animationIt == animatedView.end()) animationIt = animatedView.begin();
         auto& animationComponent = animatedView.get<RemoteAnimationComponent>(entity);
         auto& formIdComponent = animatedView.get<FormIdComponent>(entity);
 
         auto* pForm = TESForm::GetById(formIdComponent.Id);
         auto* pActor = Cast<Actor>(pForm);
-        if (!pActor)
-            continue;
-
         // Actions run on the clock the interpolation pass above just advanced, so the body and its animations stay in step
         const auto cTick = InterpolationSystem::GetPlaybackTick(animatedView.get<InterpolationComponent>(entity));
 
-        AnimationSystem::Update(m_world, pActor, animationComponent, cTick);
+        if (pActor) AnimationSystem::Update(m_world, pActor, animationComponent, cTick);
+        if (animationIt == animationStart) break;
     }
 
     auto facegenView = m_world.view<FormIdComponent, FaceGenComponent>();

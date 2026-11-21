@@ -1,5 +1,6 @@
 #pragma once
 #include <Structs/OperationWindow.h>
+#include <Structs/CharacterIdentity.h>
 
 struct ServerMessage;
 struct Player
@@ -14,6 +15,8 @@ struct Player
     Player& operator=(const Player&) = delete;
 
     [[nodiscard]] uint32_t GetId() const noexcept { return m_id; }
+    const CharacterIdentity& GetPersistentCharacterId() const noexcept { return m_persistentCharacterId; }
+    void SetPersistentCharacterId(const CharacterIdentity& acId) noexcept { m_persistentCharacterId = acId; }
     [[nodiscard]] ConnectionId_t GetConnectionId() const noexcept { return m_connectionId; }
     [[nodiscard]] std::optional<entt::entity> GetCharacter() const noexcept { return m_character; }
     [[nodiscard]] PartyComponent& GetParty() noexcept { return m_party; }
@@ -45,9 +48,18 @@ struct Player
     bool AcceptInventoryOperation(uint64_t aId) noexcept { return m_inventoryOperations.Accept(aId); }
     bool IsCampaignReady() const noexcept { return m_campaignReady; }
     void SetCampaignReady() noexcept { m_campaignReady = true; }
+    uint64_t GetCampaignNonce() const noexcept { return m_admissionNonce; }
+    void SetCampaignNonce(uint64_t aNonce) noexcept { m_admissionNonce = aNonce; }
+    bool AcceptQuestGrantQuery(uint64_t aNow) noexcept
+    {
+        if (aNow < m_nextGrantQuery) return false;
+        m_nextGrantQuery = aNow + 250;
+        return true;
+    }
 
 private:
     uint32_t m_id{0};
+    CharacterIdentity m_persistentCharacterId;
     ConnectionId_t m_connectionId;
     std::optional<entt::entity> m_character;
     Vector<String> m_mods;
@@ -62,4 +74,6 @@ private:
     uint16_t m_level{0};
     OperationWindow m_inventoryOperations;
     bool m_campaignReady{};
+    uint64_t m_nextGrantQuery{};
+    uint64_t m_admissionNonce{};
 };

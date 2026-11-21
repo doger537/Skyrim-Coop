@@ -14,9 +14,10 @@ ClientOpcode ClientMessage::GetOpcode() const noexcept
     return m_opcode;
 }
 
-void ClientMessage::Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
+void ClientMessage::Serialize(TiltedPhoques::Buffer::Writer& aWriter, uint64_t aWorldEpoch) const noexcept
 {
     ClientMessage::SerializeRaw(aWriter);
+    aWriter.WriteBits(aWorldEpoch, 64);
     SerializeRaw(aWriter);
     SerializeDifferential(aWriter);
 }
@@ -44,9 +45,10 @@ ServerOpcode ServerMessage::GetOpcode() const noexcept
     return m_opcode;
 }
 
-void ServerMessage::Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noexcept
+void ServerMessage::Serialize(TiltedPhoques::Buffer::Writer& aWriter, uint64_t aWorldEpoch) const noexcept
 {
     ServerMessage::SerializeRaw(aWriter);
+    aWriter.WriteBits(aWorldEpoch, 64);
     SerializeRaw(aWriter);
     SerializeDifferential(aWriter);
 }

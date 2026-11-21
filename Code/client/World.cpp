@@ -21,11 +21,21 @@
 #include <Services/CombatService.h>
 #include <Services/WeatherService.h>
 #include <Services/MapService.h>
+#include <Services/CoopSleepService.h>
+#include <Services/DialogueService.h>
+#include <Services/PlayerMarkerService.h>
+#include <Services/WorldCheckpointService.h>
+#include <Services/QuestGrantService.h>
+#include <Services/RagdollService.h>
+#include <Services/SharedQuestEffectService.h>
+#include <Services/WorldItemService.h>
+#include <Services/PlacedPhysicsService.h>
+#include <Services/PhysicsCheckpointService.h>
 
 #include <Events/PreUpdateEvent.h>
 #include <Events/UpdateEvent.h>
 
-#include <ModCompat/BehaviorVar.h>  
+#include <ModCompat/BehaviorVar.h>
 
 World::World()
     : m_runner(m_dispatcher)
@@ -39,7 +49,7 @@ World::World()
     ctx().emplace<InputService>(ctx().at<OverlayService>());
     ctx().emplace<CharacterService>(*this, m_dispatcher, m_transport);
     ctx().emplace<DebugService>(m_dispatcher, *this, m_transport, ctx().at<ImguiService>());
-    ctx().emplace<PapyrusService>(m_dispatcher);
+    ctx().emplace<PapyrusService>();
     ctx().emplace<DiscordService>(m_dispatcher);
     ctx().emplace<ObjectService>(*this, m_dispatcher, m_transport);
     ctx().emplace<CalendarService>(*this, m_dispatcher, m_transport);
@@ -54,6 +64,16 @@ World::World()
     ctx().emplace<CombatService>(*this, m_transport, m_dispatcher);
     ctx().emplace<WeatherService>(*this, m_transport, m_dispatcher);
     ctx().emplace<MapService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<CoopSleepService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<DialogueService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<PlayerMarkerService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<WorldCheckpointService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<QuestGrantService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<RagdollService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<SharedQuestEffectService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<WorldItemService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<PlacedPhysicsService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<PhysicsCheckpointService>(*this, m_dispatcher, m_transport);
 
     BehaviorVar::Get()->Init();
 }
@@ -68,10 +88,18 @@ void World::Update() noexcept
 
     const auto cDeltaSeconds = std::chrono::duration_cast<std::chrono::duration<double>>(cDelta).count();
 
-    m_dispatcher.trigger(PreUpdateEvent(cDeltaSeconds));
+    auto& checkpoints = ctx().at<WorldCheckpointService>();
+    if (!checkpoints.IsFrozen())
+        m_dispatcher.trigger(PreUpdateEvent(cDeltaSeconds));
 
     // Force run this before so we get the tasks scheduled to run
     m_runner.OnUpdate(UpdateEvent(cDeltaSeconds));
+    if (checkpoints.IsFrozen())
+    {
+        m_transport.PollCheckpointFrame(UpdateEvent(cDeltaSeconds));
+        checkpoints.Tick(UpdateEvent(cDeltaSeconds));
+        return;
+    }
     m_dispatcher.trigger(UpdateEvent(cDeltaSeconds));
 }
 

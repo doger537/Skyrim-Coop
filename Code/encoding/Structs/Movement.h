@@ -5,6 +5,7 @@
 #include <Structs/Vector3_NetQuantize.h>
 #include <Structs/Rotator2_NetQuantize.h>
 #include <Structs/AnimationVariables.h>
+#include <Structs/ActorPoseState.h>
 
 using TiltedPhoques::Buffer;
 
@@ -28,4 +29,6 @@ struct Movement
     float Direction{};
     bool HasLookAt{};
     Vector3_NetQuantize LookOffset{}; // From the head to the look-at target
+    ActorPoseState Pose{};
+    bool Decoded{true};
 };

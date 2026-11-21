@@ -1,4 +1,4 @@
-﻿#include <Components.h>
+#include <Components.h>
 #include <GameServer.h>
 #include <BuildInfo.h>
 #include <Messages/RequestCampaignReady.h>
@@ -9,6 +9,7 @@
 #include <Events/CharacterRemoveEvent.h>
 #include <Events/OwnershipTransferEvent.h>
 #include <Events/PacketEvent.h>
+#include <Services/WorldCheckpointService.h>
 #include <Events/PlayerJoinEvent.h>
 #include <Events/PlayerLeaveCellEvent.h>
 #include <Events/PlayerLeaveEvent.h>
@@ -45,8 +46,7 @@ Console::Setting bSyncPlayerHomes{"Gameplay:bSyncPlayerHomes", "Sync chests and 
 Console::Setting bEnableDeathSystem{"Gameplay:bEnableDeathSystem", "Enables the custom multiplayer death system. Only disable it if you use another mod that replaces death", true};
 Console::Setting uTimeScale{"Gameplay:uTimeScale", "How many seconds pass ingame for every real second (0 to 1000). Changing this can make the game unstable", 20u};
 Console::Setting bSyncPlayerCalendar{
-    "Gameplay:bSyncPlayerCalendar",
-    "Syncs up all player calendars to be the same day, month, and year. This uses the date of the player with the furthest ahead date at connection.", false};
+    "Gameplay:bSyncPlayerCalendar", "Legacy setting; the shared world date and elapsed days are always synchronized", true, Console::SettingsFlags::kLocked};
 Console::Setting bAutoPartyJoin{"Gameplay:bAutoPartyJoin", "Join parties automatically, as long as there is only one party in the server", true};
 Console::Setting bAllowConsoleCommands{
     "Gameplay:bAllowConsoleCommands",
@@ -56,7 +56,8 @@ Console::Setting bAllowConsoleCommands{
 // ModPolicy Stuff
 Console::Setting bEnableModCheck{"ModPolicy:bEnableModCheck", "Refuse clients whose mods do not match Data/loadorder.txt", false, Console::SettingsFlags::kLocked};
 Console::Setting bEnableContentCheck{"ModPolicy:bEnableContentCheck", "Legacy setting; strict content compatibility is always enforced", true, Console::SettingsFlags::kLocked};
-Console::StringSetting sQuestAdaptersPath{"Persistence:sQuestAdaptersPath", "Pinned quest adapter JSON; absent means no automatic script replay", "config/TrueCoopQuestAdapters.json"};
+Console::StringSetting sQuestAdaptersPath{
+    "Persistence:sQuestAdaptersPath", "Pinned quest adapter JSON; absent means no automatic script replay", "config/TrueCoopQuestAdapters.json"};
 Console::StringSetting sWorldPath{"Persistence:sWorldPath", "Persistent campaign database path; use a separate file for each world", "Data/TrueCoop/world.sqlite3"};
 Console::Setting bAllowSKSE{"ModPolicy:bAllowSKSE", "Allow players using SKSE to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
 Console::Setting bAllowMO2{"ModPolicy:bAllowMO2", "Allow players using Mod Organizer 2 to join. Applies even when bEnableModCheck is off", true, Console::SettingsFlags::kLocked};
@@ -140,11 +141,6 @@ constexpr char kMopoRecordsMissing[]{"Failed to start: ModPolicy's ModCheck is e
                                      "to join! Please create a Data/ directory, and put a \"loadorder.txt\" file in there."
                                      "Check the wiki, which can be found on skyrim-together.com, for more details."};
 
-constexpr char kCalendarSyncWarning[]{"Calendar sync is enabled. We generally do not recommend that you use this feature."
-                                      "Calendar sync can cause the calendar to jump ahead or behind, which might mess up the timing of quests."
-                                      "If you disable this feature again (which is the default setting), the days will still progress, but the"
-                                      "exact date will differ slightly between clients (which has no impact on gameplay)."};
-
 static uint16_t GetUserTickRate()
 {
     return bPremiumTickrate ? 60 : 30;
@@ -163,7 +159,7 @@ ServerSettings GetSettings()
     settings.PvpEnabled = bEnablePvp;
     settings.SyncPlayerHomes = bSyncPlayerHomes;
     settings.DeathSystemEnabled = bEnableDeathSystem;
-    settings.SyncPlayerCalendar = bSyncPlayerCalendar;
+    settings.SyncPlayerCalendar = true; // Shared world clock includes the entire calendar.
     settings.AutoPartyJoin = bAutoPartyJoin;
     settings.ConsoleCommandsAllowed = bAllowConsoleCommands;
     return settings;
@@ -228,17 +224,30 @@ GameServer::GameServer(Console::ConsoleRegistry& aConsole) noexcept
     }
     else if (adapterError)
         adapters = "unreadable adapter path";
-    if (!campaign.Open(std::filesystem::path(reinterpret_cast<const char8_t*>(sWorldPath.value())), adapters))
+    const std::filesystem::path worldPath(reinterpret_cast<const char8_t*>(sWorldPath.value()));
+    if (!campaign.Open(worldPath, adapters))
     {
         spdlog::critical("Cannot open persistent campaign: {}", campaign.Error());
         Kill();
     }
     else if (campaign.GetContract())
     {
+        if (!campaign.AdvanceWorldEpoch())
+        {
+            spdlog::critical("Cannot start campaign timeline: {}", campaign.Error());
+            Kill();
+        }
         m_contentContract = campaign.GetContract()->Content;
         m_sessionRuntime = campaign.GetContract()->Runtime;
         m_pWorld->ctx().at<ModsComponent>().BindContract(*m_contentContract);
-        spdlog::info("Restored campaign {} at revision {}", campaign.WorldId(), campaign.Revision());
+    }
+    if (campaign.IsReady())
+    {
+        std::error_code pathError;
+        const auto resolved = std::filesystem::absolute(worldPath, pathError).lexically_normal().u8string();
+        spdlog::info("Campaign database path={} world={} revision={} quest_revision={} initialized={}",
+                     pathError ? sWorldPath.value() : reinterpret_cast<const char*>(resolved.c_str()),
+                     campaign.WorldId(), campaign.Revision(), campaign.QuestRevision(), campaign.IsBootstrapped());
     }
 
     BindMessageHandlers();
@@ -274,8 +283,7 @@ void GameServer::Initialize()
     if (!CheckMoPo())
         return;
 
-    if (bSyncPlayerCalendar)
-        spdlog::warn(kCalendarSyncWarning);
+    spdlog::info("Shared campaign calendar and elapsed days are synchronized");
 
     BindServerCommands();
     m_pWorld->GetScriptService().Initialize(*m_pResources);
@@ -341,6 +349,8 @@ void GameServer::BindMessageHandlers()
             }
 
             if (!pPlayer->IsCampaignReady() || m_rejectedCampaigns.contains(aConnectionId))
+                return;
+            if (m_pWorld->ctx().at<WorldCheckpointService>().IsFrozen() && T::Opcode != kRequestWorldCheckpoint && T::Opcode != kRequestPhysicsFrame)
                 return;
             const auto pRealMessage = CastUnique<T>(std::move(apMessage));
 
@@ -646,7 +656,7 @@ void GameServer::OnConsume(const void* apData, const uint32_t aSize, const Conne
     Buffer::Reader reader(&buf);
 
     const ClientMessageFactory factory;
-    auto pMessage = factory.Extract(reader);
+    auto pMessage = factory.Extract(reader, m_pWorld->GetCampaign().WorldEpoch());
     if (!pMessage)
     {
         spdlog::error("Couldn't parse packet from {:x}", aConnectionId);
@@ -664,6 +674,8 @@ void GameServer::OnConnection(const ConnectionId_t aHandle)
 
 void GameServer::OnDisconnection(const ConnectionId_t aConnectionId, EDisconnectReason aReason)
 {
+    if (m_detachedCheckpointConnections.erase(aConnectionId))
+        return; // Gameplay cleanup already ran before restoring the database.
     m_adminSessions.erase(aConnectionId);
     m_rejectedCampaigns.erase(aConnectionId);
 
@@ -723,8 +735,8 @@ void GameServer::Send(const ConnectionId_t aConnectionId, const ServerMessage& a
 {
     const auto* player = m_pWorld->GetPlayerManager().GetByConnectionId(aConnectionId);
     const auto opcode = acServerMessage.GetOpcode();
-    if (opcode != kAuthenticationResponse && (m_rejectedCampaigns.contains(aConnectionId) ||
-        (player && !player->IsCampaignReady() && opcode != kNotifyCampaignCheckpoint && opcode != kNotifyQuestJournal && opcode != kStringCacheUpdate)))
+    if (opcode != kAuthenticationResponse && (m_rejectedCampaigns.contains(aConnectionId) || (player && !player->IsCampaignReady() && opcode != kNotifyCampaignCheckpoint &&
+                                                                                              opcode != kNotifyQuestJournal && opcode != kStringCacheUpdate)))
         return;
 
     static thread_local TiltedPhoques::ScratchAllocator s_allocator{1 << 18};
@@ -733,7 +745,7 @@ void GameServer::Send(const ConnectionId_t aConnectionId, const ServerMessage& a
     Buffer::Writer writer(&buffer);
     writer.WriteBits(0, 8); // Skip the first byte as it is used by packet
 
-    acServerMessage.Serialize(writer);
+    acServerMessage.Serialize(writer, m_pWorld->GetCampaign().WorldEpoch());
 
     TiltedPhoques::PacketView packet(reinterpret_cast<char*>(buffer.GetWriteData()), static_cast<uint32_t>(writer.Size()));
     Server::Send(aConnectionId, &packet, aPacketFlags);
@@ -896,6 +908,12 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         sendKick(RT::kContentMismatch);
         return;
     }
+    if (!acRequest->CharacterIdentityDecoded || !acRequest->CharacterId.IsValid())
+    {
+        serverResponse.ContentError = "The saved character identity is missing or invalid. Deploy the complete matching True Coop package and reconnect";
+        sendKick(RT::kContentMismatch);
+        return;
+    }
     if (acRequest->Version != BUILD_COMMIT)
     {
         spdlog::info("New player {:x} '{}' tried to connect with client {} - Version mismatch", aConnectionId, remoteAddress, acRequest->Version.c_str());
@@ -952,6 +970,17 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
             [](const auto& resource) { return ContentCompatibility::NormalizeName(resource.Filename) == "runtime/skse"; });
         if (contentError.empty() && cHasSKSE != acRequest->SKSEActive)
             contentError = "SKSE state and library manifest disagree. Restart with a supported SKSE installation or remove SKSE from this profile";
+        if (contentError.empty() && !acRequest->PlayerTime.IsValid())
+            contentError = "The save's calendar is invalid. Load a save with a valid game date and reconnect";
+        if (contentError.empty())
+            m_pWorld->ctx().at<WorldCheckpointService>().CanAuthenticate(acRequest->CharacterId, acRequest->CheckpointToken, acRequest->CheckpointProof, contentError);
+        if (contentError.empty())
+            for (const Player* existing : m_pWorld->GetPlayerManager())
+                if (existing->GetPersistentCharacterId() == acRequest->CharacterId)
+                {
+                    contentError = "This character is already connected. Each player needs their own character; do not share one character save";
+                    break;
+                }
         GameId checkedLocation;
         if (contentError.empty() &&
             (!ContentCompatibility::ResolveInitialForm(acRequest->WorldSpaceId, acRequest->UserMods, acRequest->UserMods, checkedLocation) ||
@@ -1062,6 +1091,7 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         pPlayer->SetMods(playerMods);
         pPlayer->SetModIds(playerModsIds);
         pPlayer->SetLevel(acRequest->Level);
+        pPlayer->SetPersistentCharacterId(acRequest->CharacterId);
 
         // this event is shit, needs to be fixed, i know
         auto [canceled, reason] = m_pWorld->GetScriptService().HandlePlayerJoin(aConnectionId);
@@ -1076,7 +1106,7 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
         serverResponse.PlayerId = pPlayer->GetId();
         if (!m_contentContract)
         {
-            if (!m_pWorld->GetCampaign().Bind(acRequest->RuntimeVersion, acRequest->UserMods))
+            if (!m_pWorld->GetCampaign().Bind(acRequest->RuntimeVersion, acRequest->UserMods) || !m_pWorld->GetCampaign().AdvanceWorldEpoch())
             {
                 serverResponse.ContentError = "Cannot create the persistent world contract: " + m_pWorld->GetCampaign().Error();
                 sendKick(RT::kContentMismatch);
@@ -1085,6 +1115,13 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
             }
             m_contentContract = acRequest->UserMods;
             m_sessionRuntime = acRequest->RuntimeVersion;
+        }
+        if (!m_pWorld->GetCampaign().RegisterParticipant(acRequest->CharacterId))
+        {
+            serverResponse.ContentError = m_pWorld->GetCampaign().Error();
+            sendKick(RT::kContentMismatch);
+            m_pWorld->GetPlayerManager().Remove(pPlayer);
+            return;
         }
 
         auto modList = PrettyPrintModList(acRequest->UserMods.ModList);
@@ -1187,4 +1224,10 @@ String GameServer::SanitizeUsername(const String& acUsername) const noexcept
     std::ranges::replace(username, '_', ' ');
 
     return username;
+}
+
+void GameServer::DetachCheckpointSession(ConnectionId_t aConnection)
+{
+    OnDisconnection(aConnection, EDisconnectReason::Quit);
+    m_detachedCheckpointConnections.insert(aConnection);
 }

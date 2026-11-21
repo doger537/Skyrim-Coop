@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <future>
+#include <filesystem>
 #include <Messages/AuthenticationRequest.h>
 #include <Messages/AuthenticationResponse.h>
 #include <Client.hpp>
@@ -30,6 +31,13 @@ struct TransportService : Client
 
     TP_NOCOPYMOVE(TransportService);
 
+    using Client::Connect;
+    bool Connect(const std::string& acEndpoint) noexcept;
+    void ReconnectAfterCheckpoint() noexcept;
+    void CompleteCheckpointConnection() noexcept;
+    void PollCheckpointFrame(const UpdateEvent& acEvent) noexcept { HandleUpdate(acEvent); }
+    const String& GetCampaignWorldId() const noexcept { return m_campaignWorldId; }
+
     bool Send(const ClientMessage& acMessage, TiltedPhoques::EPacketFlags aPacketFlags = TiltedPhoques::kReliable) const noexcept;
 
     void OnConsume(const void* apData, uint32_t aSize) override;
@@ -43,6 +51,15 @@ struct TransportService : Client
     void SetServerPassword(const std::string& acPassword) noexcept { m_serverPassword = acPassword; }
     const uint32_t& GetLocalPlayerId() const noexcept { return m_localPlayerId; }
     uint64_t GetConnectionGeneration() const noexcept { return m_connectionGeneration; }
+    uint64_t GetWorldEpoch() const noexcept { return m_worldEpoch; }
+    uint64_t GetCampaignNonce() const noexcept { return m_campaignNonce; }
+    // Native event callback may only publish this barrier, never close sockets
+    // or retain engine pointers. The runner consumes it before polling packets.
+    void NativeLoadCompleted() noexcept
+    {
+        ++m_connectionGeneration;
+        m_nativeLoadCompleted.store(true, std::memory_order_release);
+    }
     void FailCampaign(const String& acReason) noexcept;
 
     // Times below are in ms on the networking library's local clock, which keeps running while the game thread is stalled
@@ -69,14 +86,21 @@ private:
     entt::dispatcher& m_dispatcher;
     bool m_connected;
     String m_serverPassword{};
+    String m_reconnectPassword;
+    std::string m_reconnectEndpoint;
+    String m_campaignWorldId;
+    std::optional<uint32_t> m_deferredCheckpointPlayer;
     uint32_t m_localPlayerId;
     double m_lastPollTime{};
     std::optional<AuthenticationRequest> m_queuedAuthentication;
+    std::filesystem::path m_queuedCheckpointPath;
     std::future<AuthenticationRequest> m_manifestTask;
     std::atomic<uint64_t> m_connectionGeneration{};
     uint64_t m_manifestGeneration{};
     std::optional<AuthenticationResponse> m_pendingAuthentication;
     uint64_t m_campaignNonce{};
+    uint64_t m_worldEpoch{};
+    std::atomic<bool> m_nativeLoadCompleted{};
 
     entt::scoped_connection m_updateConnection;
     entt::scoped_connection m_sendServerMessageConnection;

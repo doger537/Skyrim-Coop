@@ -15,6 +15,15 @@
 #include <Services/WeatherService.h>
 #include <Services/ScriptService.h>
 #include <Services/MapService.h>
+#include <Services/CoopSleepService.h>
+#include <Services/DialogueService.h>
+#include <Services/PlayerLocationService.h>
+#include <Services/WorldCheckpointService.h>
+#include <Services/QuestGrantService.h>
+#include <Services/RagdollService.h>
+#include <Services/WorldItemService.h>
+#include <Services/PlacedPhysicsService.h>
+#include <Services/PhysicsCheckpointService.h>
 
 #include <es_loader/ESLoader.h>
 
@@ -38,6 +47,15 @@ World::World()
     ctx().emplace<CombatService>(*this, m_dispatcher);
     ctx().emplace<WeatherService>(*this, m_dispatcher);
     ctx().emplace<MapService>(*this, m_dispatcher);
+    ctx().emplace<CoopSleepService>(*this, m_dispatcher);
+    ctx().emplace<DialogueService>(*this, m_dispatcher);
+    ctx().emplace<PlayerLocationService>(*this, m_dispatcher);
+    ctx().emplace<WorldCheckpointService>(*this, m_dispatcher);
+    ctx().emplace<QuestGrantService>(*this, m_dispatcher);
+    ctx().emplace<RagdollService>(*this, m_dispatcher);
+    ctx().emplace<WorldItemService>(*this, m_dispatcher);
+    ctx().emplace<PlacedPhysicsService>(*this, m_dispatcher);
+    ctx().emplace<PhysicsCheckpointService>(*this, m_dispatcher);
 
     ESLoader::ESLoader loader;
     // emplace loaded mods into modscomponent.

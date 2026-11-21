@@ -38,7 +38,26 @@ public:
     void Close() noexcept;
     ReadResult Read(const TiltedPhoques::String& acKey, Record& aRecord) noexcept;
     bool ReadPrefix(const TiltedPhoques::String& acPrefix, TiltedPhoques::Vector<Record>& aRecords) noexcept;
+    // A revision cursor must not silently drop the remainder of a transaction.
+    // A page that would split one revision is rejected; caller can raise limit.
+    bool ReadPrefixAfterRevision(const TiltedPhoques::String& acPrefix, uint64_t aAfterRevision, size_t aLimit, TiltedPhoques::Vector<Record>& aRecords) noexcept;
     bool VerifyRecords() noexcept;
+    struct Checkpoint
+    {
+        uint64_t Id{};
+        uint64_t CapturedRevision{};
+        TiltedPhoques::Vector<uint8_t> Metadata;
+        TiltedPhoques::Vector<Record> Records;
+    };
+    // Reservations are durable even when either native save fails. A filename
+    // token is never reused after cancellation, restart or timeline rollback.
+    bool ReserveCheckpoint(uint64_t& aId) noexcept;
+    bool CaptureCheckpoint(uint64_t aId, const TiltedPhoques::Vector<uint8_t>& acMetadata) noexcept;
+    bool ReadCheckpoint(uint64_t aId, Checkpoint& aCheckpoint) noexcept;
+    bool RestoreCheckpoint(uint64_t aId, uint64_t& aNewEpoch) noexcept;
+    bool LastRestoredCheckpoint(uint64_t& aId, uint64_t& aEpoch) noexcept;
+    bool IsRestorePending(bool& aPending) noexcept;
+    bool CompleteRestore() noexcept;
     WriteResult Commit(const TiltedPhoques::Vector<Record>& acRecords, uint64_t& aRevision) noexcept;
     const TiltedPhoques::String& Error() const noexcept { return m_error; }
     const TiltedPhoques::String& WorldId() const noexcept { return m_worldId; }

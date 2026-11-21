@@ -28,6 +28,7 @@ TEST_CASE("Encoding factory", "[encoding.factory]")
 
     {
         AuthenticationRequest request;
+        request.CharacterId.Parts[0] = 1;
         request.Token = "TesSt";
 
         Buffer::Writer writer(&buff);
@@ -341,6 +342,7 @@ TEST_CASE("Packets", "[encoding.packets]")
         Buffer buff(1000);
 
         AuthenticationRequest sendMessage, recvMessage;
+        sendMessage.CharacterId.Parts[0] = 1;
         sendMessage.Token = "TesSt";
         sendMessage.UserMods.ModList.push_back({"Hello", 42});
         sendMessage.UserMods.ModList.push_back({"Hi", 14});
@@ -354,6 +356,7 @@ TEST_CASE("Packets", "[encoding.packets]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         recvMessage.DeserializeRaw(reader);
 
@@ -378,6 +381,7 @@ TEST_CASE("Packets", "[encoding.packets]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         recvMessage.DeserializeRaw(reader);
 
@@ -421,6 +425,7 @@ TEST_CASE("Packets", "[encoding.packets]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         recvMessage.DeserializeRaw(reader);
 
@@ -469,6 +474,7 @@ TEST_CASE("Packets", "[encoding.packets]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         recvMessage.DeserializeRaw(reader);
 
@@ -505,6 +511,7 @@ TEST_CASE("Packets", "[encoding.packets]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         recvMessage.DeserializeRaw(reader);
 
@@ -611,6 +618,7 @@ TEST_CASE("StringCache", "[encoding.string_cache]")
 
         uint64_t trash;
         reader.ReadBits(trash, 8); // pop opcode
+        REQUIRE(reader.ReadBits(trash, 64)); // pop world epoch
 
         StringCacheUpdate recvUpdate;
         recvUpdate.DeserializeRaw(reader);

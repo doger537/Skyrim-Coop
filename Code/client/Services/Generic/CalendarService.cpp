@@ -28,25 +28,13 @@ CalendarService::CalendarService(World& aWorld, entt::dispatcher& aDispatcher, T
 
 void CalendarService::OnTimeUpdate(const ServerTimeSettings& acMessage) noexcept
 {
+    if (!acMessage.timeModel.IsValid())
+        return;
     // disable the game clock
     ToggleGameClock(false);
     m_tickBaseline.Rebase(m_world.GetTick());
     m_fadeTimer = 0.f;
-    m_onlineTime.m_timeModel.TimeScale = acMessage.timeModel.TimeScale;
-    m_onlineTime.m_timeModel.Time = acMessage.timeModel.Time;
-
-    if (m_world.GetServerSettings().SyncPlayerCalendar)
-    {
-        m_onlineTime.m_timeModel.Day = acMessage.timeModel.Day;
-        m_onlineTime.m_timeModel.Month = acMessage.timeModel.Month;
-        m_onlineTime.m_timeModel.Year = acMessage.timeModel.Year;
-    }
-    else
-    {
-        m_onlineTime.m_timeModel.Day = m_offlineTime.m_timeModel.Day;
-        m_onlineTime.m_timeModel.Month = m_offlineTime.m_timeModel.Month;
-        m_onlineTime.m_timeModel.Year = m_offlineTime.m_timeModel.Year;
-    }
+    m_onlineTime = DateTime(acMessage.timeModel);
 }
 
 void CalendarService::OnDisconnected(const DisconnectedEvent&) noexcept
@@ -70,6 +58,7 @@ void CalendarService::ToggleGameClock(bool aEnable)
     m_offlineTime.m_timeModel.Year = pGameTime->GameYear->f;
     m_offlineTime.m_timeModel.Time = pGameTime->GameHour->f;
     m_offlineTime.m_timeModel.TimeScale = pGameTime->TimeScale->f;
+    m_offlineTime.m_timeModel.DaysPassed = pGameTime->GameDaysPassed->f;
 
     s_gameClockLocked = !aEnable;
 }
@@ -84,12 +73,13 @@ void CalendarService::HandleUpdate(const UpdateEvent& aEvent) noexcept
         const auto now = m_world.GetTick();
         const uint64_t delta = m_tickBaseline.Sample(now);
 
-        m_onlineTime.Update(delta);
+        if (!m_checkpointFrozen)
+            m_onlineTime.Update(delta);
         pGameTime->TimeScale->f = m_onlineTime.m_timeModel.TimeScale;
         pGameTime->GameDay->f = m_onlineTime.m_timeModel.Day;
         pGameTime->GameMonth->f = m_onlineTime.m_timeModel.Month;
         pGameTime->GameYear->f = m_onlineTime.m_timeModel.Year;
-        pGameTime->GameDaysPassed->f += m_onlineTime.GetDeltaTime(delta) * (1.f / 24.f);
+        pGameTime->GameDaysPassed->f = static_cast<float>(m_onlineTime.m_timeModel.DaysPassed);
 
         // time transition in
         if (m_fadeTimer < kTransitionSpeed)
@@ -100,4 +90,21 @@ void CalendarService::HandleUpdate(const UpdateEvent& aEvent) noexcept
         else
             pGameTime->GameHour->f = m_onlineTime.m_timeModel.Time;
     }
+}
+
+void CalendarService::FreezeForCheckpoint(const TimeModel& acModel) noexcept
+{
+    if (!acModel.IsValid())
+        return;
+    m_checkpointFrozen = true;
+    m_onlineTime = DateTime(acModel);
+    m_tickBaseline.Rebase(m_world.GetTick());
+    m_fadeTimer = kTransitionSpeed;
+    s_gameClockLocked = true;
+    HandleUpdate(UpdateEvent(0));
+}
+void CalendarService::ThawCheckpoint() noexcept
+{
+    m_checkpointFrozen = false;
+    m_tickBaseline.Rebase(m_world.GetTick());
 }
