@@ -1,4 +1,5 @@
 #include <Services/WorldCheckpointService.h>
+#include <Services/QuestService.h>
 #include <Services/TransportService.h>
 #include <Services/CalendarService.h>
 #include <Services/PhysicsCheckpointService.h>
@@ -119,14 +120,16 @@ void WorldCheckpointService::Apply(const NotifyWorldCheckpoint& acMessage) noexc
         const bool grantBusy = acMessage.State == Phase::PrepareLoad
                                    ? NativeQuestGate::HasLive() || NativeGrantDelivery::IsActive() || NativeItemDelivery::IsActive() || WorldItemRegistry::IsWriting()
                                    : NativeQuestGate::HasPending() || NativeGrantDelivery::HasPending() || NativeItemDelivery::HasPending() || WorldItemRegistry::HasPending();
-        if (grantBusy || (acMessage.State == Phase::PrepareSave && m_world.ctx().at<PlacedPhysicsService>().HasPendingOwnership()))
+        const bool questBusy = m_world.ctx().at<QuestService>().HasUnconfirmedUpdates();
+        if (questBusy || grantBusy || (acMessage.State == Phase::PrepareSave && m_world.ctx().at<PlacedPhysicsService>().HasPendingOwnership()))
         {
             RequestWorldCheckpoint failed;
             failed.Action = RequestWorldCheckpoint::Kind::Failed;
             failed.Id = acMessage.Id;
             failed.Nonce = acMessage.Nonce;
             m_transport.Send(failed);
-            Notice("Есть незавершённая квестовая выдача. Дождитесь её завершения или восстановите общий checkpoint.");
+            Notice(questBusy ? "Дождитесь подтверждения текущей стадии квеста и повторите операцию." :
+                "Есть незавершённая квестовая выдача. Дождитесь её завершения или восстановите общий checkpoint.");
             return;
         }
         m_control = acMessage;

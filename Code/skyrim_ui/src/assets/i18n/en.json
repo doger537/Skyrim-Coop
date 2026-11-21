@@ -167,6 +167,7 @@
     "ERROR": {
       "ERRORS": {
         "WRONG_VERSION": "This server expects version {{expectedVersion}} but you are on version {{version}}.",
+        "QUEST_ADMISSION_MISMATCH": "Quest progress differs from the campaign. {{reason}}",
         "CAMPAIGN_REFUSED": "Campaign connection refused. {{reason}}",
         "CONTENT_MISMATCH": "Active content is incompatible with this session. {{reason}}. Compare plugin contents and load order in a separate co-op profile.",
         "MODS_MISMATCH": "This server has ModPolicy enabled.{{mods}}",

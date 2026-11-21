@@ -11,6 +11,7 @@ void NotifyCampaignCheckpoint::SerializeRaw(TiltedPhoques::Buffer::Writer& aWrit
     Serialization::WriteBool(aWriter, SeedOwner);
     Serialization::WriteBool(aWriter, BaselinePending);
     Serialization::WriteBool(aWriter, AllowMisc);
+    Serialization::WriteBool(aWriter, StartupDiagnosticOnly);
     aWriter.WriteBits(MiscQuests.size(), 9);
     for (const auto& id : MiscQuests)
         id.Serialize(aWriter);
@@ -34,6 +35,7 @@ void NotifyCampaignCheckpoint::DeserializeRaw(TiltedPhoques::Buffer::Reader& aRe
     SeedOwner = Serialization::ReadBool(aReader);
     BaselinePending = Serialization::ReadBool(aReader);
     AllowMisc = Serialization::ReadBool(aReader);
+    StartupDiagnosticOnly = Serialization::ReadBool(aReader);
     aReader.ReadBits(data, 9);
     if (data > 256)
     {

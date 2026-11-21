@@ -9,6 +9,7 @@ export interface ErrorEvent {
     | 'mods_mismatch'
     | 'content_mismatch'
     | 'campaign_refused'
+    | 'quest_admission_mismatch'
     | 'client_mods_disallowed'
     | 'wrong_password'
     | 'server_full'
@@ -64,6 +65,7 @@ export class ErrorService {
     } else {
       let data: Record<string, any> = error.data;
       switch (error.error) {
+        case 'quest_admission_mismatch':
         case 'campaign_refused':
         case 'content_mismatch':
           data = {

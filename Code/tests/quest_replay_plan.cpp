@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 #include <Structs/QuestReplayPlan.h>
+#include <Structs/QuestApplyConfirmation.h>
 #include <Structs/QuestSyncPolicy.h>
 
 TEST_CASE("Quest replay keeps committed event order and requires an explicit stage allowlist", "[quest.replay]")
@@ -204,5 +205,54 @@ TEST_CASE("An unaccepted Companions radiant offer never needs lifecycle replay",
         journal.Id.ModId = 1;
     }
     REQUIRE_FALSE(PlanQuestReplay(journal, {}, false, local, plan));
+    REQUIRE(plan.Apply.empty());
+}
+
+TEST_CASE("Diagnostic-only history comparison shows the Hadvar cleanup without approving replay", "[quest.admission]")
+{
+    const QuestJournal route{GameId(0, QuestSyncPolicy::kHadvarRoute), 1, 1, true, false,
+        {{1, 0, true}, {0, 5, true}, {0, 10, true}, {0, 20, true}}};
+    const LocalQuestState local{true, false, {3, 5, 10, 20}};
+    QuestReplayPlan plan;
+    REQUIRE_FALSE(PlanQuestReplay(route, {}, false, local, plan, false));
+    REQUIRE(plan.Problem == QuestAdmissionProblem::LocalProgress);
+    REQUIRE(plan.Apply.empty());
+    REQUIRE(PlanQuestReplay(route, {}, false, local, plan));
+    REQUIRE(plan.Apply.empty());
+
+    const QuestJournal ralof{GameId(0, QuestSyncPolicy::kRalofRoute), 1, 1, true, false, route.Events};
+    REQUIRE(PlanQuestReplay(ralof, {}, false, local, plan));
+    const LocalQuestState notYetOnRoute{true, false, {3, 5, 20}};
+    REQUIRE_FALSE(PlanQuestReplay(ralof, {}, false, notYetOnRoute, plan));
+}
+
+TEST_CASE("An incoming quest update waits for native readback and never retries a fragment", "[quest.admission]")
+{
+    using Next = QuestApplyConfirmation::Next;
+    QuestApplyConfirmation verification;
+    REQUIRE(verification.Observe(10, false) == Next::Invoke);
+    // ScriptSetStage returned false and the engine has not reached this stage.
+    REQUIRE(verification.Observe(11, false) == Next::Wait);
+    REQUIRE(verification.Observe(5009, false) == Next::Wait);
+    REQUIRE(verification.Observe(5010, false) == Next::Failed);
+    // After reconnect a fresh observation confirms an already applied update
+    // without calling its script again.
+    verification = {};
+    REQUIRE(verification.Observe(5020, true) == Next::Confirm);
+    REQUIRE(verification.Deadline == 0);
+
+    REQUIRE(verification.Observe(50, false) == Next::Invoke);
+    REQUIRE(verification.Observe(51, false) == Next::Wait);
+    REQUIRE(verification.Observe(52, true) == Next::Confirm);
+}
+
+TEST_CASE("A Creation quest with a displayed objective at stage zero is not a Companions offer", "[quest.admission]")
+{
+    const GameId bittercup(1, 0xD63);
+    const LocalQuestState local{true, false, {0}};
+    REQUIRE(NeedsSharedJournal(bittercup, 8, local));
+    const QuestJournal gameQuest{bittercup, 1, 8, true, false, {{1, 0, true}, {0, 0, true}}};
+    QuestReplayPlan plan;
+    REQUIRE_FALSE(PlanQuestReplay(gameQuest, {}, false, {true, true, {}}, plan));
     REQUIRE(plan.Apply.empty());
 }

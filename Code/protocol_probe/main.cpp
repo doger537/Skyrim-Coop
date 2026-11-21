@@ -9,6 +9,7 @@
 #include <Packet.hpp>
 #include <Messages/AuthenticationRequest.h>
 #include <Messages/RequestWorldCheckpoint.h>
+#include <Messages/PhysicsFrameMessages.h>
 #include <Messages/AuthenticationResponse.h>
 #include <Messages/AssignCharacterRequest.h>
 #include <Messages/AssignCharacterResponse.h>
@@ -97,6 +98,7 @@ struct Probe final : Client
     std::optional<NotifyPartyLocations> PartyLocations;
     uint32_t LocationNotifications{};
     std::optional<NotifyWorldCheckpoint> WorldCheckpointState;
+    std::optional<NotifyPhysicsFrame> PhysicsEnd;
     uint32_t WorldCheckpointNotifications{};
     void Rest(CoopSleepVote::Action aAction, uint8_t aHours = 0, uint64_t aRound = 0)
     {
@@ -180,6 +182,12 @@ struct Probe final : Client
                 PartyLocations = snapshot;
                 ++LocationNotifications;
             }
+        }
+        else if (message && message->GetOpcode() == NotifyPhysicsFrame::Opcode)
+        {
+            const auto& frame = *static_cast<const NotifyPhysicsFrame*>(message.get());
+            if (frame.IsValid() && frame.Action == NotifyPhysicsFrame::End)
+                PhysicsEnd = frame;
         }
         else if (message && message->GetOpcode() == NotifyWorldCheckpoint::Opcode)
         {
@@ -756,10 +764,52 @@ bool CheckQuestPolicy(const std::string& acAddress)
     Probe rejoin;
     rejoin.Request = guest.Request;
     rejoin.CheckJournal = guest.CheckJournal;
-    const bool passed = ConnectProbe(rejoin, acAddress, ResponseType::kAccepted) && rejoin.CampaignRevision == revision;
+    const bool rejoined = ConnectProbe(rejoin, acAddress, ResponseType::kAccepted) && rejoin.CampaignRevision == revision;
     rejoin.Close();
     host.Close();
-    std::cout << (passed ? "PASS: " : "FAIL: ") << "two post-Helgen characters admitted without script replay and the same guest can rejoin. Revision " << revision << '\n';
+    if (!rejoined)
+        return false;
+
+    Probe incompatible;
+    incompatible.Request = MakeRequest();
+    incompatible.AutoReady = false;
+    if (!ConnectProbe(incompatible, acAddress, ResponseType::kAccepted, false))
+        return false;
+    const auto pump = [&](const auto& aDone)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!aDone() && std::chrono::steady_clock::now() < deadline)
+        {
+            incompatible.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return aDone();
+    };
+    if (!pump([&] { return incompatible.Journals.size() == 2; }))
+        return false;
+    RequestCampaignReady report;
+    report.Nonce = incompatible.Nonce;
+    report.Revision = incompatible.CampaignRevision;
+    report.State = RequestCampaignReady::Detail;
+    report.Diff.Id = prologue;
+    report.Diff.LocalForm = kHelgenPrologue;
+    report.Diff.Type = 1;
+    report.Diff.EditorId = "MQ101";
+    report.Diff.Local = {true, true, {9, 317, 900, 1000}};
+    report.Diff.Problem = QuestAdmissionProblem::LocalProgress;
+    QuestReplayPlan preview;
+    if (PlanQuestReplay(completed, {}, false, report.Diff.Local, preview) || preview.Problem != report.Diff.Problem)
+        return false;
+    incompatible.SendMessage(report);
+    report.State = RequestCampaignReady::Refused;
+    report.SeedCount = 1;
+    incompatible.SendMessage(report);
+    const bool passed = pump([&]
+    {
+        return incompatible.Reply && incompatible.Reply->Type == ResponseType::kQuestAdmissionMismatch;
+    }) && !incompatible.Ready;
+    incompatible.Close();
+    std::cout << (passed ? "PASS: " : "FAIL: ") << "two post-Helgen characters admitted, same guest rejoined, incompatible route diagnosed. Revision " << revision << '\n';
     return passed;
 }
 
@@ -1187,6 +1237,38 @@ bool CheckPartyLocations(const std::string& acAddress)
 }
 
 
+void AckEmptyPhysicsFrame(Probe& aProbe)
+{
+    RequestPhysicsFrame ack;
+    ack.Action = RequestPhysicsFrame::Applied;
+    ack.Data = aProbe.PhysicsEnd->Data;
+    aProbe.SendMessage(ack);
+}
+
+bool WaitForRestoredPhysics(Probe& aHost, Probe& aGuest)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    bool acknowledged = false;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        aHost.Update();
+        aGuest.Update();
+        if (!acknowledged && aHost.PhysicsEnd && aGuest.PhysicsEnd)
+        {
+            if (aHost.PhysicsEnd->Data.Index || aGuest.PhysicsEnd->Data.Index || aHost.PhysicsEnd->Data.Digest != aGuest.PhysicsEnd->Data.Digest)
+                return false;
+            AckEmptyPhysicsFrame(aHost);
+            AckEmptyPhysicsFrame(aGuest);
+            acknowledged = true;
+        }
+        if (acknowledged && aHost.WorldCheckpointState && aHost.WorldCheckpointState->State == NotifyWorldCheckpoint::Phase::Resume &&
+            aGuest.WorldCheckpointState && aGuest.WorldCheckpointState->State == NotifyWorldCheckpoint::Phase::Resume)
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return false;
+}
+
 bool CheckWorldCheckpoints(const std::string& address, const char* apRecoveryFile = nullptr, bool aLeavePending = false)
 {
     using Phase = NotifyWorldCheckpoint::Phase;
@@ -1224,9 +1306,28 @@ bool CheckWorldCheckpoints(const std::string& address, const char* apRecoveryFil
     guest.SendMessage(request); request.Nonce = prepared.Nonce; host.SendMessage(request); host.SendMessage(request); settle();
     if (!check(phase(host, Phase::PrepareSave) && phase(guest, Phase::PrepareSave), "replayed preparation and a wrong nonce cannot start the native saves")) return false;
     guest.SendMessage(request);
-    if (!check(pump([&] { return phase(host, Phase::SaveNow) && phase(guest, Phase::SaveNow); }), "both preparation acknowledgements authorize the two native saves")) return false;
+    if (!check(pump([&] { return phase(host, Phase::CapturePhysics) && phase(guest, Phase::CapturePhysics); }),
+        "both preparation acknowledgements start canonical physics capture")) return false;
+    RequestPhysicsFrame end;
+    end.Action = RequestPhysicsFrame::End;
+    end.Data.Id = prepared.Id;
+    end.Data.Nonce = prepared.Nonce;
+    end.Data.NativeToWorld = 1.f;
+    host.SendMessage(end);
+    guest.SendMessage(end);
+    if (!check(pump([&] { return host.PhysicsEnd && guest.PhysicsEnd; }) &&
+        !host.PhysicsEnd->Data.Index && !guest.PhysicsEnd->Data.Index && host.PhysicsEnd->Data.Digest == guest.PhysicsEnd->Data.Digest,
+        "both clients receive the same canonical empty physics frame")) return false;
+    AckEmptyPhysicsFrame(host);
+    settle();
+    if (!check(phase(host, Phase::CapturePhysics), "one physical readback cannot authorize both saves")) return false;
+    AckEmptyPhysicsFrame(guest);
+    if (!check(pump([&] { return phase(host, Phase::SaveNow) && phase(guest, Phase::SaveNow); }),
+        "both physical readbacks authorize the two native saves")) return false;
     RequestWorldCheckpoint saved; saved.Action = Kind::Saved; saved.Id = prepared.Id; saved.Nonce = prepared.Nonce;
     saved.Contribution.Character = host.Request.CharacterId; saved.Contribution.Save.Bytes = 100; saved.Contribution.Save.Digest.fill(1);
+    saved.Contribution.Physics.Bytes = 80;
+    saved.Contribution.Physics.Digest.fill(3);
     guest.SendMessage(saved); host.SendMessage(saved); settle();
     if (!check(phase(host, Phase::SaveNow) && phase(guest, Phase::SaveNow), "one file receipt or another player's identity cannot commit a pair")) return false;
     saved.Contribution.Character = guest.Request.CharacterId; saved.Contribution.Save.Digest.fill(2); guest.SendMessage(saved);
@@ -1246,15 +1347,20 @@ bool CheckWorldCheckpoints(const std::string& address, const char* apRecoveryFil
     if (!check(pump([&] { return phase(host, Phase::LoadNow) && phase(guest, Phase::LoadNow); }) && host.WorldCheckpointState->WorldEpoch > oldEpoch,
         "both file checks atomically restore state and authorize a newer world epoch")) return false;
     const uint64_t newEpoch = host.WorldCheckpointState->WorldEpoch;
-    const auto hostRequest = host.Request, guestRequest = guest.Request;
+    auto hostRequest = host.Request, guestRequest = guest.Request;
+    hostRequest.CheckpointToken = guestRequest.CheckpointToken = prepared.Id;
+    hostRequest.CheckpointProof = {prepared.WorldId, manifest.Players[0]};
+    guestRequest.CheckpointProof = {prepared.WorldId, manifest.Players[1]};
     if (apRecoveryFile)
     {
         std::ofstream file(apRecoveryFile, std::ios::binary | std::ios::trunc);
-        const auto write = [&](uint64_t value, size_t bytes) { for (size_t i = 0; i < bytes; ++i) file.put(static_cast<char>(value >> (i * 8))); };
-        file.write("TCREC001", 8);
-        for (const auto* identity : {&hostRequest.CharacterId, &guestRequest.CharacterId})
-            for (const auto part : identity->Parts) write(part, 2);
-        write(prepared.Id, 8); write(newEpoch, 8);
+        Buffer buffer(512);
+        Buffer::Writer writer(&buffer);
+        writer.WriteBits(prepared.Id, 64);
+        writer.WriteBits(newEpoch, 64);
+        hostRequest.CheckpointProof.Serialize(writer);
+        guestRequest.CheckpointProof.Serialize(writer);
+        file.write(reinterpret_cast<const char*>(buffer.GetWriteData()), writer.Size());
         file.close();
         if (!check(!file.fail(), "synthetic checkpoint recovery identities are recorded")) return false;
     }
@@ -1269,9 +1375,7 @@ bool CheckWorldCheckpoints(const std::string& address, const char* apRecoveryFil
     guestReturn.Request.CheckpointToken = hostReturn.Request.CheckpointToken = prepared.Id;
     if (!check(ConnectProbe(guestReturn, address, ResponseType::kAccepted) && ConnectProbe(hostReturn, address, ResponseType::kAccepted),
         "both original characters can rejoin the restored checkpoint in reverse connection order")) return false;
-    const auto finish = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while ((!hostReturn.WorldCheckpointState || hostReturn.WorldCheckpointState->State != Phase::Resume) && std::chrono::steady_clock::now() < finish)
-    { hostReturn.Update(); guestReturn.Update(); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+    if (!check(WaitForRestoredPhysics(hostReturn, guestReturn), "both clients align with the restored canonical frame")) return false;
     if (!check(hostReturn.WorldEpoch == newEpoch && guestReturn.WorldEpoch == newEpoch && hostReturn.WorldCheckpointState &&
         hostReturn.WorldCheckpointState->State == Phase::Resume && hostReturn.PartyLeader && !guestReturn.PartyLeader,
         "resume preserves the epoch and original host even when the guest reconnects first")) return false;
@@ -1290,27 +1394,32 @@ bool CheckCheckpointRecovery(const std::string& address, const char* apRecoveryF
     using Phase = NotifyWorldCheckpoint::Phase;
     const auto check = [](bool passed, const char* name) { std::cout << (passed ? "PASS: " : "FAIL: ") << name << std::endl; return passed; };
     std::ifstream file(apRecoveryFile, std::ios::binary);
-    std::array<uint8_t, 56> bytes{};
-    file.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
-    if (!file || file.peek() != std::char_traits<char>::eof() || std::memcmp(bytes.data(), "TCREC001", 8))
+    Buffer buffer(512);
+    // Two 64-bit values followed by a fixed-size proof for each character.
+    constexpr size_t kProofBytes = 32 + 16 + 3 * (8 + 32);
+    constexpr size_t kFixtureBytes = 16 + 2 * kProofBytes;
+    file.read(reinterpret_cast<char*>(buffer.GetWriteData()), kFixtureBytes);
+    if (!file || file.peek() != std::char_traits<char>::eof())
         return check(false, "recovery fixture is exact, bounded synthetic data");
-    size_t cursor = 8;
-    const auto read = [&](size_t count) { uint64_t value{}; for (size_t i = 0; i < count; ++i) value |= uint64_t(bytes[cursor++]) << (i * 8); return value; };
+    Buffer::Reader reader(&buffer);
+    uint64_t checkpoint{}, previousEpoch{};
     Probe host, guest; host.Request = MakeRequest(); guest.Request = MakeRequest();
-    for (auto* identity : {&host.Request.CharacterId, &guest.Request.CharacterId})
-        for (auto& part : identity->Parts) part = static_cast<uint16_t>(read(2));
-    host.Request.CheckpointToken = guest.Request.CheckpointToken = read(8);
-    const uint64_t previousEpoch = read(8);
+    if (!reader.ReadBits(checkpoint, 64) || !reader.ReadBits(previousEpoch, 64) ||
+        !host.Request.CheckpointProof.Deserialize(reader) || !guest.Request.CheckpointProof.Deserialize(reader))
+        return check(false, "recovery fixture contains both paired-save proofs");
+    for (auto* request : {&host.Request, &guest.Request})
+    {
+        request->CharacterId = request->CheckpointProof.Player.Character;
+        request->CheckpointToken = checkpoint;
+    }
     if (aPending)
     {
-        Probe outsider; outsider.Request = MakeRequest(); outsider.Request.CheckpointToken = host.Request.CheckpointToken;
+        Probe outsider; outsider.Request = MakeRequest();
         if (!check(ConnectProbe(outsider, address, ResponseType::kContentMismatch), "pending recovery refuses an unrelated character")) return false;
     }
     if (!check(ConnectProbe(guest, address, ResponseType::kAccepted) && ConnectProbe(host, address, ResponseType::kAccepted),
         "original checkpoint characters authenticate after server restart")) return false;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (aPending && (!host.WorldCheckpointState || host.WorldCheckpointState->State != Phase::Resume) && std::chrono::steady_clock::now() < deadline)
-    { host.Update(); guest.Update(); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+    if (aPending && !check(WaitForRestoredPhysics(host, guest), "restored physical frame is acknowledged after restart")) return false;
     if (!check(host.WorldEpoch > previousEpoch && guest.WorldEpoch == host.WorldEpoch, "restart has a fresh epoch with the same restored pair")) return false;
     if (aPending && !check(host.WorldCheckpointState && host.WorldCheckpointState->State == Phase::Resume && host.PartyLeader && !guest.PartyLeader,
         "unfinished rollback survives restart and restores the original host")) return false;

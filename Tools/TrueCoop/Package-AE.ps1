@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$NativeRevision = '', [string]$Distribution = '', [string]$Destination = '', [string]$InstallGuide = '', [string]$QuestProbePath = '')
+param([string]$NativeRevision = '', [string]$Distribution = '', [string]$Destination = '', [string]$InstallGuide = '', [string]$QuestProbePath = '', [switch]$TestsRun)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $workspace = (Resolve-Path (Join-Path $repo '../..')).Path
@@ -93,7 +93,7 @@ $protocol = $Matches[1]
 foreach ($name in @('PLACED_PHYSICS_INSTALL_RU.md','PLACED_PHYSICS_CHECKPOINTS.md')) {
     Copy-Item -LiteralPath (Join-Path $repo "docs/truecoop/$name") -Destination $info
 }
-[ordered]@{NativeRevision=$revision;Build=$version;Protocol=$protocol;CorePluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/SkyrimTogether.esp')).Hash;GrantCursorPluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/TrueCoopWorldState.esp')).Hash;AutomaticQuestGrantPolicyEnabled=$false;AcceleratedQuestStageEffectsEnabled=$true;OrdinaryWorldItemReplicationEnabled=$true;PlacedPhysicsReplicationEnabled=$true;PhysicalCheckpointAlignmentEnabled=$true;WorldSchema=6;CheckpointManifestSchema=2;MaxLiveWorldItems=64;TestsRun=$false;Runtime='1.7.104.0';Profile='Identical active AE content';GameTested=$false;CommonSELauncherIncluded=$false;DiagnosticQuestIncluded=[bool]$QuestProbePath} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $info 'BUILD.json') -Encoding utf8
+[ordered]@{NativeRevision=$revision;Build=$version;Protocol=$protocol;CorePluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/SkyrimTogether.esp')).Hash;GrantCursorPluginSHA256=(Get-FileHash -LiteralPath (Join-Path $repo 'GameFiles/Skyrim/TrueCoopWorldState.esp')).Hash;AutomaticQuestGrantPolicyEnabled=$false;AcceleratedQuestStageEffectsEnabled=$true;OrdinaryWorldItemReplicationEnabled=$true;PlacedPhysicsReplicationEnabled=$true;PhysicalCheckpointAlignmentEnabled=$true;WorldSchema=6;CheckpointManifestSchema=2;MaxLiveWorldItems=64;TestsRun=[bool]$TestsRun;Runtime='1.7.104.0';Profile='Identical active AE content';GameTested=$false;CommonSELauncherIncluded=$false;DiagnosticQuestIncluded=[bool]$QuestProbePath} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $info 'BUILD.json') -Encoding utf8
 $records = @(foreach ($file in Get-ChildItem -LiteralPath $stage -File -Recurse) {
     [pscustomobject]@{Path=[IO.Path]::GetRelativePath($stage,$file.FullName).Replace('\','/');Bytes=$file.Length;SHA256=(Get-FileHash -LiteralPath $file.FullName).Hash}
 })

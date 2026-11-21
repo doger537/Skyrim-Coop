@@ -46,7 +46,7 @@ struct GameServer final : Server
     void Initialize();
     void Kill();
     void StopForWorldError(const String& acReason);
-    void RejectCampaign(ConnectionId_t aConnectionId, const String& acReason);
+    void RejectCampaign(ConnectionId_t aConnectionId, const String& acReason, bool aQuestMismatch = false);
 
     bool CheckMoPo();
     void BindMessageHandlers();
@@ -141,6 +141,7 @@ private:
         uint64_t Revision{};
         bool SeedOwner{};
         Vector<QuestJournal> Seed;
+        uint32_t QuestDetails{};
         std::chrono::steady_clock::time_point Deadline{std::chrono::steady_clock::now() + std::chrono::seconds(90)};
     };
     TiltedPhoques::Map<ConnectionId_t, PendingCampaign> m_pendingCampaigns;

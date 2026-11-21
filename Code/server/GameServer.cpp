@@ -224,7 +224,8 @@ GameServer::GameServer(Console::ConsoleRegistry& aConsole) noexcept
     }
     else if (adapterError)
         adapters = "unreadable adapter path";
-    if (!campaign.Open(std::filesystem::path(reinterpret_cast<const char8_t*>(sWorldPath.value())), adapters))
+    const std::filesystem::path worldPath(reinterpret_cast<const char8_t*>(sWorldPath.value()));
+    if (!campaign.Open(worldPath, adapters))
     {
         spdlog::critical("Cannot open persistent campaign: {}", campaign.Error());
         Kill();
@@ -239,7 +240,14 @@ GameServer::GameServer(Console::ConsoleRegistry& aConsole) noexcept
         m_contentContract = campaign.GetContract()->Content;
         m_sessionRuntime = campaign.GetContract()->Runtime;
         m_pWorld->ctx().at<ModsComponent>().BindContract(*m_contentContract);
-        spdlog::info("Restored campaign {} at revision {}", campaign.WorldId(), campaign.Revision());
+    }
+    if (campaign.IsReady())
+    {
+        std::error_code pathError;
+        const auto resolved = std::filesystem::absolute(worldPath, pathError).lexically_normal().u8string();
+        spdlog::info("Campaign database path={} world={} revision={} quest_revision={} initialized={}",
+                     pathError ? sWorldPath.value() : reinterpret_cast<const char*>(resolved.c_str()),
+                     campaign.WorldId(), campaign.Revision(), campaign.QuestRevision(), campaign.IsBootstrapped());
     }
 
     BindMessageHandlers();

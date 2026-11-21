@@ -444,6 +444,8 @@ void TransportService::HandleAuthenticationResponse(const AuthenticationResponse
     switch (acMessage.Type)
     {
     case AR::kContentMismatch: ErrorInfo += "\"error\":\"content_mismatch\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acMessage.ContentError) + "\"}"; break;
+    case AR::kCampaignRefused: ErrorInfo += "\"error\":\"campaign_refused\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acMessage.ContentError) + "\"}"; break;
+    case AR::kQuestAdmissionMismatch: ErrorInfo += "\"error\":\"quest_admission_mismatch\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acMessage.ContentError) + "\"}"; break;
     case AR::kWrongVersion:
         ErrorInfo += "\"error\": \"wrong_version\", \"data\": {";
         ErrorInfo += fmt::format("\"expectedVersion\": \"{}\", \"version\": \"{}\"", acMessage.Version, BUILD_COMMIT);

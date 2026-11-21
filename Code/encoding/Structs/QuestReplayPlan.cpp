@@ -12,37 +12,37 @@ bool NeedsSharedJournal(const GameId& acId, uint8_t aType, const LocalQuestState
 }
 
 bool PlanQuestReplay(
-    const QuestJournal& acJournal, const TiltedPhoques::Vector<uint16_t>& acReplayStages, bool aReplayLifecycle, const LocalQuestState& acLocal, QuestReplayPlan& aPlan) noexcept
+    const QuestJournal& acJournal, const TiltedPhoques::Vector<uint16_t>& acReplayStages, bool aReplayLifecycle, const LocalQuestState& acLocal, QuestReplayPlan& aPlan, bool aNormalizeHistory) noexcept
 {
     aPlan = {};
-    const auto fail = [&](const char* apReason)
+    const auto fail = [&](QuestAdmissionProblem aReason)
     {
         aPlan.Apply.clear();
-        aPlan.Error = apReason;
+        aPlan.Problem = aReason;
         return false;
     };
     if (!acJournal.IsValid() || !acLocal.Exists)
-        return fail("Shared quest is invalid or missing from the game");
+        return fail(QuestAdmissionProblem::MissingOrUnsupported);
     using namespace QuestSyncPolicy;
     const auto policy = Classify(acJournal.Id, acJournal.Type);
     if (policy.Type == Category::Local)
         return true;
     const bool localPreparation = IsPreparation(policy, acLocal.Reached);
-    if (IsPreparedImport(acJournal) && localPreparation)
+    if (aNormalizeHistory && IsPreparedImport(acJournal) && localPreparation)
         return true;
 
     const bool radiantProgress = policy.Type == Category::Radiant && std::any_of(
         acJournal.Events.begin(), acJournal.Events.end(),
         [&](const auto& event) { return event.Status == 0 && event.Stage > policy.PreparationThrough; });
     if (radiantProgress && localPreparation)
-        return fail("The campaign has an accepted radiant quest; the local save has no accepted progress");
+        return fail(QuestAdmissionProblem::AcceptedRadiant);
     if (policy.Type == Category::Radiant)
         aReplayLifecycle = false;
 
     const auto localHistory = [&](uint16_t aStage)
     {
-        return (radiantProgress && aStage <= policy.PreparationThrough) ||
-               IsHistoricalStage(acJournal, acLocal.Stopped, acLocal.Reached, aStage);
+        return aNormalizeHistory && ((radiantProgress && aStage <= policy.PreparationThrough) ||
+                                     IsHistoricalStage(acJournal, acLocal.Stopped, acLocal.Reached, aStage));
     };
     std::set<uint16_t> expected;
     std::set<uint16_t> reached;
@@ -54,10 +54,10 @@ bool PlanQuestReplay(
             expected.insert(event.Stage);
     for (const auto& decision : acJournal.Decisions)
         if (!expected.contains(decision.Stage) || !reached.contains(decision.Stage))
-            return fail("A committed quest decision is missing from the local save");
+            return fail(QuestAdmissionProblem::Decision);
     for (uint16_t stage : reached)
         if (!expected.contains(stage))
-            return fail("Local quest contains progress outside the shared campaign; load a matching campaign save");
+            return fail(QuestAdmissionProblem::LocalProgress);
     const auto canReplay = [&](const auto& event)
     {
         return policy.Type != Category::Radiant && !event.Bootstrap && std::find(acReplayStages.begin(), acReplayStages.end(), event.Stage) != acReplayStages.end();
@@ -69,10 +69,10 @@ bool PlanQuestReplay(
     if (!running && (!acJournal.Stopped || hasMissing))
     {
         if (!aReplayLifecycle || acJournal.Epoch != 1)
-            return fail("Quest lifecycle differs; automatic start/restart is not approved for this quest");
+            return fail(QuestAdmissionProblem::Lifecycle);
         const auto start = std::find_if(acJournal.Events.begin(), acJournal.Events.end(), [](const auto& event) { return event.Status == 1; });
         if (start == acJournal.Events.end() || !canReplay(*start))
-            return fail("Imported or unapproved quest start cannot be replayed");
+            return fail(QuestAdmissionProblem::UnapprovedStart);
         aPlan.Apply.push_back(*start);
         reached.insert(start->Stage);
         running = true;
@@ -82,7 +82,7 @@ bool PlanQuestReplay(
         if (event.Status == 2 || localHistory(event.Stage) || reached.contains(event.Stage) || (event.Status == 1 && event.Stage == 0))
             continue;
         if (!canReplay(event))
-            return fail("Missing quest stage is not approved for replay; load a matching campaign save");
+            return fail(QuestAdmissionProblem::UnapprovedStage);
         aPlan.Apply.push_back({0, event.Stage, false});
         reached.insert(event.Stage);
     }
@@ -90,7 +90,7 @@ bool PlanQuestReplay(
     {
         const auto stop = std::find_if(acJournal.Events.rbegin(), acJournal.Events.rend(), [](const auto& event) { return event.Status == 2; });
         if (!aReplayLifecycle || acJournal.Epoch != 1 || stop == acJournal.Events.rend() || stop->Bootstrap)
-            return fail("Quest stop differs and its lifecycle replay is not approved");
+            return fail(QuestAdmissionProblem::UnapprovedStop);
         aPlan.Apply.push_back(*stop);
     }
     return true;

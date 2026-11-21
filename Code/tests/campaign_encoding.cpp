@@ -61,6 +61,7 @@ TEST_CASE("Campaign barrier and baseline messages survive factory encoding", "[c
     checkpoint.SeedOwner = true;
     checkpoint.BaselinePending = true;
     checkpoint.AllowMisc = true;
+    checkpoint.StartupDiagnosticOnly = true;
     checkpoint.MiscQuests = {GameId(78, 0x800)};
     const auto boundary = RoundTrip<NotifyCampaignCheckpoint, ServerMessageFactory>(checkpoint);
     REQUIRE(boundary.Decoded);
@@ -73,6 +74,31 @@ TEST_CASE("Campaign barrier and baseline messages survive factory encoding", "[c
     REQUIRE(boundary.BaselinePending);
     REQUIRE(boundary.AllowMisc);
     REQUIRE(boundary.MiscQuests == checkpoint.MiscQuests);
+}
+
+TEST_CASE("Quest admission diagnostics carry bounded quest observations", "[campaign.encoding][quest.admission]")
+{
+    RequestCampaignReady message;
+    message.State = RequestCampaignReady::Detail;
+    message.Nonce = 88;
+    message.Revision = 5;
+    message.Diff.Id = GameId(0, 0x2BF9C);
+    message.Diff.LocalForm = 0x2BF9C;
+    message.Diff.Type = 1;
+    message.Diff.EditorId = "MQ102A";
+    message.Diff.Local = {true, false, {3, 5, 10}};
+    message.Diff.Problem = QuestAdmissionProblem::LocalProgress;
+    const auto decoded = RoundTrip<RequestCampaignReady, ClientMessageFactory>(message);
+    REQUIRE(decoded.State == RequestCampaignReady::Detail);
+    REQUIRE(decoded.Diff.IsValid());
+    REQUIRE(decoded.Diff == message.Diff);
+    const QuestJournal journal{message.Diff.Id, 1, 1, true, false, {{0, 5, true}, {0, 10, true}, {0, 20, false}}};
+    const auto formatted = DescribeQuestAdmission(decoded.Diff, &journal);
+    REQUIRE(formatted.find("Bootstrap=[5,10]") != String::npos);
+    REQUIRE(formatted.find("Both=[5,10] LocalOnly=[3] ServerOnly=[20]") != String::npos);
+    REQUIRE(formatted.find("Epoch=unknown") != String::npos);
+    message.Diff.EditorId.assign(QuestAdmissionDiff::kMaxEditorId + 1, 'x');
+    REQUIRE_FALSE(RoundTrip<RequestCampaignReady, ClientMessageFactory>(message).Diff.IsValid());
 }
 
 TEST_CASE("Quest journal encoding rejects oversized or invalid state", "[campaign.encoding]")

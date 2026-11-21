@@ -7,7 +7,6 @@
 #include <Components.h>
 #include <TiltedCore/ViewBuffer.hpp>
 #include <Messages/PartyCreateRequest.h>
-#include <Services/QuestService.h>
 #include <Services/QuestGrantService.h>
 #include <algorithm>
 #include <cstring>
@@ -141,7 +140,7 @@ void WorldCheckpointService::Begin(Player& aLeader, uint64_t aLoadId) noexcept
     m_control = {};
     m_control.WorldId = m_world.GetCampaign().WorldId();
     m_control.PreviousEpoch = m_world.GetCampaign().WorldEpoch();
-    if (m_world.ctx().at<QuestService>().HasPendingAuthority() || m_world.ctx().at<QuestGrantService>().HasPending() || m_world.ctx().at<WorldItemService>().HasPending())
+    if (m_world.ctx().at<QuestGrantService>().HasPending() || m_world.ctx().at<WorldItemService>().HasPending())
     {
         m_control.State = NotifyWorldCheckpoint::Phase::Cancelled;
         m_control.Failure = Error::Busy;
