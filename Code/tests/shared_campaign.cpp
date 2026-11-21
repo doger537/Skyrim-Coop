@@ -1,5 +1,7 @@
 #include <catch2/catch.hpp>
 #include <CampaignState.h>
+#include <Structs/QuestReplayPlan.h>
+#include <Structs/QuestSyncPolicy.h>
 #include <sqlite3.h>
 
 namespace
@@ -301,4 +303,125 @@ TEST_CASE("Legacy object worlds upgrade their campaign contract and old servers 
     Campaign::Contract decoded;
     REQUIRE(Campaign::Decode(record.Value, decoded));
     REQUIRE(decoded.Content == QuestContent());
+}
+
+TEST_CASE("Two post-Helgen characters with separate offer histories can enter and rejoin the same campaign", "[quest.admission]")
+{
+    using namespace QuestSyncPolicy;
+    using Result = Campaign::State::QuestResult;
+    QuestDirectory directory;
+    const GameId prologue(0, kHelgenPrologue), hadvar(0, kHadvarRoute), scene(0, kHelgenDragonAttack);
+    const GameId hostOffer(0, 0x00025231), guestOffer(0, 0x0001CEEE);
+    const QuestJournal completed{prologue, 1, 1, true, true,
+        {{1, 0, true}, {0, 8, true}, {0, 318, true}, {0, 900, true}, {0, 1000, true}, {2, 1000, true}}};
+    const QuestJournal route{hadvar, 1, 1, true, false, {{1, 0, true}, {0, 5, true}, {0, 10, true}, {0, 20, true}}};
+    const QuestJournal prepared{hostOffer, 1, 5, true, false, {{1, 0, true}, {0, 0, true}, {0, 1, true}}};
+
+    const auto check = [&](const Campaign::State& acState)
+    {
+        REQUIRE(acState.IsBootstrapped());
+        REQUIRE(acState.Quests().size() == 2);
+        QuestReplayPlan plan;
+        REQUIRE(PlanQuestReplay(acState.FindQuest(prologue)->Data, {}, false, {true, true, {8, 318, 900, 1000}}, plan));
+        REQUIRE(PlanQuestReplay(acState.FindQuest(hadvar)->Data, {}, false, {true, false, {5, 10, 20}}, plan));
+        REQUIRE(PlanQuestReplay(acState.FindQuest(prologue)->Data, {}, false, {true, true, {8, 317, 318, 900, 1000}}, plan));
+        REQUIRE(PlanQuestReplay(acState.FindQuest(hadvar)->Data, {}, false, {true, false, {3, 5, 10, 20}}, plan));
+        REQUIRE(plan.Apply.empty());
+
+        REQUIRE_FALSE(NeedsSharedJournal(guestOffer, 5, {true, false, {0, 1}}));
+        REQUIRE_FALSE(NeedsSharedJournal(scene, 1, {true, false, {15, 110, 195}}));
+        REQUIRE(NeedsSharedJournal(guestOffer, 5, {true, false, {0, 1, 10}}));
+        REQUIRE_FALSE(PlanQuestReplay(acState.FindQuest(prologue)->Data, {}, false, {true, true, {9, 317, 900, 1000}}, plan));
+        REQUIRE_FALSE(PlanQuestReplay(acState.FindQuest(hadvar)->Data, {0, 10, 20}, true, {true, false, {3, 5}}, plan));
+        REQUIRE(plan.Apply.empty());
+    };
+
+    uint64_t revision{};
+    {
+        Campaign::State state;
+        REQUIRE(state.Open(directory.File));
+        REQUIRE(state.Bind("1.7.104.0", QuestContent()));
+        REQUIRE_FALSE(state.IsBootstrapped());
+        REQUIRE(state.BootstrapQuests({completed, route, prepared}, false));
+        REQUIRE_FALSE(state.BootstrapQuests({}, false));
+        revision = state.QuestRevision();
+        REQUIRE(state.UpdateQuest(scene, 1, 0, 195, 1, true) == Result::Ignored);
+        REQUIRE(state.UpdateQuest(hostOffer, 1, 1, 0, 5, false) == Result::Ignored);
+        REQUIRE(state.UpdateQuest(hostOffer, 1, 0, 1, 5, false) == Result::Ignored);
+        REQUIRE(state.UpdateQuest(hostOffer, 1, 2, 1, 5, false) == Result::Ignored);
+        REQUIRE(state.QuestRevision() == revision);
+        check(state);
+    }
+    Campaign::State rejoined;
+    REQUIRE(rejoined.Open(directory.File));
+    REQUIRE(rejoined.QuestRevision() == revision);
+    REQUIRE_FALSE(rejoined.BootstrapQuests({}, false));
+    check(rejoined);
+}
+
+TEST_CASE("A legacy radiant offer remains private and its first real stage replaces it atomically", "[quest.admission][quest.migration]")
+{
+    using Result = Campaign::State::QuestResult;
+    QuestDirectory directory;
+    const GameId offer(0, 0x00025231); // CR04
+    const QuestJournal prepared{offer, 1, 5, true, false, {{1, 0, true}, {0, 0, true}, {0, 1, true}}};
+    {
+        Campaign::State state;
+        REQUIRE(state.Open(directory.File));
+        REQUIRE(state.Bind("1.7.104.0", QuestContent()));
+        REQUIRE(state.BootstrapQuests({}, false));
+    }
+    WorldStore::Record legacy;
+    legacy.Key = "quest/skyrim.esm/152113";
+    REQUIRE(Campaign::Encode(prepared, legacy.Value));
+    uint64_t revision{};
+    {
+        WorldStore raw;
+        REQUIRE(raw.Open(directory.File));
+        REQUIRE(raw.Commit({legacy}, revision) == WorldStore::WriteResult::Committed);
+    }
+    {
+        Campaign::State state;
+        REQUIRE(state.Open(directory.File));
+        REQUIRE(state.IsBootstrapped());
+        REQUIRE(state.FindQuest(offer) == nullptr);
+        REQUIRE(state.QuestRevision() == revision);
+        REQUIRE(state.PreviewQuest(offer, 1, 0, 10, 5, false) == Result::Applied);
+        REQUIRE(state.Revision() == revision);
+        REQUIRE(state.FindQuest(offer) == nullptr);
+        REQUIRE(state.UpdateQuest(offer, 1, 0, 10, 5, false) == Result::Applied);
+        REQUIRE(state.UpdateQuest(offer, 1, 0, 10, 5, false) == Result::Duplicate);
+        const auto& accepted = state.FindQuest(offer)->Data;
+        REQUIRE(accepted.Started);
+        REQUIRE(accepted.Events == TiltedPhoques::Vector<QuestJournal::Event>{{0, 10, false}});
+        QuestReplayPlan plan;
+        REQUIRE_FALSE(PlanQuestReplay(accepted, {0, 1, 10}, true, {true, false, {0, 1}}, plan));
+        REQUIRE_FALSE(PlanQuestReplay(accepted, {0, 1, 10}, true, {true, false, {0, 1, 20}}, plan));
+        REQUIRE(PlanQuestReplay(accepted, {}, false, {true, false, {0, 1, 10}}, plan));
+        REQUIRE(plan.Apply.empty());
+
+        REQUIRE(state.UpdateQuest(offer, 1, 2, 0, 5, false) == Result::Applied);
+        REQUIRE(state.UpdateQuest(offer, 2, 1, 0, 5, false) == Result::Ignored);
+        REQUIRE(state.UpdateQuest(offer, 2, 0, 1, 5, false) == Result::Ignored);
+        REQUIRE(state.FindQuest(offer)->Data.Epoch == 1);
+        REQUIRE(state.UpdateQuest(offer, 2, 0, 10, 5, false) == Result::Applied);
+        REQUIRE(state.UpdateQuest(offer, 1, 0, 20, 5, false) == Result::Conflict);
+        revision = state.QuestRevision();
+    }
+    Campaign::State restarted;
+    REQUIRE(restarted.Open(directory.File));
+    REQUIRE(restarted.QuestRevision() == revision);
+    REQUIRE(restarted.FindQuest(offer)->Data.Epoch == 2);
+    REQUIRE(restarted.FindQuest(offer)->Data.Started);
+    REQUIRE(restarted.FindQuest(offer)->Data.Events == TiltedPhoques::Vector<QuestJournal::Event>{{0, 10, false}});
+}
+
+TEST_CASE("Admission cannot replay a missing committed story decision", "[quest.admission]")
+{
+    const QuestJournal story{GameId(0, 0x0004E50D), 1, 1, true, false,
+        {{1, 0, false}, {0, 20, false}}, {{"side", 20}}};
+    QuestReplayPlan plan;
+    REQUIRE_FALSE(PlanQuestReplay(story, {0, 20}, true, {true, false, {0}}, plan));
+    REQUIRE(plan.Apply.empty());
+    REQUIRE(PlanQuestReplay(story, {}, false, {true, false, {0, 20}}, plan));
 }

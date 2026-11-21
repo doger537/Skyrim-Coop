@@ -511,7 +511,7 @@ void TransportService::HandleNotifySettingsChange(const NotifySettingsChange& ac
 void TransportService::FailCampaign(const String& acReason) noexcept
 {
     ConnectionErrorEvent event;
-    event.ErrorDetail = "{\"error\":\"content_mismatch\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acReason) + "\"}}";
+    event.ErrorDetail = "{\"error\":\"campaign_refused\",\"data\":{\"reason\":\"" + ContentCompatibility::EscapeJson(acReason) + "\"}}";
     m_dispatcher.trigger(event);
     Close();
 }

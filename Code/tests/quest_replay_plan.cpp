@@ -61,14 +61,14 @@ TEST_CASE("A local-only Companions offer is eligible for admission until its fir
 {
     const GameId offer(0, 0x0001CEEE); // CR01
     LocalQuestState local{true, false, {0, 1}};
-    REQUIRE(IsUnacceptedCompanionsOffer(offer, 5, local));
-    REQUIRE_FALSE(IsUnacceptedCompanionsOffer(GameId(1, offer.BaseId), 5, local));
-    REQUIRE_FALSE(IsUnacceptedCompanionsOffer(GameId(0, 0x0004B2D9), 5, local));
+    REQUIRE_FALSE(NeedsSharedJournal(offer, 5, local));
+    REQUIRE(NeedsSharedJournal(GameId(1, offer.BaseId), 5, local));
+    REQUIRE(NeedsSharedJournal(GameId(0, 0x0004B2D9), 5, local));
     local.Reached.push_back(10);
-    REQUIRE_FALSE(IsUnacceptedCompanionsOffer(offer, 5, local));
+    REQUIRE(NeedsSharedJournal(offer, 5, local));
 }
 
-TEST_CASE("Different completed Helgen routes can join without replaying the prologue", "[quest.replay]")
+TEST_CASE("Completed Helgen histories can differ on audited stages without replay", "[quest.replay]")
 {
     QuestJournal journal;
     journal.Id = GameId(0, QuestSyncPolicy::kHelgenPrologue);
@@ -90,6 +90,15 @@ TEST_CASE("Different completed Helgen routes can join without replaying the prol
     SECTION("An incomplete imported run stays strict")
     {
         journal.Events[3].Stage = 800;
+    }
+    SECTION("The completed tutorial must agree on the chosen guide")
+    {
+        journal.Events.push_back({0, 8, true}); // Hadvar
+        local.Reached.push_back(9); // Ralof
+    }
+    SECTION("Unaudited prologue progress remains significant after escape")
+    {
+        local.Reached.push_back(1001);
     }
     SECTION("A later run stays strict")
     {

@@ -77,7 +77,7 @@ private:
     void OnQuestJournal(const NotifyQuestJournal&) noexcept;
     bool CheckCampaign(bool aApply, String& aError) noexcept;
     bool SeedCampaign(uint32_t& aCount, String& aError) noexcept;
-    bool IsSharedQuest(TESQuest* apQuest) const noexcept;
+    bool IsSharedQuest(TESQuest* apQuest, const GameId& acId) const noexcept;
     void SendQuestUpdate(uint32_t aFormId, uint16_t aStage, uint8_t aStatus, uint8_t aType) noexcept;
     void HoldStage(TESQuest* apQuest, uint16_t aStage) noexcept;
     // The quest's held stages, while it has stages to apply or fragments to wait for. Drops the stages that can't be
@@ -93,6 +93,7 @@ private:
         uint32_t Epoch{1};
         uint64_t Revision{};
         bool Stopped{};
+        bool RadiantStartPending{};
     };
     Map<uint32_t, Cursor> m_cursors;
     NotifyCampaignCheckpoint m_checkpoint;

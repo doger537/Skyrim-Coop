@@ -4,62 +4,11 @@
 #include <iterator>
 #include <set>
 
-namespace
+bool NeedsSharedJournal(const GameId& acId, uint8_t aType, const LocalQuestState& acLocal) noexcept
 {
-bool BothCompletedHelgen(const QuestJournal& acJournal, const LocalQuestState& acLocal) noexcept
-{
-    if (acJournal.Id.ModId != 0 || acJournal.Id.BaseId != QuestSyncPolicy::kHelgenPrologue ||
-        acJournal.Epoch != 1 || acJournal.Type != 1 || !acJournal.Started || !acJournal.Stopped ||
-        !acLocal.Stopped || !acJournal.Decisions.empty() ||
-        !std::all_of(acJournal.Events.begin(), acJournal.Events.end(), [](const auto& event) { return event.Bootstrap; }))
-        return false;
-
-    for (uint16_t stage : {QuestSyncPolicy::kHelgenEscapeStage, QuestSyncPolicy::kHelgenCompletionStage})
-    {
-        if (std::find(acLocal.Reached.begin(), acLocal.Reached.end(), stage) == acLocal.Reached.end() ||
-            !std::any_of(acJournal.Events.begin(), acJournal.Events.end(),
-                         [stage](const auto& event) { return event.Status == 0 && event.Stage == stage; }))
-            return false;
-    }
-    return true;
-}
-
-bool CanAcceptLocalAlduinCleanup(const QuestJournal& acJournal, const LocalQuestState& acLocal) noexcept
-{
-    using namespace QuestSyncPolicy;
-    if (acJournal.Id.ModId != 0 || acJournal.Id.BaseId != kHadvarRoute || acJournal.Type != 1 ||
-        acJournal.Epoch != 1 || !acJournal.Started || acJournal.Stopped != acLocal.Stopped || !acJournal.Decisions.empty())
-        return false;
-
-    // Stage 3 disables and relocates the prologue's Alduin reference. Once
-    // both saves have reached the Hadvar-to-Riverwood scene, keep that local
-    // setup history without running its Papyrus fragment again.
-    return std::find(acLocal.Reached.begin(), acLocal.Reached.end(), kHadvarRiverwoodSceneStage) != acLocal.Reached.end() &&
-           std::any_of(acJournal.Events.begin(), acJournal.Events.end(),
-                       [](const auto& event) { return event.Status == 0 && event.Stage == kHadvarRiverwoodSceneStage; }) &&
-           std::none_of(acJournal.Events.begin(), acJournal.Events.end(),
-                        [](const auto& event) { return event.Stage == kHadvarAlduinCleanupStage && (event.Status != 0 || !event.Bootstrap); });
-}
-
-bool CanLeaveCompanionsOfferToSkyrim(const QuestJournal& acJournal, const LocalQuestState& acLocal) noexcept
-{
-    if (acJournal.Epoch != 1 || !acJournal.Started || acJournal.Stopped || !acJournal.Decisions.empty() || acJournal.Events.empty() ||
-        !IsUnacceptedCompanionsOffer(acJournal.Id, acJournal.Type, acLocal))
-        return false;
-
-    return std::all_of(acJournal.Events.begin(), acJournal.Events.end(), [](const auto& event)
-                       { return event.Bootstrap && ((event.Status == 0 && event.Stage <= 1) || (event.Status == 1 && event.Stage == 0)); });
-}
-} // namespace
-
-bool IsUnacceptedCompanionsOffer(const GameId& acId, uint8_t aType, const LocalQuestState& acLocal) noexcept
-{
-    // The stage-zero fragments of these quests call CompanionsRadiantQuest.Setup,
-    // which registers an offer and sets stage 1. The first objective is at stage 10.
-    constexpr uint32_t kOfferQuests[]{0x0001CEEE, 0x00025185, 0x00025231, 0x0002522F, 0x000C18E1, 0x00025250, 0x00025251}; // CR01, CR02, CR04-CR08
-    return acLocal.Exists && acId.ModId == 0 && aType == 5 &&
-           std::find(std::begin(kOfferQuests), std::end(kOfferQuests), acId.BaseId) != std::end(kOfferQuests) &&
-           std::all_of(acLocal.Reached.begin(), acLocal.Reached.end(), [](uint16_t stage) { return stage <= 1; });
+    const auto policy = QuestSyncPolicy::Classify(acId, aType);
+    return acLocal.Exists && (!acLocal.Stopped || !acLocal.Reached.empty()) &&
+           policy.Type != QuestSyncPolicy::Category::Local && !QuestSyncPolicy::IsPreparation(policy, acLocal.Reached);
 }
 
 bool PlanQuestReplay(
@@ -74,37 +23,49 @@ bool PlanQuestReplay(
     };
     if (!acJournal.IsValid() || !acLocal.Exists)
         return fail("Shared quest is invalid or missing from the game");
-    // Both players escaped Helgen before this campaign. Keep their local
-    // route history without replaying either set of prologue scripts.
-    if (BothCompletedHelgen(acJournal, acLocal))
+    using namespace QuestSyncPolicy;
+    const auto policy = Classify(acJournal.Id, acJournal.Type);
+    if (policy.Type == Category::Local)
         return true;
-    if (CanLeaveCompanionsOfferToSkyrim(acJournal, acLocal))
+    const bool localPreparation = IsPreparation(policy, acLocal.Reached);
+    if (IsPreparedImport(acJournal) && localPreparation)
         return true;
 
-    std::set<uint16_t> expected;
-    std::set<uint16_t> reached(acLocal.Reached.begin(), acLocal.Reached.end());
-    for (const auto& event : acJournal.Events)
-        if (event.Status != 2)
-            expected.insert(event.Stage);
-    if (CanAcceptLocalAlduinCleanup(acJournal, acLocal))
+    const bool radiantProgress = policy.Type == Category::Radiant && std::any_of(
+        acJournal.Events.begin(), acJournal.Events.end(),
+        [&](const auto& event) { return event.Status == 0 && event.Stage > policy.PreparationThrough; });
+    if (radiantProgress && localPreparation)
+        return fail("The campaign has an accepted radiant quest; the local save has no accepted progress");
+    if (policy.Type == Category::Radiant)
+        aReplayLifecycle = false;
+
+    const auto localHistory = [&](uint16_t aStage)
     {
-        const uint16_t cleanup = QuestSyncPolicy::kHadvarAlduinCleanupStage;
-        if (expected.contains(cleanup))
-            reached.insert(cleanup);
-        else
-            reached.erase(cleanup);
-    }
+        return (radiantProgress && aStage <= policy.PreparationThrough) ||
+               IsHistoricalStage(acJournal, acLocal.Stopped, acLocal.Reached, aStage);
+    };
+    std::set<uint16_t> expected;
+    std::set<uint16_t> reached;
+    for (uint16_t stage : acLocal.Reached)
+        if (!localHistory(stage))
+            reached.insert(stage);
+    for (const auto& event : acJournal.Events)
+        if (event.Status != 2 && !localHistory(event.Stage))
+            expected.insert(event.Stage);
+    for (const auto& decision : acJournal.Decisions)
+        if (!expected.contains(decision.Stage) || !reached.contains(decision.Stage))
+            return fail("A committed quest decision is missing from the local save");
     for (uint16_t stage : reached)
         if (!expected.contains(stage))
             return fail("Local quest contains progress outside the shared campaign; load a matching campaign save");
     const auto canReplay = [&](const auto& event)
     {
-        return !event.Bootstrap && std::find(acReplayStages.begin(), acReplayStages.end(), event.Stage) != acReplayStages.end();
+        return policy.Type != Category::Radiant && !event.Bootstrap && std::find(acReplayStages.begin(), acReplayStages.end(), event.Stage) != acReplayStages.end();
     };
     bool running = !acLocal.Stopped;
     const bool hasMissing = std::any_of(
         acJournal.Events.begin(), acJournal.Events.end(),
-        [&](const auto& event) { return event.Status != 2 && !(event.Status == 1 && event.Stage == 0) && !reached.contains(event.Stage); });
+        [&](const auto& event) { return event.Status != 2 && !localHistory(event.Stage) && !(event.Status == 1 && event.Stage == 0) && !reached.contains(event.Stage); });
     if (!running && (!acJournal.Stopped || hasMissing))
     {
         if (!aReplayLifecycle || acJournal.Epoch != 1)
@@ -118,7 +79,7 @@ bool PlanQuestReplay(
     }
     for (const auto& event : acJournal.Events)
     {
-        if (event.Status == 2 || reached.contains(event.Stage) || (event.Status == 1 && event.Stage == 0))
+        if (event.Status == 2 || localHistory(event.Stage) || reached.contains(event.Stage) || (event.Status == 1 && event.Stage == 0))
             continue;
         if (!canReplay(event))
             return fail("Missing quest stage is not approved for replay; load a matching campaign save");

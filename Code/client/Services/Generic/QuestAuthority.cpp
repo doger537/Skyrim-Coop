@@ -41,7 +41,7 @@ void QuestService::TickProposals() noexcept
     const auto& change = proposal.Change;
     const uint32_t formId = m_world.GetModSystem().GetGameId(change.Id);
     auto* quest = Cast<TESQuest>(TESForm::GetById(formId));
-    const bool permitted = m_world.GetPartyService().IsLeader() && quest && !IsNonSyncableQuest(quest) &&
+    const bool permitted = m_world.GetPartyService().IsLeader() && IsSharedQuest(quest, change.Id) &&
         static_cast<uint8_t>(quest->type) == change.QuestType;
     bool accepted{};
     if (permitted && !proposal.Applied)

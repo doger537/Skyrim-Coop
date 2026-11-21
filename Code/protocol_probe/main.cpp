@@ -25,6 +25,8 @@
 #include <Messages/LockChangeRequest.h>
 #include <Messages/NotifyLockChange.h>
 #include <Structs/AnniversaryContent.h>
+#include <Structs/QuestReplayPlan.h>
+#include <Structs/QuestSyncPolicy.h>
 #include <Messages/PartyCreateRequest.h>
 #include <Messages/NotifyPartyJoined.h>
 #include <Messages/RequestWeatherChange.h>
@@ -48,6 +50,7 @@
 #include <Messages/PartyLeaveRequest.h>
 #include <chrono>
 #include <iostream>
+#include <functional>
 #include <cmath>
 #include <optional>
 #include <thread>
@@ -84,6 +87,7 @@ struct Probe final : Client
     bool SeedOwner{};
     Vector<NotifyQuestJournal> Journals;
     Vector<QuestJournal> Seed;
+    std::function<bool(const Vector<NotifyQuestJournal>&)> CheckJournal;
     float LastPositionX{};
     std::optional<NotifyCoopSleep> RestState;
     uint64_t RestSequence{};
@@ -142,6 +146,8 @@ struct Probe final : Client
             }
             else if (checkpoint.State == NotifyCampaignCheckpoint::End && AutoReady && (!checkpoint.BaselinePending || SeedOwner))
             {
+                if (!SeedOwner && CheckJournal && !CheckJournal(Journals))
+                    return;
                 if (SeedOwner)
                     for (const auto& quest : Seed)
                     {
@@ -686,6 +692,75 @@ bool CheckCampaignAdmission(const std::string& address)
     reconnect.Close();
     waiting.Close();
     return passed && seedPassed && objectPassed && restored;
+}
+
+bool CheckQuestPolicy(const std::string& acAddress)
+{
+    using namespace QuestSyncPolicy;
+    const GameId prologue(0, kHelgenPrologue), route(0, kHadvarRoute), scene(0, kHelgenDragonAttack);
+    const GameId hostOffer(0, 0x00025231), guestOffer(0, 0x0001CEEE);
+    using Observation = std::pair<QuestJournal, LocalQuestState>;
+    const auto check = [](const Vector<NotifyQuestJournal>& acJournals, const Vector<Observation>& acLocal)
+    {
+        if (acJournals.size() != 2)
+            return false;
+        for (const auto& [quest, local] : acLocal)
+        {
+            const auto journal = std::find_if(acJournals.begin(), acJournals.end(), [&](const auto& aEntry) { return aEntry.Data.Id == quest.Id; });
+            if (journal == acJournals.end())
+            {
+                if (NeedsSharedJournal(quest.Id, quest.Type, local))
+                    return false;
+                continue;
+            }
+            QuestReplayPlan plan;
+            if (!PlanQuestReplay(journal->Data, journal->ReplayStages, journal->ReplayLifecycle, local, plan) || !plan.Apply.empty())
+                return false;
+        }
+        return true;
+    };
+    const QuestJournal completed{prologue, 1, 1, true, true,
+        {{1, 0, true}, {0, 8, true}, {0, 318, true}, {0, 900, true}, {0, 1000, true}, {2, 1000, true}}};
+    const QuestJournal hadvar{route, 1, 1, true, false, {{1, 0, true}, {0, 5, true}, {0, 10, true}, {0, 20, true}}};
+    const QuestJournal prepared{hostOffer, 1, 5, true, false, {{1, 0, true}, {0, 1, true}}};
+    const Vector<Observation> hostSave{
+        {completed, {true, true, {8, 318, 900, 1000}}},
+        {hadvar, {true, false, {5, 10, 20}}},
+        {prepared, {true, false, {1}}},
+    };
+    const Vector<Observation> guestSave{
+        {completed, {true, true, {8, 317, 318, 900, 1000}}},
+        {hadvar, {true, false, {3, 5, 10, 20}}},
+        {{guestOffer, 1, 5}, {true, false, {0, 1}}},
+        {{scene, 1, 1}, {true, true, {45, 195, 200}}},
+    };
+    Probe host, guest;
+    host.Request = MakeRequest();
+    guest.Request = MakeRequest();
+    host.Seed = {completed, hadvar, prepared};
+    host.CheckJournal = [&](const auto& acJournals) { return check(acJournals, hostSave); };
+    guest.CheckJournal = [&](const auto& acJournals) { return check(acJournals, guestSave); };
+    if (!ConnectProbe(host, acAddress, ResponseType::kAccepted) || !ConnectProbe(guest, acAddress, ResponseType::kAccepted))
+        return false;
+    const uint64_t revision = host.CampaignRevision;
+    if (!revision || guest.CampaignRevision != revision)
+        return false;
+    guest.Close();
+    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+    while (std::chrono::steady_clock::now() < until)
+    {
+        host.Update();
+        guest.Update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    Probe rejoin;
+    rejoin.Request = guest.Request;
+    rejoin.CheckJournal = guest.CheckJournal;
+    const bool passed = ConnectProbe(rejoin, acAddress, ResponseType::kAccepted) && rejoin.CampaignRevision == revision;
+    rejoin.Close();
+    host.Close();
+    std::cout << (passed ? "PASS: " : "FAIL: ") << "two post-Helgen characters admitted without script replay and the same guest can rejoin. Revision " << revision << '\n';
+    return passed;
 }
 
 bool CheckEnvironment(const std::string& acAddress)
@@ -1267,6 +1342,8 @@ int main(int argc, char** argv)
         return CheckCoopSleep(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-environment")
         return CheckEnvironment(address) ? 0 : 1;
+    if (argc > 2 && std::string_view(argv[2]) == "--verify-quest-policy")
+        return CheckQuestPolicy(address) ? 0 : 1;
     if (argc > 2 && std::string_view(argv[2]) == "--verify-campaign-admission")
         return CheckCampaignAdmission(address) ? 0 : 1;
     if (argc > 2 && (std::string_view(argv[2]) == "--verify-world" || std::string_view(argv[2]) == "--touch-world"))

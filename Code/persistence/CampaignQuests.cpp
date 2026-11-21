@@ -104,23 +104,24 @@ bool State::LoadQuestState(const String& acAdapters) noexcept
         }
     }
     Vector<WorldStore::Record> records;
-    if (!m_store.ReadPrefix("quest/", records) || records.size() > kMaxSharedQuests + 1)
+    if (!m_store.ReadPrefix("quest/", records))
     {
-        m_error = "Shared quest journal is unreadable or exceeds the supported quest count";
+        m_error = "Shared quest journal is unreadable";
         return false;
     }
+    std::set<uint64_t> ids;
     for (const auto& record : records)
     {
         Quest quest;
-        if (!Decode(record.Value, quest) || !quest.IsValid() || !ValidForm(quest.Id) || record.Key != Key("quest", quest.Id) || FindQuest(quest.Id))
+        if (!Decode(record.Value, quest) || !quest.IsValid() || !ValidForm(quest.Id) || record.Key != Key("quest", quest.Id) || !ids.insert(quest.Id.LogFormat()).second)
         {
             m_error = "Saved shared quest entry is invalid";
             return false;
         }
         m_questRevision = std::max(m_questRevision, record.Revision);
-        // Older campaigns may contain the Helgen scene. Keep its stored
-        // history intact while omitting it from the shared journal.
-        if (QuestSyncPolicy::IsLocalScene(quest.Id.ModId, quest.Id.BaseId))
+        // Preserve the durable records and checkpoint digests. Local history
+        // and old preparation-only imports have no shared run to publish.
+        if (QuestSyncPolicy::IsLocalOnly(quest))
             continue;
         if (m_quests.size() >= kMaxSharedQuests)
         {
@@ -156,10 +157,10 @@ bool State::BootstrapQuests(const Vector<Quest>& acQuests, bool aAllowMisc) noex
     for (auto quest : acQuests)
     {
         const auto* adapter = Adapter(quest.Id);
+        const auto policy = QuestSyncPolicy::Classify(quest.Id, quest.Type);
         if (!quest.IsValid() || !ValidForm(quest.Id) || quest.Epoch != 1 || !ids.insert(quest.Id.LogFormat()).second || !quest.Decisions.empty() ||
-            QuestSyncPolicy::IsLocalScene(quest.Id.ModId, quest.Id.BaseId) ||
-            ContentCompatibility::NormalizeName(m_contract->Content.ModList[quest.Id.ModId].Filename) == AlternateStartPolicy::cPlugin ||
-            ((quest.Type == 0 || quest.Type == 6) && !aAllowMisc && !(adapter && adapter->AllowMisc)))
+            !QuestSyncPolicy::IsShared(policy, quest.Type, aAllowMisc || (adapter && adapter->AllowMisc)) ||
+            ContentCompatibility::NormalizeName(m_contract->Content.ModList[quest.Id.ModId].Filename) == AlternateStartPolicy::cPlugin)
         {
             m_error = "Initial quest baseline has an invalid, duplicate, personal or unsupported miscellaneous quest";
             return false;
@@ -175,6 +176,8 @@ bool State::BootstrapQuests(const Vector<Quest>& acQuests, bool aAllowMisc) noex
             if (event.Status != 2 && !Choose(quest, adapter, event.Stage, m_error))
                 return false;
         }
+        if (QuestSyncPolicy::IsPreparedImport(quest))
+            continue;
         WorldStore::Record record;
         record.Key = Key("quest", quest.Id);
         if (!Encode(quest, record.Value))
@@ -263,14 +266,25 @@ State::QuestResult State::ChangeQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
         m_error = "Invalid shared quest identity, epoch or state";
         return QuestResult::Invalid;
     }
-    if (QuestSyncPolicy::IsLocalScene(aId.ModId, aId.BaseId) ||
+    const auto policy = QuestSyncPolicy::Classify(aId, aType);
+    const auto* adapter = Adapter(aId);
+    if (!QuestSyncPolicy::IsShared(policy, aType, aAllowMisc || (adapter && adapter->AllowMisc)) ||
         ContentCompatibility::NormalizeName(m_contract->Content.ModList[aId.ModId].Filename) == AlternateStartPolicy::cPlugin)
         return QuestResult::Ignored;
-    const auto* adapter = Adapter(aId);
-    if ((aType == 0 || aType == 6) && !aAllowMisc && !(adapter && adapter->AllowMisc))
-        return QuestResult::Ignored;
+
     const auto* saved = FindQuest(aId);
-    const bool newRun = !saved || (aStatus == 1 && saved->Data.Stopped && saved->Data.Epoch < UINT32_MAX && aEpoch == saved->Data.Epoch + 1);
+    const bool radiant = policy.Type == QuestSyncPolicy::Category::Radiant;
+    const bool activeRun = saved && !saved->Data.Stopped && saved->Data.Epoch == aEpoch;
+    if (QuestSyncPolicy::IsPreparationEvent(policy, aStatus, aStage) && !(aStatus == 2 && activeRun))
+        return QuestResult::Ignored;
+    if (radiant && !saved && aStatus != 0)
+    {
+        m_error = "Radiant quest has no accepted campaign run to stop";
+        return QuestResult::Conflict;
+    }
+    const bool startsRun = radiant ? aStatus == 0 : aStatus == 1;
+    const bool restart = startsRun && saved && saved->Data.Stopped && saved->Data.Epoch < UINT32_MAX && aEpoch == saved->Data.Epoch + 1;
+    const bool newRun = !saved || restart;
     if (apParticipants && !apParticipants->IsValid())
     {
         m_error = "Invalid quest initiator or reward recipient identities";
@@ -284,7 +298,7 @@ State::QuestResult State::ChangeQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
         m_error = "Quest type differs from the saved campaign";
         return QuestResult::Invalid;
     }
-    if (aStatus == 1 && next.Stopped && next.Epoch < UINT32_MAX && aEpoch == next.Epoch + 1)
+    if (restart)
     {
         if (adapter && !adapter->AllowRestart)
         {
@@ -310,7 +324,7 @@ State::QuestResult State::ChangeQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
     }
     if (aStatus != 2 && !Choose(next, adapter, aStage, m_error))
         return QuestResult::Conflict;
-    if (aStatus == 1)
+    if (aStatus == 1 || (radiant && newRun))
         next.Started = true;
     if (aStatus == 2)
         next.Stopped = true;
@@ -327,6 +341,26 @@ State::QuestResult State::ChangeQuest(GameId aId, uint32_t aEpoch, uint8_t aStat
     WorldStore::Record state;
     state.Key = Key("quest", aId);
     state.Revision = saved ? saved->Revision : 0;
+    if (!saved && radiant)
+    {
+        WorldStore::Record legacy;
+        const auto read = m_store.Read(state.Key, legacy);
+        if (read == WorldStore::ReadResult::Found)
+        {
+            Quest observed;
+            if (!Decode(legacy.Value, observed) || observed.Id != aId || !QuestSyncPolicy::IsPreparedImport(observed))
+            {
+                m_error = "The previous radiant quest record is invalid";
+                return QuestResult::StorageError;
+            }
+            state.Revision = legacy.Revision;
+        }
+        else if (read == WorldStore::ReadResult::Failed)
+        {
+            m_error = m_store.Error();
+            return QuestResult::StorageError;
+        }
+    }
     Quest event = next;
     event.Events = {next.Events.back()};
     WorldStore::Record audit;

@@ -501,7 +501,7 @@ void QuestService::OnQuestUpdate(const NotifyQuestUpdate& aUpdate) noexcept
     if (!aUpdate.IsValid()) return;
     ModSystem& modSystem = World::Get().GetModSystem();
     uint32_t formId = modSystem.GetGameId(aUpdate.Id);
-    if (formId == QuestSyncPolicy::kHelgenDragonAttack)
+    if (QuestSyncPolicy::Classify(aUpdate.Id, aUpdate.ClientQuestType).Type == QuestSyncPolicy::Category::Local)
         return;
 
     if (aUpdate.Revision)
@@ -619,22 +619,12 @@ bool QuestService::StopQuest(uint32_t aformId)
     return false;
 }
 
-static constexpr std::array kNonSyncableQuestIds = std::to_array<uint32_t>({
-    0x2BA16,   // Werewolf transformation quest
-    0x20071D0, // Vampire transformation quest
-    0x3AC44,   // MS13BleakFallsBarrowLeverScene
-    QuestSyncPolicy::kHelgenDragonAttack,
-    // 0xFE014801,  // Unknown dynamic ID, kept as note, maybe lookup correct ID this game?
-    0xF2593 // Skill experience quest
-});
-
 bool QuestService::IsNonSyncableQuest(TESQuest* apQuest)
 {
-    // Quests with no quest stages are never synced. Most TESQues::Type:: quests should
-    // be synced, including Type::None and Type::Miscellaneous, but there are a few
-    // known exceptions that should be excluded that are in the table.
-    return AlternateStart::IsPersonalQuest(apQuest->formID) || apQuest->stages.Empty() ||
-           std::find(kNonSyncableQuestIds.begin(), kNonSyncableQuestIds.end(), apQuest->formID) != kNonSyncableQuestIds.end();
+    constexpr uint32_t kVampireTransformation = 0x020071D0;
+    return apQuest->stages.Empty() || apQuest->formID == kVampireTransformation ||
+           QuestSyncPolicy::Classify(GameId(0, apQuest->formID), static_cast<uint8_t>(apQuest->type)).Type == QuestSyncPolicy::Category::Local ||
+           AlternateStart::IsPersonalQuest(apQuest->formID);
 }
 
 void QuestService::DebugDumpQuests()

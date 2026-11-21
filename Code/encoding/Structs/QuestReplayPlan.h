@@ -14,7 +14,7 @@ struct QuestReplayPlan
     TiltedPhoques::String Error;
 };
 
-bool IsUnacceptedCompanionsOffer(const GameId& acId, uint8_t aType, const LocalQuestState& acLocal) noexcept;
+bool NeedsSharedJournal(const GameId& acId, uint8_t aType, const LocalQuestState& acLocal) noexcept;
 
 // Make the full plan before invoking any engine functions. Imported completed-stage
 // sets are observations, not an inferred Papyrus execution order.
